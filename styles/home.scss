@@ -1,0 +1,179 @@
+/**
+ * 首页专用设计令牌 home.scss
+ * 「好诚事家风」家谱系统 · V2.0 第〇部分定案
+ * 着色新颖大方 · 布局紧凑 · 美观大方
+ */
+
+:root {
+  // ═══════════ 首页专用色板 ═══════════
+  --home-bg: #FAF8F2;
+  --home-card: #FFFFFF;
+  --home-card-2: #F7F4EC;
+  --home-accent: #B03A2E;
+  --home-fresh: #7FA8A0;
+  --home-text: #2B2723;
+  --home-text-2: #6E6659;
+  --home-line: #EAE4D6;
+  
+  // ═══════════ 顶部晨光渐变 ═══════════
+  --home-header: linear-gradient(165deg, #FDFCF8 0%, #F5F1E6 45%, #EDF2EC 100%);
+  
+  // ═══════════ 琉璃金渐变 ═══════════
+  --home-gold: linear-gradient(135deg, #D4B06A 0%, #C9A063 50%, #B8924F 100%);
+  
+  // ═══════════ 白事素色渐变 ═══════════
+  --home-header-muted: linear-gradient(165deg, #F7F5F0 0%, #F0EEE8 100%);
+  
+  // ═══════════ 节气联动渐变端点色 ═══════════
+  --header-top: #FDFCF8;
+  --header-mid: #F5F1E6;
+  --header-bottom: #EDF2EC;
+  
+  // ═══════════ 紧凑布局 ═══════════
+  --home-grid: 8px;
+  --home-margin: 16px;
+  --home-card-gap: 12px;
+  --home-card-pad: 12px;
+  --home-card-pad-lg: 16px;
+  --home-quickbar-height: 72px;
+  --home-overview-height: 72px;
+}
+
+.home-page {
+  background: var(--home-bg);
+  padding: 0 var(--home-margin);
+  min-height: 100vh;
+}
+
+.home-header {
+  background: linear-gradient(165deg, var(--header-top) 0%, var(--header-mid) 45%, var(--header-bottom) 100%);
+  padding: var(--home-grid) var(--home-margin);
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  
+  &.muted {
+    background: var(--home-header-muted);
+  }
+}
+
+.home-greeting {
+  font-size: var(--font-xl);
+  font-weight: var(--weight-bold);
+  color: var(--home-text);
+  line-height: 1.4;
+}
+
+.home-greeting-sub {
+  font-size: var(--font-sm);
+  color: var(--home-text-2);
+}
+
+.home-quickbar {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: var(--home-grid) 0;
+  background: var(--home-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  
+  &-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: var(--min-touch);
+    min-height: var(--min-touch);
+    justify-content: center;
+    cursor: pointer;
+  }
+  
+  &-icon {
+    width: 40px;
+    height: 40px;
+  }
+  
+  &-label {
+    font-size: var(--font-xs);
+    color: var(--home-text-2);
+  }
+}
+
+.home-today-card {
+  background: var(--home-card);
+  border-radius: var(--radius-card);
+  padding: var(--home-card-pad);
+  margin-bottom: var(--home-card-gap);
+  box-shadow: var(--shadow-card);
+  
+  &.ceremony {
+    border-left: 4px solid var(--home-accent);
+  }
+  
+  &.motto {
+    background: var(--home-card-2);
+  }
+}
+
+.home-card-title {
+  font-size: var(--font-base);
+  font-weight: var(--weight-bold);
+  color: var(--home-text);
+  margin-bottom: var(--space-1);
+}
+
+.home-card-desc {
+  font-size: var(--font-sm);
+  color: var(--home-text-2);
+  line-height: 1.5;
+  max-height: 3em;
+  overflow: hidden;
+}
+
+.home-overview {
+  display: flex;
+  gap: var(--home-card-gap);
+  height: var(--home-overview-height);
+  overflow-x: auto;
+  scrollbar-width: none;
+  
+  &::-webkit-scrollbar { display: none; }
+}
+
+.home-overview-item {
+  flex-shrink: 0;
+  min-width: 120px;
+  background: var(--home-card);
+  border-radius: var(--radius-card);
+  padding: var(--home-grid);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-shadow: var(--shadow-card);
+}
+
+.home-overview-num {
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+  background: var(--home-gold);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.home-overview-label {
+  font-size: var(--font-xs);
+  color: var(--home-text-2);
+}
+
+.fade-in {
+  animation: fadeIn 200ms ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.elder-mode .home-greeting { font-size: calc(var(--font-xl) * 1.4); }
+.elder-mode .home-card-title { font-size: calc(var(--font-base) * 1.4); }
+.elder-mode .home-card-desc { font-size: calc(var(--font-sm) * 1.4); }

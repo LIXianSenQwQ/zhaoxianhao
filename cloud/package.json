@@ -1,0 +1,12 @@
+{
+  "name": "haochengshi-fengjia-cloud",
+  "version": "2.0.0",
+  "description": "好诚事家风云开发服务",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "^2.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0"
+  }
+}

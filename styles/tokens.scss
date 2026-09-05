@@ -1,0 +1,75 @@
+/**
+ * 全局设计令牌 tokens.scss
+ * 「好诚事家风」家谱系统 · V2.0
+ * 基础色板 + 字号 + 间距 + 圆角
+ */
+
+:root {
+  // ═══════════ 全局色彩令牌 ═══════════
+  --ink: #26221E;           // 玄墨：深色底/祠堂场景
+  --paper: #F4F1E8;         // 月白：全局底色
+  --river: #3A4A56;         // 黛青：次级底/冷色
+  --spectrum: #E8D5A3;      // 缃黄：卡片底/证书底
+  --cinnabar: #B03A2E;      // 朱砂：强调/红事
+  --gold: #C9A063;          // 琉璃金：点灯/荣誉/功德
+  --pear: #D9A441;          // 梨果金：秋收/寿诞
+  --pear-blossom: #FAF7F0;  // 梨花白：清明/春季
+  
+  // ═══════════ 文本色 ═══════════
+  --text-main: #333333;
+  --text-sub: #666666;
+  --text-aux: #999999;
+  
+  // ═══════════ 字号 ═══════════
+  --font-xs: 12px;
+  --font-sm: 14px;
+  --font-base: 16px;
+  --font-md: 18px;
+  --font-lg: 20px;
+  --font-xl: 24px;
+  
+  // ═══════════ 字重 ═══════════
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-bold: 700;
+  
+  // ═══════════ 间距 (8px 基础网格) ═══════════
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  
+  // ═══════════ 圆角 ═══════════
+  --radius-card: 12px;
+  --radius-btn: 8px;
+  --radius-tag: 4px;
+  
+  // ═══════════ 阴影 ═══════════
+  --shadow-card: 0 2px 12px rgba(38, 34, 30, 0.06);
+  --shadow-hover: 0 4px 20px rgba(38, 34, 30, 0.10);
+  --shadow-pressed: 0 1px 4px rgba(38, 34, 30, 0.08);
+  
+  // ═══════════ 最小热区 ═══════════
+  --min-touch: 44px;
+}
+
+// 年长模式整体 ×1.4
+.elder-mode {
+  --font-xs: 16.8px;
+  --font-sm: 19.6px;
+  --font-base: 22.4px;
+  --font-md: 25.2px;
+  --font-lg: 28px;
+  --font-xl: 33.6px;
+}
+
+// 少年模式字号略缩
+.child-mode {
+  --font-xs: 11px;
+  --font-sm: 13px;
+  --font-base: 15px;
+  --font-md: 16.5px;
+  --font-lg: 18px;
+  --font-xl: 22px;
+}
