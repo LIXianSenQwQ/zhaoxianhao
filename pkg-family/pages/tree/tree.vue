@@ -68,9 +68,12 @@
         <View v-else-if="!hasMore" class="end-line">没有更多了</View>
       </scroll-view>
 
-      <!-- 工具栏：刷新 / 年长模式 -->
+      <!-- 工具栏：刷新 / 年长模式 / 导出（Sprint R5） -->
       <View class="toolbar">
         <Button class="tool-btn" type="default" @tap="refreshRoot">刷新树视图</Button>
+        <template v-if="user.isChief">
+          <Button class="tool-btn export-btn" type="primary" @tap="exportCsv">导出 CSV</Button>
+        </template>
       </View>
     </template>
   </view>
@@ -144,6 +147,23 @@ function refreshRoot() {
 
 function goDetail(id: string) {
   uni.navigateTo({ url: `/pkg-family/pages/memberDetail/detail?id=${id}` });
+}
+
+/** 批量导出 CSV（Sprint R5，CHIEF 权限） */
+async function exportCsv() {
+  try {
+    const res = await read('member', { action: 'export', page: 1 }, null, 10000);
+    if (res.data?.csv) {
+      uni.setClipboardData({
+        data: res.data.csv,
+        success: () => uni.showToast({ title: `已复制 ${res.data.total} 条到剪贴板`, icon: 'none' })
+      });
+    } else {
+      uni.showToast({ title: res.error?.message || '导出失败', icon: 'none' });
+    }
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '导出失败', icon: 'none' });
+  }
 }
 
 function getKinshipTitle(n: any): string {

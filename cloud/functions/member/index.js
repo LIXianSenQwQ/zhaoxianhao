@@ -10,6 +10,7 @@ const wx = require('wx-server-sdk');
 const { OK, BAD_REQUEST, FORBIDDEN, NOT_FOUND } = require('./common/response');
 const { hasRole } = require('./common/roles');
 const { privacyCheck } = require('./common/privacy');
+const { rowsToCsv } = require('./common/csv');
 const {
   generationOf, relationSteps, paginateTree, subtreeRegex, TREE_PAGE_BUDGET
 } = require('./common/tree');
@@ -17,6 +18,7 @@ const {
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
 
 const LIST_LIMIT = 50;
+const EXPORT_BATCH = 500; // 单批导出上限（内存峰值保护）
 
 async function main(event, context) {
   const openid = context.OPENID || context.openid;
@@ -29,9 +31,48 @@ async function main(event, context) {
       return await getDetail(db, openid, event.memberId);
     case 'tree':
       return await buildTree(db, openid, event.focusId, event.page);
+    case 'export':
+      return await exportCsv(db, openid, event);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }
+}
+
+/**
+ * 批量导出 CSV（CHIEF 专属；分批 + 字段投影减体积）
+ * 返回 { csv, total, batches }——前端 uni.setClipboardData 或云存储落盘
+ */
+async function exportCsv(db, openid, { branchId, page = 1 }) {
+  const ctx = await requesterCtx(db, openid);
+  if (!hasRole(ctx.role, 'CHIEF')) return FORBIDDEN('仅族长可批量导出成员档案');
+
+  const p = Math.max(1, Number(page) || 1);
+  const where = branchId ? { branchId } : {};
+  const res = await db.collection('members')
+    .where(where)
+    .orderBy('path', 'asc') // 物化路径序 = 族谱序
+    .skip((p - 1) * EXPORT_BATCH).limit(EXPORT_BATCH)
+    .get();
+
+  // 字段投影：只导出非私密字段（导出物仍受隐私分级约束）
+  const rows = res.data.map(m => ({
+    谱名: m.genealogyName || '',
+    本名: m.name || '',
+    世代: m.generation ?? '',
+    房支: m.branchId ?? '',
+    性别: m.gender ?? '',
+    生卒: [m.birthDate, m.deathDate].filter(Boolean).join(' ~ '),
+    状态: m.status ?? '',
+    世系路径: m.path ?? ''
+  }));
+
+  const csv = rowsToCsv(rows);
+  return OK({
+    csv,
+    total: rows.length,
+    page: p,
+    hasMore: rows.length === EXPORT_BATCH
+  });
 }
 
 /** 请求者上下文：角色 + 房支 + 授权名单（一次查齐） */

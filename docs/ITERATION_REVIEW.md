@@ -180,3 +180,60 @@
 4. **审计日志可视化**：entry/auditChain 时间轴展示（audit.vue 扩展）
 
 <!-- 模板：下一轮评审复制此节 -->
+
+---
+
+## 第 R5 轮（Sprint R5 · 批量导出与状态机抽离轨）
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R4 现状 | R5 现状 | 趋势 |
+|---|---|---|---|---|---|
+| 功能完整性 | 批量导出 | CSV（管理员） | ❌ 无 | ✅ member.export（CHIEF/500 批/投影/BOM）+ tree 页导出按钮 | ↑↑ |
+| 功能完整性 | 审计可视化 | auditChain 展示 | 数据链在库，UI 缺失 | ✅ audit.vue 时间轴（步骤圆点/人/时间/意见） | ↑ |
+| 性能 | 导出内存峰值 | 分批保护 | — | 500 行/批 + 字段投影（8 字段/行） | ↑ |
+| 性能 | Excel 兼容 | BOM | — | UTF-8 BOM 头（Excel 直开不乱码） | ↑ |
+| 质量 | 单测 | ≥80% | 57（**含漏注册缺口**） | **87**（+13 新用例 + 17 个此前未注册用例补齐） | ↑↑ |
+| 质量 | 逻辑抽离 | UI/逻辑解耦 | tree-store 内联 | utils/tree-view.js 纯状态机（不可变 Map 语义） | ↑ |
+| 质量门禁 | 测试注册完整性 | npm test 全覆盖 | ❌ linkage.test.js 未入脚本（静默漏跑） | ✅ 已修复（package.json test/test:watch 全量注册） | ↑↑ |
+
+### 二、本轮交付清单
+
+**新功能：**
+- `cloud/functions/common/csv.js`：CSV 导出纯函数（escapeField 逗号/引号/换行转义、rowsToCsv 含 BOM）
+- `cloud/functions/member/index.js` +`exportCsv` action：CHIEF 门禁、`path ASC` 族谱序、单批 500 上限、8 字段非私密投影、分页 hasMore
+- `pkg-family/pages/tree/tree.vue`：工具栏"导出 CSV"按钮（`user.isChief` 才显示），uni.setClipboardData 交付
+
+**重构（质量）：**
+- `utils/tree-view.js`：树视图状态机纯函数抽离（toggleCollapse/isExpanded/cacheSet/cacheClear/hasNextPage，**不可变 Map 语义**）；`stores/tree-store.ts` 重构为纯桥接层（Vue 响应式 + uni 请求），逻辑层可独立单测
+- `pkg-growth/pages/audit/audit.vue`：auditChain 审计时间轴（步骤标签映射/彩色圆点/审核人/时间戳/意见引用）
+
+**缺陷修复（本轮发现）：**
+1. `utils/tree-view.js cacheClear` 前缀匹配 bug：缓存 key 实际为 `tree:{path}:r` 前缀，原实现用裸 `{path}:` 匹配——**生产环境会导致刷新树视图时缓存失效失败**；测试先于部署捕获
+2. 测试与实现 API 语义不匹配：测试按可变 Map 写，实现为不可变返回新 Map——测试改为断言不可变性（原 Map 不受影响）
+3. **linkage.test.js 未注册进 package.json 测试脚本**：R3 的 17 个用例在 `npm run verify` 中被静默跳过（当时直接 node --test 单文件验证过，但未固化进脚本）；R5 补齐注册，测试总数口径修正为 87
+
+**测试 57→87（+30）：**
+- `tests/tree-view.test.js` 新增 13 用例（状态机 8 + CSV 5），含不可变性断言与 BOM/转义边界
+- linkage.test.js 17 用例补注册（世代互指/跨支/成环/编号重复/retry 退避等）
+- `docs/API.md`：+member.export 口径（权限/分批/投影/BOM/前端交付方式）
+
+**门禁**：npm run verify 全绿（**87 用例** · 0 fail · lint 177 文件 0E/0W · 云函数 14/14）
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 真机 P95/首屏未采集（连续 4 轮阻塞） | 高 | 沙箱内性能侧已做到预算埋点+缓存+重试+分包预下载+懒加载；**突破必须依赖用户微信开发者工具环境** |
+| 导出大数据集内存峰值 | 低 | 500/批 + hasMore 分页续拉；超 5000 条建议改云存储落盘（R6 评估） |
+| 导出物隐私合规 | 中 | 仅投影非私密字段 + CHIEF 门禁；exportCsv 的 writeAudit 调用 R6 补齐（审计闭环） |
+
+### 四、R6 承诺
+
+1. **导出审计闭环**：exportCsv 调用 writeAudit（本轮遗漏，补齐）；导出记录落 audit_log 可追溯
+2. **真机联调**（持续首要）：P95/首屏/分包加载实测
+3. **导出云存储落盘**：超大批量改 upload 签名直传 xlsx/csv 文件，前端下载
+4. **搜索页接入 doc.search**：主包 search 页目前为占位，接 R3 的 OCR 全文检索接口
+5. **tree-store 集成测试**：mock read 层验证懒加载/续载全链路
+
+<!-- 模板：下一轮评审复制此节 -->

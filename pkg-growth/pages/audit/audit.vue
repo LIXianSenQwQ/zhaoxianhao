@@ -53,6 +53,19 @@
             <text class="done-text">{{ doneText(r.status) }}</text>
           </view>
 
+          <!-- 审计时间轴（Sprint R5） -->
+          <view class="timeline" v-if="r.auditChain && r.auditChain.length > 1">
+            <text class="timeline-title">审核链</text>
+            <view v-for="(s, i) in r.auditChain" :key="i" class="tl-row">
+              <view class="tl-dot" :class="tlDotClass(s.step)" />
+              <view class="tl-body">
+                <text class="tl-label">{{ stepLabel(s.step) }}</text>
+                <text class="tl-meta">{{ s.userId?.slice(0, 8) }}… · {{ formatTime(s.time) }}</text>
+                <text class="tl-comment" v-if="s.comment">“{{ s.comment }}”</text>
+              </view>
+            </view>
+          </view>
+
           <!-- 备注 -->
           <text class="comment" v-if="r.auditChain?.[r.auditChain.length -1]?.comment">{{ r.auditChain[r.auditChain.length-1].comment }}</text>
         </BaseCard>
@@ -153,6 +166,17 @@ function doneText(s: string): string {
   return { APPROVED: '已通过入谱', REJECTED: '已驳回' }[s] || '';
 }
 
+/** 时间轴步骤标签（Sprint R5） */
+function stepLabel(s: string): string {
+  return { SUBMITTED: '提交申请', IMPORTED: '批量导入', FIRST_PASS: '初审通过', SECOND_PASS: '复审通过', APPROVED: '已入谱', REJECTED: '已驳回' }[s] || s;
+}
+
+function tlDotClass(step: string): string {
+  if (step === 'REJECTED') return 'dot-reject';
+  if (step === 'SECOND_PASS' || step === 'APPROVED') return 'dot-ok';
+  return 'dot-mid';
+}
+
 function formatTime(iso?: string): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -187,4 +211,17 @@ onMounted(loadList);
 .comment { display: block; font-size: 12px; color: #999; margin-top: 6px; }
 
 .more-line, .end-line { text-align: center; padding: 12px; font-size: 12px; color: #999; }
+
+/* ── 审计时间轴（Sprint R5） ── */
+.timeline { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #EEE7DA; }
+.timeline-title { font-size: 11px; color: #8A8378; display: block; margin-bottom: 6px; }
+.tl-row { display: flex; gap: 8px; padding: 3px 0; }
+.tl-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+.dot-mid { background: #D9A441; }
+.dot-ok { background: #7A9A5F; }
+.dot-reject { background: #C44D4D; }
+.tl-body { flex: 1; }
+.tl-label { font-size: 12px; color: #2B2320; display: block; }
+.tl-meta { font-size: 10px; color: #B0A99A; display: block; margin-top: 1px; }
+.tl-comment { font-size: 11px; color: #6B6459; display: block; margin-top: 2px; font-style: italic; }
 </style>

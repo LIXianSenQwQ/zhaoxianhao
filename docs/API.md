@@ -44,6 +44,32 @@
 - 若成员不存在 → NOT_FOUND 404
 - 隐私卡路由字段：`needAuthCard`, `applyRoute`
 
+### 1.4 export（批量导出 CSV，Sprint R5）
+
+**请求**：`{ action: 'export', branchId?: string, page?: number }`
+
+**权限**：仅 `CHIEF` 可执行
+
+- 单批上限 500 行（`EXPORT_BATCH`，内存峰值保护）
+- 字段投影仅导出非私密字段（谱名/本名/世代/房支/性别/生卒/状态/世系路径）
+- 排序：`path ASC`（物化路径序 = 族谱序）
+- CSV 含 UTF-8 BOM（Excel 打开不乱码）；逗号/引号/换行自动转义
+
+**响应**：
+```json
+{
+  "success": true,
+  "data": {
+    "csv": "\ufeff谱名,世代\r\n郝一,18\r\n...",
+    "total": 500,
+    "page": 1,
+    "hasMore": true
+  }
+}
+```
+
+**前端**：tree.vue 工具栏"导出 CSV"按钮（`user.isChief` 才显示），`uni.setClipboardData` 复制到剪贴板。
+
 ---
 
 ## 2. 入谱（entry）

@@ -1,121 +1,103 @@
 /**
  * stores/tree-store.ts
- * 族谱树视图 Store（Sprint R4）
+ * 族谱树视图 Store（Sprint R4 / R5 重构）
  * 
- * 职责：维护树视图展开状态（path -> collapsed）、当前页面加载路径、子树分页缓冲
- * 纯 JS/TS 可用，不依赖 uni-app/uni API；数据流与 UI 解耦
+ * 状态机/缓存/续载判定逻辑抽离至 utils/tree-view.js（纯函数可单测）。
+ * 本文件只做 uni 请求桥接 + Vue 响应式包装。
  */
-import { ref, computed } from 'vue';
-import { call, read } from '@/services/request';
-import { useUserStore } from './user';
+import { ref } from 'vue';
+import { read } from '@/services/request';
+import * as V from '@/utils/tree-view';
 
-// ─── 类型 ───
-export interface TreeNode { path: string; name: string; generation: number; genealogyName?: string; gender?: string }
+export interface TreeNode { path: string; name: string; generation: number; genealogyName?: string; gender?: string; _id?: string; children?: TreeNode[] }
 export interface TreePage { nodes: TreeNode[]; cursor?: string; hasMore: boolean }
 
 export function useTreeStore() {
-  const user = useUserStore();
-  
-  // 展开状态：path -> false(expanded) / true(collapsed)
+  // 响应式包装
   const collapsedMap = ref<Record<string, boolean>>({});
-  // 当前页数据：按根节点 key=path 缓存
   const pages = ref<Map<string, TreePage>>(new Map());
-  // 加载中状态
   const loadingPaths = ref<Set<string>>(new Set());
-  
+
+  // ─── 折叠态（委托 tree-view 纯函数） ───
+  const isExpanded = (path: string) => V.isExpanded(collapsedMap.value, path);
   const toggleCollapse = (path: string) => {
-    const prev = collapsedMap.value[path] ?? false;
-    collapsedMap.value[path] = !prev;
+    collapsedMap.value = V.toggleCollapse(collapsedMap.value, path);
   };
-  
-  const isExpanded = (path: string) => !collapsedMap.value[path];
-  const isCollapsed = (path: string) => !!collapsedMap.value[path];
   const setCollapse = (path: string, collapse: boolean) => {
-    collapsedMap.value[path] = collapse;
+    collapsedMap.value = V.setCollapse(collapsedMap.value, path, collapse);
   };
-  
-  // 获取当前页：若已缓存则优先返回
-  const getPage = (rootPath: string): TreePage | null => {
-    return pages.value.get(rootPath) || null;
-  };
-  
-  // 加载根节点子树（懒加载：从 pagesMap 取或调 API，无 cacheKey 防重复请求）
-  async function loadRoot(rootPath: string) {
-    if (loadingPaths.value.has(rootPath)) return getPage(rootPath);
-    loadingPaths.value.add(rootPath);
+
+  // ─── 页缓存 ───
+  const getPage = (key: string): TreePage | null => V.getPage(pages.value, key);
+  const hasCache = (key: string) => V.hasCache(pages.value, key);
+
+  function cachePut(key: string, value: TreePage) {
+    pages.value = V.cacheSet(pages.value, key, value);
+  }
+
+  // ─── API 桥接（懒加载 + 分页） ───
+  async function loadRoot(rootPath: string): Promise<TreePage | null> {
+    const key = V.CACHE_KEY_ROOT(rootPath);
+    if (hasCache(key) || loadingPaths.value.has(key)) return getPage(key);
+    loadingPaths.value.add(key);
     try {
-      const res = await read('member', { action: 'tree', focusId: rootPath, page: 1 }, `tree:${rootPath}:r`, 30000);
+      const res = await read('member', { action: 'tree', focusId: rootPath, page: 1 }, key, 30000);
       if (res.data?.nodes) {
-        pages.value.set(rootPath, { ...res.data, hasMore: res.data.hasMore ?? false });
+        cachePut(key, { nodes: res.data.nodes, cursor: res.data.cursor, hasMore: !!res.data.hasMore });
       }
-      return getPage(rootPath);
+      return getPage(key);
     } finally {
-      loadingPaths.value.delete(rootPath);
+      loadingPaths.value.delete(key);
     }
   }
-  
-  // 子树懒加载：点击节点时调用 member.tree(path)
-  async function loadChildren(parentPath: string) {
-    if (!isExpanded(parentPath)) return; // 收缩态不加载
-    if (pages.value.get(`${parentPath}_children`)) return; // 已缓存
-    if (loadingPaths.value.has(parentPath)) return; // 正在加载
-    
-    loadingPaths.value.add(parentPath);
+
+  async function loadChildren(parentPath: string): Promise<TreePage | null> {
+    const key = V.CACHE_KEY_CHILDREN(parentPath);
+    if (hasCache(key) || loadingPaths.value.has(key)) return getPage(key);
+    loadingPaths.value.add(key);
     try {
-      const res = await read('member', { action: 'tree', focusId: parentPath, page: 1 }, `tree:${parentPath}:c`, 30000);
+      const res = await read('member', { action: 'tree', focusId: parentPath, page: 1 }, key, 30000);
       if (res.data?.nodes) {
-        pages.value.set(`${parentPath}_children`, { ...res.data, hasMore: res.data.hasMore ?? false });
+        cachePut(key, { nodes: res.data.nodes, cursor: res.data.cursor, hasMore: !!res.data.hasMore });
       }
-      return getPage(`${parentPath}_children`);
+      return getPage(key);
     } finally {
-      loadingPaths.value.delete(parentPath);
+      loadingPaths.value.delete(key);
     }
   }
-  
-  // 续载下一页
-  async function nextPage(rootPath: string) {
-    const cur = getPage(rootPath);
-    if (!cur || !cur.hasMore || !cur.cursor) return null;
-    const p = cur.page + 1;
-    loadingPaths.value.add(rootPath);
+
+  async function nextPage(rootPath: string, pageNo: number): Promise<TreePage | null> {
+    const key = V.PAGE_KEY(rootPath, pageNo);
+    if (!V.hasNextPage(V.CACHE_KEY_ROOT(rootPath), pages.value)) return null;
+    if (loadingPaths.value.has(key)) return null;
+    loadingPaths.value.add(key);
     try {
-      const res = await read('member', { action: 'tree', focusId: rootPath, page: p }, `tree:${rootPath}:${p}`, 30000);
+      const res = await read('member', { action: 'tree', focusId: rootPath, page: pageNo }, key, 30000);
       if (res.data?.nodes) {
-        pages.value.set(rootPath, { ...res.data, hasMore: res.data.hasMore ?? false, page: p, cursor: res.data.cursor });
-        return res.data;
+        cachePut(key, { nodes: res.data.nodes, cursor: res.data.cursor, hasMore: !!res.data.hasMore });
+        return getPage(key);
       }
       return null;
     } finally {
-      loadingPaths.value.delete(rootPath);
+      loadingPaths.value.delete(key);
     }
   }
-  
-  // 刷新整棵树
+
   async function refreshRoot(rootPath: string) {
-    pages.value.set(rootPath, undefined as any); // 清空缓存
+    pages.value = V.cacheClear(pages.value, rootPath);
     return loadRoot(rootPath);
   }
-  
-  // 重置（登出）
+
   function reset() {
-    collapsedMap.value = {};
-    pages.value.clear();
-    loadingPaths.value.clear();
+    collapsedMap.value = V.resetCollapsed();
+    pages.value = new Map();
+    loadingPaths.value = new Set();
   }
-  
+
   return {
-    collapsedMap,
-    pages,
-    loadingPaths,
-    isExpanded,
-    isCollapsed,
-    toggleCollapse,
-    setCollapse,
-    getPage,
-    loadRoot,
-    loadChildren,
-    nextPage,
-    refreshRoot,
-    reset
+    collapsedMap, pages, loadingPaths,
+    isExpanded, toggleCollapse, setCollapse,
+    getPage, hasCache,
+    loadRoot, loadChildren, nextPage, refreshRoot, reset
   };
 }
