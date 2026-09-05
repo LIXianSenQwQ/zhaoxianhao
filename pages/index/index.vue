@@ -1,63 +1,57 @@
 <template>
-  <view class="home-page fade-in">
-    <!-- ① 问候区 (晨光渐变) -->
-    <view 
-      class="home-header" 
-      :class="{ muted: isMutedPeriod }"
-    >
+  <view class="home-page" :class="{ 'elder-mode': userStore.elderMode }">
+    <!-- ① 问候区（晨光渐变） -->
+    <view class="home-header" :class="{ muted: isMutedPeriod }">
       <text class="home-greeting">{{ greeting }}</text>
-      <text class="home-greeting-sub">{{ solarTerm }} · {{ weatherInfo }}</text>
-      
-      <!-- V1.1 天气组件 -->
-      <v11-weather-widget v-if="isV11Enabled('weather')" />
+      <text class="home-greeting-sub" v-if="loaded">{{ solarTerm }} · {{ weatherInfo }}</text>
     </view>
-    
-    <!-- ② 快捷工具条 (5 键横向) -->
+
+    <!-- ② 快捷工具条（固定 5 键） -->
     <view class="home-quickbar">
-      <view 
-        v-for="item in quickItems.filter(i => isFeatureEnabled(i.key))" 
+      <view
+        v-for="item in quickItems"
         :key="item.id"
         class="home-quickbar-item"
         @click="handleQuickClick(item)"
       >
-        <image :src="item.icon" class="home-quickbar-icon" mode="aspectFit" />
+        <text class="qb-icon">{{ item.glyph }}</text>
         <text class="home-quickbar-label">{{ item.label }}</text>
       </view>
     </view>
-    
+
     <!-- ③ 今日要事卡流 -->
-    <scroll-view scroll-y class="today-scroll">
-      <!-- 仪式/红白事卡 (最高优先级) -->
-      <home-today-card 
-        v-if="ceremonyCard" 
-        type="ceremony"
-        :data="ceremonyCard"
-        @click="goToCeremony"
+    <view class="today-section">
+      <!-- 骨架屏：数据未到位时 ≤300ms 出现 -->
+      <Skeleton :visible="loading" :rows="3" />
+
+      <!-- 错误兜底：可重试不白屏 -->
+      <ErrorPage
+        v-else-if="loadError"
+        title="今日要事加载失败"
+        :message="loadError.message"
+        @retry="loadTodayCards"
       />
-      
-      <!-- 提醒卡 -->
-      <home-today-card v-for="reminder in reminders" :key="reminder.id" :data="reminder" @click="goToCalendar" />
-      
-      <!-- 动态摘要卡 -->
-      <home-today-card v-if="momentDigest" :data="momentDigest" @click="goToPlaza" />
-      
-      <!-- V1.1 家风家训推荐卡 -->
-      <home-today-card 
-        v-if="isV11Enabled('motto') && mottoRecommend" 
-        type="motto"
-        :data="mottoRecommend"
-        @click="goToMotto"
-      />
-    </scroll-view>
-    
-    <!-- ④ 家族速览 (横滑数据卡) -->
+
+      <!-- 空态降级：祖训今日卡（不空屏，文档 0.3.3） -->
+      <EmptyState v-else-if="!cards.length" />
+
+      <!-- 正常卡流 -->
+      <template v-else>
+        <BaseCard
+          v-for="card in cards"
+          :key="card.id"
+          :title="card.title"
+          :desc="card.desc"
+          :type="card.type === 'ceremony' ? 'ceremony' : card.type === 'motto' ? 'motto' : 'normal'"
+          clamp
+          @click="openCard(card)"
+        />
+      </template>
+    </view>
+
+    <!-- ④ 家族速览（横滑数据卡） -->
     <view class="home-overview">
-      <view 
-        v-for="(stat, idx) in overviewStats" 
-        :key="idx"
-        class="home-overview-item"
-        @click="handleOverviewStat(stat)"
-      >
+      <view v-for="(stat, idx) in overviewStats" :key="idx" class="home-overview-item">
         <text class="home-overview-num">{{ stat.value }}</text>
         <text class="home-overview-label">{{ stat.label }}</text>
       </view>
@@ -66,94 +60,122 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useUserStore } from '@/stores/user';
-import { isFeatureEnabled } from '@/utils/feature-flags';
+import { call } from '@/services/request';
+import BaseCard from '@/components/common/BaseCard.vue';
+import Skeleton from '@/components/common/Skeleton.vue';
+import EmptyState from '@/components/common/EmptyState.vue';
+import ErrorPage from '@/components/common/ErrorPage.vue';
 
 const userStore = useUserStore();
 
-// V1.1 功能开关检查
-const isV11Enabled = (key: string) => isFeatureEnabled(`v11${key}`);
-
-// 问候语
-const greeting = ref('');
+const greeting = ref('您好');
 const solarTerm = ref('');
 const weatherInfo = ref('');
 const isMutedPeriod = ref(false);
+const loaded = ref(false);
 
-// 快捷工具（固定 5 键）
-const quickItems = ref([
-  { id: 'lamp', key: 'shrine', label: '点灯', icon: '/static/icons/lamp.png' },
-  { id: 'qingan', key: 'social', label: '请安', icon: '/static/icons/qingan.png' },
-  { id: 'zupu', key: 'jiapu', label: '族谱', icon: '/static/icons/zupu.png' },
-  { id: 'daka', key: 'task', label: '打卡', icon: '/static/icons/daka.png' },
-  { id: 'more', key: 'mine', label: '更多', icon: '/static/icons/more.png' }
+const loading = ref(true);
+const loadError = ref<{ message: string } | null>(null);
+const cards = ref<{ id: string; title: string; desc: string; type: string }[]>([]);
+
+const overviewStats = ref([
+  { value: '—', label: '在世人口' },
+  { value: '—', label: '最新代数' },
+  { value: '—', label: '本月大事' },
+  { value: '—', label: '我的字辈' }
 ]);
 
-// 今日要事数据
-const ceremonyCard = ref(null);
-const reminders = ref([]);
-const momentDigest = ref(null);
-const mottoRecommend = ref(null);
+// 快捷 5 键（图标用字形占位，切图后替换 image）
+const quickItems = [
+  { id: 'lamp', label: '点灯', glyph: '🕯', url: '/pkg-shrine/shrine/index' },
+  { id: 'qingan', label: '请安', glyph: '🙏', url: '' },
+  { id: 'zupu', label: '族谱', glyph: '📜', url: '/pkg-genealogy/jiapu/index' },
+  { id: 'daka', label: '打卡', glyph: '✅', url: '/pkg-points/task/index' },
+  { id: 'more', label: '更多', glyph: '⋯', url: '/pages/mine/mine' }
+];
 
-// 家族速览统计
-const overviewStats = computed(() => [
-  { value: '128', label: '在世人口' },
-  { value: '47', label: '最新代数' },
-  { value: '3', label: '本月大事' },
-  { value: '明', label: '我的字辈' }
-]);
-
-// 页面加载
-onMounted(async () => {
-  // 1. 获取节气信息
-  const atmRes = await wx.cloud.callFunction({ name: 'atmosphere', data: { action: 'today' } });
-  if (atmRes.result) {
-    solarTerm.value = atmRes.result.solarTerm;
-    isMutedPeriod.value = !!atmRes.result.mutedPeriod;
-  }
-  
-  // 2. 聚合 API 加载要事数据
-  await loadTodayCards();
+onMounted(() => {
+  // 时段问候（本地计算，零网络开销）
+  const h = new Date().getHours();
+  greeting.value = h < 6 ? '夜安' : h < 12 ? '晨安' : h < 18 ? '午安' : '晚安';
+  loadTodayCards();
 });
 
-// 加载今日卡片
+/**
+ * 首屏数据：缓存优先 + 静默刷新（文档 0.3.3 / 11.5）
+ * atmosphere.today → 10 分钟缓存（节气/氛围变化低频）
+ * notify.digest → 60 秒缓存（要事需要相对新鲜）
+ */
 async function loadTodayCards() {
-  try {
-    const res = await wx.cloud.callFunction({
-      name: 'notify',
-      data: { action: 'digest' }
-    });
-    
-    if (res.result?.cards) {
-      ceremonyCard.value = res.result.cards.find(c => c.type === 'ceremony');
-      reminders.value = res.result.cards.filter(c => c.type === 'reminder');
-      momentDigest.value = res.result.cards.find(c => c.type === 'moment');
-    }
-  } catch (e) {
-    console.error('Failed to load today cards:', e);
+  loading.value = true;
+  loadError.value = null;
+
+  // 1. 氛围数据（缓存优先）
+  const atm = await call('atmosphere', { action: 'today' }, {
+    cacheKey: 'atmosphere:today',
+    cacheTTL: 10 * 60 * 1000
+  });
+  if (atm.data) {
+    const d = atm.data.data ?? atm.data;
+    solarTerm.value = d.solarTerm || '';
+    isMutedPeriod.value = !!d.mutedPeriod;
+    weatherInfo.value = d.weather || '晴';
+    loaded.value = true;
   }
+
+  // 2. 要事卡流（缓存优先，短 TTL）
+  const digest = await call('notify', { action: 'digest' }, {
+    cacheKey: 'notify:digest',
+    cacheTTL: 60 * 1000
+  });
+
+  if (digest.error && !digest.data) {
+    loadError.value = { message: digest.error.message };
+    cards.value = [];
+  } else {
+    const d = digest.data?.data ?? digest.data;
+    cards.value = (d?.cards || []).map((c: any) => ({
+      id: c.id || c._id || c.title,
+      title: c.title,
+      desc: c.desc || '',
+      type: c.type || 'normal'
+    }));
+  }
+
+  loading.value = false;
 }
 
-// 快捷点击处理
-function handleQuickClick(item) {
-  switch (item.id) {
-    case 'lamp': wx.navigateTo({ url: '/pkg-shrine/shrine/index' }); break;
-    case 'qingan': wx.showToast({ title: '请安入口' }); break;
-    case 'zupu': wx.navigateTo({ url: '/pkg-genealogy/jiapu/index' }); break;
-    case 'daka': wx.navigateTo({ url: '/pkg-points/task/index' }); break;
-    case 'more': wx.navigateTo({ url: '/pages/mine/mine' }); break;
+function handleQuickClick(item: typeof quickItems[number]) {
+  if (!item.url) {
+    uni.showToast({ title: '「请安」入口开发中', icon: 'none' });
+    return;
   }
+  uni.navigateTo({
+    url: item.url,
+    fail: () => uni.showToast({ title: '页面开发中', icon: 'none' })
+  });
 }
 
-function goToCeremony() { /* ... */ }
-function goToCalendar() { /* ... */ }
-function goToPlaza() { /* ... */ }
-function goToMotto() { /* ... */ }
-function handleOverviewStat(stat) { /* ... */ }
+function openCard(card: { id: string; type: string }) {
+  if (card.type === 'ceremony') {
+    uni.navigateTo({ url: '/pkg-calendar/calendar/index', fail: () => {} });
+  } else {
+    uni.navigateTo({ url: '/pkg-social/plaza/index', fail: () => {} });
+  }
+}
 </script>
 
-<style scoped>
-@import '/styles/home.scss';
-/* 其他样式... */
+<style lang="scss" scoped>
+@import '@/styles/home.scss';
+
+/* 年长模式：全局字号 ×1.4（文档 0.5） */
+.elder-mode {
+  .home-greeting { font-size: calc(28px * 1.4); }
+  .home-greeting-sub { font-size: calc(14px * 1.4); }
+  .home-quickbar-label { font-size: calc(12px * 1.4); }
+  .home-overview-num { font-size: calc(20px * 1.4); }
+  .home-overview-label { font-size: calc(12px * 1.4); }
+}
 </style>

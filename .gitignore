@@ -27,6 +27,9 @@ npm-debug.log*
 cloud/node_modules/
 cloud/**/node_modules/
 
+# sync-common 生成的副本（源码在 cloud/functions/common）
+cloud/functions/*/common/
+
 # 临时文件
 *.tmp
 *.bak

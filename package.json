@@ -6,7 +6,9 @@
     "dev:mp-wechat": "uni -p mp-wechat",
     "build:mp-wechat": "uni build -p mp-wechat",
     "dev:h5": "uni",
-    "build:h5": "uni build"
+    "build:h5": "uni build",
+    "test": "node --test --test-isolation=none tests/roles.test.js tests/privacy.test.js tests/kindship.test.js tests/core.test.js",
+    "sync:common": "node scripts/sync-common.js"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-4020920240930001",
