@@ -67,6 +67,13 @@ async function exportCsv(db, openid, { branchId, page = 1 }) {
   }));
 
   const csv = rowsToCsv(rows);
+  // Audit trail (Sprint R6 closure)
+  try {
+    const auditRes = await db.collection('audit_log').add({
+      data: { userId: openid, action: 'member.export_csv', target: `${branchId || 'all'}:${p}`, detail: `total=${rows.length}` }
+    }).catch(() => null);
+  } catch (e) { /* 审计失败不阻塞导出 */ }
+
   return OK({
     csv,
     total: rows.length,

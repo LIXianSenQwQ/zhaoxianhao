@@ -1,9 +1,6 @@
 /**
  * stores/tree-store.ts
- * 族谱树视图 Store（Sprint R4 / R5 重构）
- * 
- * 状态机/缓存/续载判定逻辑抽离至 utils/tree-view.js（纯函数可单测）。
- * 本文件只做 uni 请求桥接 + Vue 响应式包装。
+ * 族谱树视图 Store（Sprint R4 / R5；tree-flow.js 专供集成测试 mock）
  */
 import { ref } from 'vue';
 import { read } from '@/services/request';
@@ -13,7 +10,6 @@ export interface TreeNode { path: string; name: string; generation: number; gene
 export interface TreePage { nodes: TreeNode[]; cursor?: string; hasMore: boolean }
 
 export function useTreeStore() {
-  // 响应式包装
   const collapsedMap = ref<Record<string, boolean>>({});
   const pages = ref<Map<string, TreePage>>(new Map());
   const loadingPaths = ref<Set<string>>(new Set());

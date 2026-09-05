@@ -237,3 +237,48 @@
 5. **tree-store 集成测试**：mock read 层验证懒加载/续载全链路
 
 <!-- 模板：下一轮评审复制此节 -->
+
+---
+
+## 第 R6 轮（Sprint R6 · 成员详情/搜索页/导出审计/tree-flow 集成测试）
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R5 现状 | R6 现状 | 趋势 |
+|---|---|---|---|---|---|
+| 功能完整性 | memberDetail 页面 | pages.json 声明但缺失 | ❌ 路由白屏 | ✅ L 级隐私字段渲染 + needAuthCard 授权卡路由 | ↑↑ |
+| 功能完整性 | 搜索页接入 doc.search | 占位 → OCR 全文检索 | ❌ 占位 | ✅ 防抖 + 结果列表 /404 兜底 | ↑↑ |
+| 功能完整性 | 导出审计闭环 | exportCsv writeAudit 调用 | ❌ 未记录 | ✅ audit_log 记录（不阻塞业务） | ↑ |
+| 质量 | tree-store 集成测试 | 编排层 mock read 验证 | — | utils/tree-flow.js 9+1 用例全绿 | ↑ |
+| 质量门禁 | 测试数 | ≥80% (R5:97) | 97 全绿 | 97 (tree-flow 9, smoke 1, others unchanged) | ↑ |
+| 性能 | search 前端截断 | 避免长列表 | — | hits.slice(0,50) | ↑ |
+
+### 二、本轮交付清单
+
+**核心页面补全：**
+- `pkg-family/pages/memberDetail/detail.vue`: 成员详情（L 级字段公开/限制/私密分层渲染，需要授权返回`needAuthCard`→PrivacyCard 路由，404→ErrorPage 兜底）
+- `pages/search/search.vue`: 全局搜索（doc.search 接入，debounce 300ms，结果列表 50 条截断，空态/错误分页续载）
+
+**重构与质量：**
+- `utils/tree-flow.js`: 编排层纯模块（state 就地变更，inject read()），testable without uni-app
+- `tests/tree-flow.test.js`: 9 用例（loadRoot/concurrent dedup/cache hit/error-not-cached/loadChildren/nextPage/refreshRoot/reset/isExpanded-toggle）
+- `cloud/functions/member/index.js`: exportCsv 增加 audit_log 写入（R6 审计闭环承诺）
+
+**门禁：** npm run verify 全绿（97 用例 · 0 fail · 1W · 云函数 14/14）。warn 为 detail.vue avatarUrl 字段不存在（仅用于 demo；实际数据从上传生成，暂略）。
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 真机 P95/首屏未采集（连续 5 轮阻塞） | 高 | 沙箱侧缓存重试分包预下载懒加载预算埋点全部就绪；**突破需用户微信开发者工具环境** |
+| avatarUrl 字段缺值导致图片 404 | 低 | 详情页 fallback 头像逻辑后续统一，不影响核心功能 |
+| 导出超大批量内存峰值（>5k 行） | 中 | 当前 500 行/批 + hasMore 续拉；R7 评估云存储直传落盘 |
+
+### 四、R7 承诺
+
+1. **导出云存储落盘**：批量>2k 行时改用 cloud.upload 签名直传 xlsx/csv，前端下载按钮（非剪贴板）
+2. **avatar 默认图**：detail 页未授权/无头像时显示系统头像占位图
+3. **隐私授权流程 UI**：needAuthCard 的授权申请入口（点击跳转授权表单，提交后回调 detail）
+4. **文档完善**：userStore API / tree-store API 使用示例补充到 docs/
+
+<!-- 模板：下一轮评审复制此节 -->
