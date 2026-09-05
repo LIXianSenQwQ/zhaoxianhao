@@ -4,7 +4,9 @@
 			"path": "pages/index/index",
 			"style": {
 				"navigationStyle": "custom",
-				"navigationBarTitleText": "好诚事家风"
+				"navigationBarTitleText": "好诚事家风",
+				"enablePullDownRefresh": true,
+				"onReachBottomDistance": 50
 			}
 		},
 		{
@@ -23,10 +25,52 @@
 		{
 			"path": "pages/search/search",
 			"style": {
-				"navigationBarTitleText": "搜索"
+				"navigationBarTitleText": "搜索",
+				"navigationBarBackgroundColor": "#FAF8F2",
+				"navigationBarTextStyle": "black"
 			}
 		}
 	],
+	"subPackages": [
+		{
+			"root": "pkg-family",
+			"name": "family",
+			"pages": [
+				{
+					"path": "pages/tree/tree",
+					"style": {}
+				},
+				{
+					"path": "pages/members/members",
+					"style": {}
+				}
+			]
+		},
+		{
+			"root": "pkg-growth",
+			"name": "growth",
+			"pages": [
+				{
+					"path": "pages/audit/audit",
+					"style": {}
+				}
+			]
+		}
+	],
+	"preloadRule": {
+		"pages/index/index": {
+			"network": "all",
+			"packages": ["family"]
+		},
+		"pages/mine/mine": {
+			"network": "all",
+			"packages": ["family", "growth"]
+		},
+		"pages/search/search": {
+			"network": "all",
+			"packages": ["family"]
+		}
+	},
 	"globalStyle": {
 		"navigationBarTextStyle": "black",
 		"navigationBarTitleText": "好诚事家风",

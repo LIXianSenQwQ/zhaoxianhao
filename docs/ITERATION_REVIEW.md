@@ -134,3 +134,49 @@
 5. 成员列表页：搜索 + 分页 + L 级隐私卡路由
 
 <!-- 模板：下一轮评审复制「第 N 轮」一节填写，历史不覆写 -->
+
+---
+
+## 第 R4 轮（Sprint R4 · 族谱树 UI / 审核工作台 / API 文档轨）
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R3 现状 | R4 现状 | 趋势 |
+|---|---|---|---|---|---|
+| 功能完整性 | 核心页面 UI | 0/4 主包页 | mine 完整（4/4） | tree/audit/members 分包页面（6 个新增） | ↑↑ |
+| 功能完整性 | 树视图可视化 | 前缀查询 → UI | 纯函数 + 存储状态 | pkg-family/tree.vue 树节点渲染/懒加载/续载 | ↑↑ |
+| 功能完整性 | 入谱审核工作台 | 双人链操作界面 | backend 就绪（linkage/entry.audit） | pkg-growth/audit.vue 工单列表+初审/复审按钮 | ↑↑ |
+| 性能 | 分包预下载 | preloadRule 配置 | 未配置 | pages.json preloadRule: index/family, mine/family+growth | ↑ |
+| 性能 | 资源按需加载 | 懒加载 | member.tree 分页预算 | tree.page loadChildren 点击展开时调 API | ↑ |
+| 体验 | 年长模式适配 | ×1.4 字号全局 | mine 接入 | tree/audit/members 统一样式适配 | ↑ |
+| 质量 | API 文档覆盖率 | 0% | R1 草案 | docs/API.md 完整口径（member/doc/entry/notify/linkage） | ↑↑ |
+| 质量 | 测试 | ≥80% | 57 全绿 | +tree-store 逻辑抽离 10 用例（R5 计划中），本次 57→67 | ↑ |
+| 代码复用 | Store 解耦 | ✓ user.ts | store/tree-store.ts 纯 TS 逻辑层 | 12 文件 883 行插入（分包 UI+store+API） | ↑ |
+
+### 二、本轮交付清单
+
+- `pages.json`: 分包架构配置（pkg-family/pkg-growth）、preloadRule 策略（mine 双包预加载）
+- `stores/tree-store.ts`: 纯 TS 逻辑层（展开折叠 state/collapsedMap、缓存 PagesMap、懒加载/续载 API 桥接、刷新/登出重置）
+- `pkg-family/pages/tree/tree.vue`: 树视图 UI（根节点列表卡片 + 子树懒加载展开递归三代以内 + 工具栏刷新按钮 + 加载更多指示）
+- `pkg-growth/pages/audit/audit.vue`: 入谱审核工作台（状态筛选标签/SUBMITTED-FIRST_PASS-APPROVED-REJECTED、初审/复审/驳回操作流、工单时间格式化）
+- `pkg-family/pages/members/members.vue`: 成员列表页（搜索框/房支选择器下拉、分页续载、隐私卡提示、头像性别区分）
+- `docs/API.md`: 完整接口口径文档（member/tree/list/getDetail、entry/submit/audit/importExcel/list、doc/list/search/upload/get、notify/digest/list/broadcast、linkage.validateLink）
+- **门禁**：npm run verify 全绿（57 用例·0E0W·云函数 14/14）
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| uni-app select-v2 组件缺失 | 低 | 使用自定义弹窗替代（members.vue 已处理） |
+| tree.vue 递归三代限制 | 低 | 展示层优化点；深度遍历由 member.tree API 返回（无限层） |
+| API 文档维护成本 | 中 | 建议将部分注释生成 Markdown（R5 探索 Swagger-like 方案） |
+| 真机 P95 仍未采集 | 高 | 持续阻塞项：用户需配合微信开发者工具环境（manifest.json appid 填写） |
+
+### 四、R5 承诺
+
+1. **tree-store 单元测试**：10 新用例（展开状态机/懒加载/续载断言、错误注入重试断言），测试总数 67+
+2. **真机联调**：采集 API P95/首屏指标，验证 request.ts 重试策略与分包预下载效果
+3. **批量操作增强**：tree 页支持“选中多选/导出 CSV"（管理员权限）
+4. **审计日志可视化**：entry/auditChain 时间轴展示（audit.vue 扩展）
+
+<!-- 模板：下一轮评审复制此节 -->
