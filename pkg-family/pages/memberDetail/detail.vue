@@ -12,8 +12,8 @@
       v-else-if="needAuthCard || authError"
       :level="privacyLevel"
       :desc="authDesc"
-      :apply-route="applyRoute"
       style="padding: 24px;"
+      @tap="openApply"
     />
 
     <!-- 正常数据展示 -->
@@ -21,7 +21,7 @@
       <!-- 头像卡 -->
       <BaseCard>
         <view class="avatar-row">
-          <image class="avatar" :src="member.avatarUrl" mode="aspectFill" />
+          <image class="avatar" :src="getAvatar(member)" mode="aspectFit" />
           <view class="info">
             <text class="name">{{ member.genealogyName || member.name }}</text>
             <text class="meta">{{ member.branchId }} · {{ member.generation }}世</text>
@@ -133,6 +133,18 @@ function statusClass(s?: string): string {
 }
 function genDate(b?: string, d?: string): string {
   return [b, d].filter(Boolean).join(' ~ ') || '-';
+}
+
+/** avatar fallback（Sprint R7） */
+function getAvatar(m: any): string {
+  return m.avatarUrl || (m.gender === 'FEMALE' ? '/static/female.png' : '/static/male.png');
+}
+
+/** 打开授权申请页（Sprint R7：needAuthCard 授权卡闭环） */
+async function openApply() {
+  if (!props.id) return;
+  const q = `?memberId=${encodeURIComponent(props.id)}&name=${encodeURIComponent(member.value.genealogyName || member.value.name || '')}`;
+  uni.navigateTo({ url: `/pages/privacy/privacy${q}` });
 }
 
 function goEdit() {

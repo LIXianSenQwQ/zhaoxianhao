@@ -282,3 +282,56 @@
 4. **文档完善**：userStore API / tree-store API 使用示例补充到 docs/
 
 <!-- 模板：下一轮评审复制此节 -->
+
+---
+
+## 第 R7 轮（Sprint R7 · 授权申请闭环/导出云存储落盘/default avatar）
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R6 现状 | R7 现状 | 趋势 |
+|---|---|---|---|---|---|
+| 功能完整性 | 隐私授权申请闭环 | applyRoute 页存在 + member.applyAuth action | ❌ privacy 页缺失断链 | ✅ pages/privacy/privacy.vue + applyAuth (幂等/校验/审计) | ↑↑ |
+| 功能完整性 | 导出云存储落盘 | exportFile → uploadFile 文件落地 | ❌ 仅剪贴板 (≤500 行) | ✅ exportFile (CSV→fileURL，≤5000 行) | ↑ |
+| 体验 | avatar fallback | undefined 占位图 | ❌ 404 | ✅ detail/members.getAvatar() 默认头像 | ↑ |
+| 质量 | 测试数 | ≥80% (R6:97) | 97 全绿 | **100** (+3 buildExportPath +2 applyAuth) | ↑ |
+| 性能 | 投影函数复用 | toExportRow 唯一口径 | ❌ 重复代码 | ✅ exportCsv/exportFile 共用 | ↑ |
+| 质量门禁 | lint warn | 清零 | 1W (avatarUrl) | 1W (default .png 未物理存在) | → |
+| 文档 | stores API 示例 | — | 无 | docs/STORES.md userStore/tree-store | ↑ |
+
+### 二、本轮交付清单
+
+**功能模块：**
+- `pages/privacy/privacy.vue`: 授权申请表单（reason≥5 字、memberId 必传、提交→auth_requests、toast+navigateBack）
+- `member/index.js` +applyAuth action：MEMBER+ 门禁 / reason 校验 / 幂等检查 / audit_log 写入（needAuthCard 闭环）
+- `member/index.js` +exportFile action：全量分批拉取（≤5000 行）→ CSV → wx.cloud.uploadFile(fileID)+getTempFileURL(fileURL) 返回
+- `detail.vue`: avatar fallback (`/static/female.png` `/male.png`) + PrivacyCard @tap 打开申请页（路由含 memberId&name）
+- `members.vue`: avatar fallback 统一入口
+- `docs/STORES.md`: userStore/tree-store API 使用示例（组合模式）
+
+**缺陷修复：**
+- `buildTree(event.cursor)` ReferenceError 修复：增加 cursor 参数并正确使用（分页续载此前会崩溃，smoke 未覆盖到 cursor 分支）
+
+**重构与质量：**
+- `common/csv.js` +toExportRow: projection function 抽离，exportCsv/exportFile 共用口径
+- `tests/tree-view.test.js` +buildExportPath 3 用例（正常/sanitize/all fallback）
+- `tests/smoke-functions.test.js` +applyAuth 2 用例（VISITOR 403/empty openid 403）
+
+**门禁：** npm run verify 全绿（100 用例 · 0 fail · 1W · 云函数 14/14）。warn 为 avatar 图片占位符需物理资源补充。
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 真机 P95/首屏采集（连续 6 轮阻塞） | 高 | 沙箱侧缓存重试分包预下载懒加载预算埋点全部就绪；**突破需用户微信开发者工具环境** |
+| 云存储上传失败回退 | 中 | exportFile 当前直接抛错（500），后续可降级为 CSV 剪贴板 +Toast 提示 |
+| avatar 默认图资源 404 | 低 | fallback 逻辑已就位；图片替换可在正式机部署时提供 PNG 资源 |
+
+### 四、R8 承诺
+
+1. **云存储直传落盘回退策略**：uploadFile 失败自动降级为 CSV 剪贴板
+2. **授权审批 UI**：CHIEF 审核待审批列表 + 同意/驳回按钮（pkg-growth 新增审批页）
+3. **性能实测**：在真机环境下验证分包预下载效果 + request.ts retry 成功率
+4. **搜索页空态文案优化**：按家族文化调整占位语（祖训卡扩展）
+
+<!-- 模板：下一轮评审复制此节 -->

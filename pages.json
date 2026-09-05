@@ -29,6 +29,14 @@
 				"navigationBarBackgroundColor": "#FAF8F2",
 				"navigationBarTextStyle": "black"
 			}
+		},
+		{
+			"path": "pages/privacy/privacy",
+			"style": {
+				"navigationBarTitleText": "资料授权申请",
+				"navigationBarBackgroundColor": "#FAF8F2",
+				"navigationBarTextStyle": "black"
+			}
 		}
 	],
 	"subPackages": [

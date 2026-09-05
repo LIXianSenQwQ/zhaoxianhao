@@ -112,7 +112,7 @@ function onBranchChange(v: string) {
 }
 
 function getAvatar(m: any): string {
-  return m.gender === 'FEMALE' ? '/static/female.png' : '/static/male.png';
+  return m.avatarUrl || (m.gender === 'FEMALE' ? '/static/female.png' : '/static/male.png');
 }
 
 function goDetail(m: any) {

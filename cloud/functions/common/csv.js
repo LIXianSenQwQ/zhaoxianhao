@@ -36,4 +36,11 @@ function rowsToCsv(rows, keys) {
   return BOM + lines.join('\r\n');
 }
 
-module.exports = { BOM, escapeField, rowToCsvLine, rowsToCsv };
+/** 导出文件云存储路径（Sprint R7）：exports/members-{branch}-{ts}.csv */
+function buildExportPath(branchId, ts) {
+  const b = branchId ? String(branchId).replace(/[^a-zA-Z0-9_-]/g, '') : 'all';
+  const t = Number(ts) || Date.now();
+  return `exports/members-${b}-${t}.csv`;
+}
+
+module.exports = { BOM, escapeField, rowToCsvLine, rowsToCsv, buildExportPath };

@@ -4,7 +4,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const V = require('../utils/tree-view');
-const { BOM, escapeField, rowToCsvLine, rowsToCsv } = require('../cloud/functions/common/csv');
+const { BOM, escapeField, rowToCsvLine, rowsToCsv, buildExportPath } = require('../cloud/functions/common/csv');
 
 // ─── 折叠状态机 ───
 
@@ -115,4 +115,12 @@ test('rowsToCsv：省略 keys 自动取首行键', () => {
   const csv = rowsToCsv([{ x: 1, y: 2 }]);
   assert.ok(csv.includes('x,y'));
   assert.ok(csv.includes('1,2'));
+});
+
+/** Sprint R7: buildExportPath 纯函数测试 */
+test('buildExportPath：正常 branchId+ts → exports/members-{branch}-{ts}.csv', () => {
+  assert.equal(buildExportPath('long', 1690000000), 'exports/members-long-1690000000.csv');
+  assert.equal(buildExportPath('', 1690000000), 'exports/members-all-1690000000.csv');
+  // 转义：特殊字符过滤
+  assert.equal(buildExportPath('long/branch', 1690000000), 'exports/members-longbranch-1690000000.csv');
 });

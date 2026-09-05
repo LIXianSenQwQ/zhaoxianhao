@@ -92,6 +92,21 @@ test('member.getDetail：stub doc 无数据 → NOT_FOUND 404', async () => {
   assert.equal(res.code, 404);
 });
 
+// ─── Sprint R7: member.applyAuth smoke gates ───
+
+test('member.applyAuth：VISITOR → 403（鉴权先行）', async () => {
+  const denied = await FN('member').main(
+    { action: 'applyAuth', memberId: 'm-123', reason: '需要查看详细资料，理由充足且符合要求。' }, CTX);
+  assert.equal(denied.success, false);
+  assert.equal(denied.code, 403);
+});
+
+test('member.applyAuth：缺 openid → 403', async () => {
+  const noOpenid = await FN('member').main({ action: 'applyAuth', memberId: 'm-123', reason: '原因说明。' }, {});
+  assert.equal(noOpenid.success, false);
+  assert.equal(noOpenid.code, 403);
+});
+
 // ─── Sprint R3 冒烟：doc / entry / notify ───
 
 test('doc.list：类型筛选 + 未知类型拒绝', async () => {

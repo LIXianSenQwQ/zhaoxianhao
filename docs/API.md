@@ -70,6 +70,32 @@
 
 **前端**：tree.vue 工具栏"导出 CSV"按钮（`user.isChief` 才显示），`uni.setClipboardData` 复制到剪贴板。
 
+### 1.5 exportFile（全量导出→云存储落盘，Sprint R7）
+
+**请求**：`{ action: 'exportFile', branchId?: string }`
+
+**权限**：仅 `CHIEF` 可执行
+
+- 全量分批拉取（单批 500 × 最多 10 批 = 5000 行上限）
+- CSV → `wx.cloud.uploadFile`（路径 `exports/members-{branch}-{ts}.csv`）→ `getTempFileURL` 取下载链接
+- 上传失败返回 500（R8 评估降级为剪贴板回退）
+
+**响应**：`{ success: true, data: { fileID, fileURL, total, cloudPath } }`
+
+### 1.6 applyAuth（授权申请，Sprint R7）
+
+**请求**：`{ action: 'applyAuth', memberId: string, reason: string }`
+
+**权限**：`MEMBER+`（鉴权先行：VISITOR 直接 403，不暴露参数校验细节）
+
+- reason 长度 5–500 字
+- 幂等：同一申请人对同一目标已有 PENDING 申请时返回 `{ duplicate: true }`
+- 写入 `auth_requests`（grantee/target/reason/status=PENDING）+ audit_log 审计
+
+**响应**：`{ success: true, data: { submitted: true } }`
+
+**前端**：detail.vue 的 PrivacyCard 点击 → `/pages/privacy/privacy?memberId=&name=` 申请表单页。
+
 ---
 
 ## 2. 入谱（entry）

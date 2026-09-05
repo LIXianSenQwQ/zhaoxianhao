@@ -10,7 +10,7 @@ const wx = require('wx-server-sdk');
 const { OK, BAD_REQUEST, FORBIDDEN, NOT_FOUND } = require('./common/response');
 const { hasRole } = require('./common/roles');
 const { privacyCheck } = require('./common/privacy');
-const { rowsToCsv } = require('./common/csv');
+const { rowsToCsv, buildExportPath } = require('./common/csv');
 const {
   generationOf, relationSteps, paginateTree, subtreeRegex, TREE_PAGE_BUDGET
 } = require('./common/tree');
@@ -19,6 +19,7 @@ wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
 
 const LIST_LIMIT = 50;
 const EXPORT_BATCH = 500; // 单批导出上限（内存峰值保护）
+const EXPORT_MAX_BATCHES = 10; // 全量落盘上限 = 5000 行
 
 async function main(event, context) {
   const openid = context.OPENID || context.openid;
@@ -30,12 +31,141 @@ async function main(event, context) {
     case 'getDetail':
       return await getDetail(db, openid, event.memberId);
     case 'tree':
-      return await buildTree(db, openid, event.focusId, event.page);
+      return await buildTree(db, openid, event.focusId, event.page, event.cursor);
     case 'export':
       return await exportCsv(db, openid, event);
+    case 'exportFile':
+      return await exportToFile(db, openid, event);
+    case 'applyAuth':
+      return await applyAuth(db, openid, event);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }
+}
+
+/** 导出字段投影（Sprint R7 抽离：exportCsv / exportToFile 共用，口径唯一） */
+function toExportRow(m) {
+  return {
+    谱名: m.genealogyName || '',
+    本名: m.name || '',
+    世代: m.generation ?? '',
+    房支: m.branchId ?? '',
+    性别: m.gender ?? '',
+    生卒: [m.birthDate, m.deathDate].filter(Boolean).join(' ~ '),
+    状态: m.status ?? '',
+    世系路径: m.path ?? ''
+  };
+}
+
+/** 导出审计落 audit_log（失败不阻塞业务） */
+async function writeExportAudit(db, openid, action, detail) {
+  try {
+    await db.collection('audit_log').add({
+      data: { userId: openid, action, detail }
+    });
+  } catch (e) { /* 忽略 */ }
+}
+
+/**
+ * 批量导出 CSV（CHIEF 专属；分批 + 字段投影减体积）
+ * 返回 { csv, total }——前端 uni.setClipboardData 交付（≤500 行场景）
+ */
+async function exportCsv(db, openid, { branchId, page = 1 }) {
+  const ctx = await requesterCtx(db, openid);
+  if (!hasRole(ctx.role, 'CHIEF')) return FORBIDDEN('仅族长可批量导出成员档案');
+
+  const p = Math.max(1, Number(page) || 1);
+  const where = branchId ? { branchId } : {};
+  const res = await db.collection('members')
+    .where(where)
+    .orderBy('path', 'asc') // 物化路径序 = 族谱序
+    .skip((p - 1) * EXPORT_BATCH).limit(EXPORT_BATCH)
+    .get();
+
+  const rows = res.data.map(toExportRow);
+  const csv = rowsToCsv(rows);
+  await writeExportAudit(db, openid, 'member.export_csv', `branch=${branchId || 'all'} page=${p} total=${rows.length}`);
+  return OK({ csv, total: rows.length, page: p, hasMore: rows.length === EXPORT_BATCH });
+}
+
+/**
+ * 全量导出 → 云存储落盘（CHIEF 专属；Sprint R7：>2k 行场景，前端拿 fileURL 下载）
+ * 上限 EXPORT_MAX_BATCHES × EXPORT_BATCH = 5000 行
+ */
+async function exportToFile(db, openid, { branchId }) {
+  const ctx = await requesterCtx(db, openid);
+  if (!hasRole(ctx.role, 'CHIEF')) return FORBIDDEN('仅族长可导出成员档案');
+
+  const where = branchId ? { branchId } : {};
+  let all = [];
+  for (let p = 1; p <= EXPORT_MAX_BATCHES; p++) {
+    const res = await db.collection('members')
+      .where(where)
+      .orderBy('path', 'asc')
+      .skip((p - 1) * EXPORT_BATCH).limit(EXPORT_BATCH)
+      .get();
+    all = all.concat(res.data);
+    if (res.data.length < EXPORT_BATCH) break;
+  }
+
+  const rows = all.map(toExportRow);
+  const csv = rowsToCsv(rows);
+  const cloudPath = buildExportPath(branchId, Date.now());
+
+  let fileID = '';
+  let fileURL = '';
+  try {
+    const up = await wx.cloud.uploadFile({
+      cloudPath,
+      fileContent: Buffer.from(csv, 'utf8')
+    });
+    fileID = up.fileID || '';
+    const g = await wx.cloud.getTempFileURL({ fileList: [fileID] });
+    fileURL = (g.fileList && g.fileList[0] && g.fileList[0].tempFileURL) || '';
+  } catch (e) {
+    return { success: false, code: 500, message: '导出文件上传云存储失败', detail: cloudPath };
+  }
+
+  await writeExportAudit(db, openid, 'member.export_file', `branch=${branchId || 'all'} total=${rows.length} path=${cloudPath}`);
+  return OK({ fileID, fileURL, total: rows.length, cloudPath });
+}
+
+/**
+ * 授权申请（Sprint R7：needAuthCard 授权卡闭环）
+ * MEMBER+ 可对不可见族人发起申请 → auth_requests 集合，族长审批后生效
+ */
+async function applyAuth(db, openid, { memberId, reason }) {
+  // 鉴权先行：未授权者不暴露参数校验细节
+  const ctx = await requesterCtx(db, openid);
+  if (!hasRole(ctx.role, 'MEMBER')) return FORBIDDEN('仅注册族人可申请授权');
+
+  if (!memberId) return BAD_REQUEST('缺少 memberId');
+  const reasonText = String(reason || '').trim();
+  if (reasonText.length < 5) return BAD_REQUEST('申请理由至少 5 个字');
+  if (reasonText.length > 500) return BAD_REQUEST('申请理由过长（≤500 字）');
+
+  const targetRes = await db.collection('members').doc(memberId).get().catch(() => null);
+  const target = targetRes && targetRes.data && !Array.isArray(targetRes.data) ? targetRes.data : (targetRes && targetRes.data && targetRes.data[0]);
+  if (!target) return NOT_FOUND('族人不存在');
+
+  // 幂等：同一申请人对同一目标存在 PENDING 申请时直接返回
+  const dup = await db.collection('auth_requests').where({ grantee: openid, target: memberId, status: 'PENDING' }).limit(1).get();
+  if (dup && Array.isArray(dup.data) && dup.data.length) {
+    return OK({ duplicate: true, message: '已存在待审申请，请耐心等待族长审批' });
+  }
+
+  await db.collection('auth_requests').add({
+    data: {
+      grantee: openid,
+      target: memberId,
+      targetName: target.genealogyName || target.name || '',
+      reason: reasonText,
+      status: 'PENDING',
+      createdAt: new Date().toISOString()
+    }
+  });
+  await writeExportAudit(db, openid, 'member.apply_auth', `target=${memberId}`);
+  return OK({ submitted: true });
 }
 
 /**
@@ -132,7 +262,7 @@ async function getDetail(db, openid, memberId) {
  * 族谱树（焦点视图）：向上 2 代 + 向下 2 代 + 同辈全取
  * 物化路径一次前缀查询（focus.path 截断至祖父层）→ 内存过滤 → 分页（≤200 节点）
  */
-async function buildTree(db, openid, focusId, page) {
+async function buildTree(db, openid, focusId, page, cursor = '') {
   if (!focusId) return BAD_REQUEST('缺少 focusId');
 
   const ctx = await requesterCtx(db, openid);
@@ -163,7 +293,7 @@ async function buildTree(db, openid, focusId, page) {
     .map(m => ({ ...m, gen: generationOf(m.path) }))
     .sort((a, b) => (a.path < b.path ? -1 : 1));
 
-  const paged = paginateTree(sorted, event.cursor || '', TREE_PAGE_BUDGET);
+  const paged = paginateTree(sorted, cursor || '', TREE_PAGE_BUDGET);
   return OK({
     focusId,
     focusPath: focus.path,
