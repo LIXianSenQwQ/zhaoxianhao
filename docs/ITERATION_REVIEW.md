@@ -84,4 +84,53 @@
 2. 真机性能采集（依赖用户环境，持续跟踪）
 3. 挂接校验中间件：entry.importExcel 入库时自动 buildPath + 世代互指校验
 
+---
+
+## 第 R3 轮（Sprint R3 · 入谱工作流与挂接校验轨）
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R3 现状 | 趋势 |
+|---|---|---|---|---|
+| 功能完整性 | 云函数完整化 | 0 轻量 stub | doc/entry/notify 完整化（task/upload/event 已于 R2） | ↑ |
+| 功能完整性 | 挂接校验 | 世代互指+同支 | ✅ linkage.js 中间件 + finalize 真实入库挂接 | ↑ |
+| 功能完整性 | 存量数据迁移 | path 回填脚本 | ✅ migrate-paths.js（demo 验证通过 / dry-run 默认 / apply 门禁） | ↑ |
+| 性能 | API 重试 | 读路径退避 | ✅ utils/retry.js + request.ts 接入（R1 文档承诺落地） | ↑ |
+| 性能 | API P95 | ≤200ms | 仍待真机采集（R4 首要承诺） | → |
+| 体验 | 主包页面覆盖 | 组件化 4/4 | mine 页重构（BaseCard/Skeleton/ErrorPage/年长模式）→ 4/4 | ↑ |
+| 质量 | 单测 | ≥80% | 57 用例全绿（38→57，+50%），云函数行为冒烟 16 用例 | ↑ |
+| 质量 | Lint | 0 error | ✅ 177 文件 0E/0W | ↑ |
+
+### 二、本轮交付清单
+
+- `common/linkage.js`：挂接校验中间件（世代互指/同支 fail-closed/特批豁免/finalizePatch 统一出口）
+- `common/tree.js` +`rebuildPaths`：存量回填纯函数（森林重建/成环检测/编号重复/引用校验）
+- `scripts/migrate-paths.js`：--demo（沙箱验证通过 6/6）/--dry-run（默认安全）/--apply（conflicts=0 才放行）
+- `entry/index.js` 完整化：
+  - **修复 importExcel 引用未定义函数的 ReferenceError**（崩溃路径 → 完整批量导入）
+  - 幂等提交 / 双人审核链（初审≠复审≠提交人）/ finalize 真实入库（linkage 挂接+path）
+  - 批内世代连续性预检 + 逐行校验报告
+- `doc/index.js` 完整化：分页/类型筛选/OCR 全文检索（正则转义）/404/贡献权限
+- `notify/index.js` 完整化：**修复 list 引用未定义函数**、broadcast 统一响应+hasRole（旧字符串枚举漏 ADMIN）
+- `utils/retry.js` + `request.ts`：读路径退避重试落地（408/500/502/503，1s/2s/4s/8s/16s 封顶；写路径绝不自动重试）
+- `pages/mine/mine.vue`：占位页 → 完整版（组件化/年长模式开关/角色徽章/访客态降级）
+- 测试 38→57：linkage/rebuildPaths/retry 12 用例 + 冒烟 10→16（doc/entry/notify）
+- 测试暴露问题修正：doc/entry 鉴权先行顺序确认（安全惯例：未授权者不暴露参数校验细节）
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 真机 P95 仍未采集 | 中 | R4 首要承诺；重试/缓存策略已就绪，等真机验证 |
+| 存量 path 回填需人工确认 | 低 | dry-run 默认安全；conflicts=0 才允许 --apply |
+| Excel 导入依赖客户端解析 | 低 | 职责分离设计：云函数接受 rows 数组，零 xlsx 依赖 |
+
+### 四、R4 承诺
+
+1. 真机联调：采集 API P95/首屏指标，验证重试+缓存优先策略（需用户配合开发者工具）
+2. 族谱树 UI 页面：member.tree 前缀查询结果的可视化（pkg-family 树视图）
+3. 挂接 UI：入谱审核工作台（双人审核链操作界面）
+4. API 文档同步：doc/entry/notify 新接口口径更新至 docs/API.md
+5. 成员列表页：搜索 + 分页 + L 级隐私卡路由
+
 <!-- 模板：下一轮评审复制「第 N 轮」一节填写，历史不覆写 -->

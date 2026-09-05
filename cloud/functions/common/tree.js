@@ -98,6 +98,93 @@ function subtreeRegex(ancestorPath) {
   return new RegExp(`^${trimmed}(/|$)`);
 }
 
+/**
+ * rebuildPaths - 存量数据物化路径回填（纯函数，Sprint R3）
+ * @param {Array} members [{_id, memberNo?}] 成员列表（顺序即默认编号序）
+ * @param {Array} edges   [{childId, parentId}] 父子边（方向显式）
+ * @param {Function} [memberNoOf] 从 member 取编号的函数，默认用 memberNo 或序号
+ * @returns {{ patches: Array<{_id, path}>, conflicts: string[], roots: string[] }}
+ *   patches  → 批量 update 计划（dry-run 打印 / apply 写库）
+ *   conflicts → 编号冲突 / 成环 / 缺父 引用问题清单（阻断 apply）
+ */
+function rebuildPaths(members, edges, memberNoOf) {
+  const noOf = memberNoOf || ((m, i) => m.memberNo ?? String(i + 1));
+  const conflicts = [];
+  const byId = new Map(members.map((m, i) => [m._id, m]));
+
+  // childId → parentId
+  const parentMap = new Map();
+  for (const e of edges || []) {
+    if (!byId.has(e.childId) || !byId.has(e.parentId)) {
+      conflicts.push(`边引用不存在的成员: ${e.childId} -> ${e.parentId}`);
+      continue;
+    }
+    if (parentMap.has(e.childId)) {
+      conflicts.push(`成员 ${e.childId} 存在多个父亲声明（旧=${parentMap.get(e.childId)} 新=${e.parentId}）`);
+      continue;
+    }
+    if (e.childId === e.parentId) {
+      conflicts.push(`自引用成环: ${e.childId}`);
+      continue;
+    }
+    parentMap.set(e.childId, e.parentId);
+  }
+
+  // 编号分配（先算全部，冲突只记不抛）
+  const segOf = new Map();
+  const usedBySeg = new Map(); // "parentId:seg" -> memberId 防同父下编号重复
+  members.forEach((m, i) => {
+    try {
+      const seg = segmentOf(noOf(m, i));
+      const parent = parentMap.get(m._id) || null;
+      const k = `${parent || 'ROOT'}:${seg}`;
+      if (usedBySeg.has(k)) {
+        conflicts.push(`同父下编号重复 ${seg}: ${usedBySeg.get(k)} 与 ${m._id}`);
+      } else {
+        usedBySeg.set(k, m._id);
+      }
+      segOf.set(m._id, seg);
+    } catch (err) {
+      conflicts.push(`成员 ${m._id}: ${err.message}`);
+    }
+  });
+
+  // 森林：根 = 无父者
+  const roots = members.filter(m => !parentMap.has(m._id)).map(m => m._id);
+  const childrenOf = new Map();
+  for (const [child, parent] of parentMap) {
+    if (!childrenOf.has(parent)) childrenOf.set(parent, []);
+    childrenOf.get(parent).push(child);
+  }
+
+  // BFS 自根向下构造 path（迭代防爆栈）
+  const patches = [];
+  const visited = new Set();
+  const queue = roots.map(id => ({ id, parentPath: ROOT_PATH }));
+  while (queue.length) {
+    const { id, parentPath } = queue.shift();
+    if (visited.has(id)) {
+      conflicts.push(`检测到环: ${id} 被二次访问`);
+      continue;
+    }
+    visited.add(id);
+    const seg = segOf.get(id);
+    if (!seg) continue; // 编号失败者跳过（已记冲突）
+    const p = buildPath(parentPath, seg);
+    patches.push({ _id: id, path: p });
+    for (const child of childrenOf.get(id) || []) {
+      queue.push({ id: child, parentPath: p });
+    }
+  }
+  for (const m of members) {
+    if (!visited.has(m._id) && parentMap.has(m._id)) {
+      conflicts.push(`成员 ${m._id} 不可达（父亲链断裂或成环）`);
+    }
+  }
+
+  return { patches, conflicts, roots };
+}
+
 module.exports = {
   ROOT_PATH,
   TREE_PAGE_BUDGET,
@@ -108,5 +195,6 @@ module.exports = {
   relationSteps,
   paginateTree,
   subtreeRegex,
-  segmentOf
+  segmentOf,
+  rebuildPaths
 };

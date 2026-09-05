@@ -1,14 +1,16 @@
 /**
  * services/request.ts
- * 统一请求层（性能优化核心，Sprint R1）
+ * 统一请求层（性能优化核心，Sprint R1 / R3 补齐重试）
  *
  * 性能预算（文档 2.2）：API ≤200ms；超时 3s 即视为失败并走降级
- * 策略（文档 0.3.3 / 11.5）：
+ * 策略（文档 0.3.3 / 11.5 / A.5）：
  *   1. 缓存优先渲染：先返回本地缓存，再静默刷新
- *   2. 失败重试：指数退避最多 5 次（1s/2s/4s/8s/16s，对齐 common/idempotency）
+ *   2. 失败重试：仅读路径，指数退避（1s/2s，utils/retry.js，可重试码 408/500/502/503）；
+ *      写路径绝不自动重试（幂等键防重，失败提示用户手动重试）
  *   3. 性能埋点：每次调用记录耗时，超 200ms 记 slowCall
  *   4. 幂等键透传：写操作自动生成 bizType:bizId:userId
  */
+const { withRetry } = require('../utils/retry');
 
 // ─── 类型 ───
 interface CallOptions {
@@ -99,8 +101,8 @@ export async function call<T = any>(
     if (cached && Date.now() - cached.ts < cacheTTL) {
       recordPerf(name, Date.now() - started);
       if (silentRefresh) {
-        // 后台刷新不阻塞
-        rawCall<T>(name, data, timeout, idempotency)
+        // 后台刷新不阻塞（同样走退避重试）
+        withRetry(() => rawCall<T>(name, data, timeout, idempotency), 2)
           .then(fresh => { if (fresh.data) writeCache(cacheKey, fresh.data); })
           .catch(() => {});
       }
@@ -108,8 +110,11 @@ export async function call<T = any>(
     }
   }
 
-  // 2. 直连云函数
-  const res = await rawCall<T>(name, data, timeout, idempotency);
+  // 2. 直连云函数（读路径退避重试，写路径不重试）
+  const exec = () => rawCall<T>(name, data, timeout, idempotency);
+  const res: CallResult<T> = idempotency
+    ? await exec()
+    : await withRetry(exec, 2);
   recordPerf(name, res.latencyMs);
 
   if (res.data && cacheKey) writeCache(cacheKey, res.data);

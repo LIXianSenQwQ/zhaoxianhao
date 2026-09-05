@@ -91,3 +91,79 @@ test('member.getDetail：stub doc 无数据 → NOT_FOUND 404', async () => {
   const res = await FN('member').main({ action: 'getDetail', memberId: 'm-x' }, CTX);
   assert.equal(res.code, 404);
 });
+
+// ─── Sprint R3 冒烟：doc / entry / notify ───
+
+test('doc.list：类型筛选 + 未知类型拒绝', async () => {
+  const ok = await FN('doc').main({ action: 'list', type: 'old_genealogy', page: 1 }, CTX);
+  assert.equal(ok.success, true);
+  assert.ok(Array.isArray(ok.data.docs));
+  assert.equal(ok.data.hasMore, false);
+
+  const bad = await FN('doc').main({ action: 'list', type: 'hacker' }, CTX);
+  assert.equal(bad.code, 400);
+});
+
+test('doc.upload：VISITOR 403（鉴权先于参数校验的安全惯例）', async () => {
+  const denied = await FN('doc').main(
+    { action: 'upload', title: '旧谱', type: 'photo', fileId: 'f1' }, CTX);
+  assert.equal(denied.code, 403, 'stub db users 为空 → VISITOR 不得上传');
+
+  const noFile = await FN('doc').main(
+    { action: 'upload', title: '旧谱', type: 'photo' }, CTX);
+  assert.equal(noFile.code, 403, '鉴权先行：缺参细节不暴露给未授权者');
+});
+
+test('doc.search：缺检索词 400', async () => {
+  const res = await FN('doc').main({ action: 'search' }, CTX);
+  assert.equal(res.code, 400);
+});
+
+test('entry.submit：VISITOR 403 / 必填缺失 400 / 正常提交含谱名', async () => {
+  const denied = await FN('entry').main(
+    { action: 'submit', type: 'MANUAL', payload: { name: '郝一', generation: 18, branchId: 'long' } }, CTX);
+  assert.equal(denied.code, 403, 'stub db users 为空 → VISITOR 不得提交');
+
+  const bad = await FN('entry').main(
+    { action: 'submit', type: 'MANUAL', payload: { name: '', generation: 18, branchId: 'long' } }, CTX);
+  assert.equal(bad.code, 400, '缺本名应 400');
+
+  const badType = await FN('entry').main(
+    { action: 'submit', type: 'HACK', payload: { name: '郝一', generation: 18, branchId: 'long' } }, CTX);
+  assert.equal(badType.code, 400, '未知 type 应 400');
+});
+
+test('entry.importExcel：VISITOR 403 鉴权先行（含缺 rows 场景）', async () => {
+  const denied = await FN('entry').main(
+    { action: 'importExcel', payload: { rows: [{ name: 'x', generation: 1, branchId: 'b' }] } }, CTX);
+  assert.equal(denied.code, 403, '仅 EDITOR+ 可批量导入');
+
+  const noRows = await FN('entry').main({ action: 'importExcel', payload: {} }, CTX);
+  assert.equal(noRows.code, 403, '鉴权先行：VISITOR 不暴露参数校验细节');
+});
+
+test('entry.audit：VISITOR 403 鉴权先行（含缺参场景）', async () => {
+  const denied = await FN('entry').main(
+    { action: 'audit', recordId: 'r1', auditAction: 'FIRST_PASS' }, CTX);
+  assert.equal(denied.code, 403, '仅族史委可审核');
+
+  const bad = await FN('entry').main({ action: 'audit' }, CTX);
+  assert.equal(bad.code, 403, '鉴权先行');
+});
+
+test('entry：未知 action 400（此前为 undefined 崩溃路径）', async () => {
+  const res = await FN('entry').main({ action: 'nope' }, CTX);
+  assert.equal(res.code, 400);
+});
+
+test('notify.broadcast：VISITOR → 统一 403（旧版裸 {error} 已废除）', async () => {
+  const res = await FN('notify').main({ action: 'broadcast', content: 'x', level: 'HIGH' }, CTX);
+  assert.equal(res.success, false);
+  assert.equal(res.code, 403, 'stub db users 为空 → VISITOR 不得广播');
+});
+
+test('notify.list：分页结构', async () => {
+  const res = await FN('notify').main({ action: 'list' }, CTX);
+  assert.equal(res.success, true);
+  assert.ok(Array.isArray(res.data.records));
+});

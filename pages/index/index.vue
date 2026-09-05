@@ -22,7 +22,7 @@
     <!-- ③ 今日要事卡流 -->
     <view class="today-section">
       <!-- 骨架屏：数据未到位时 ≤300ms 出现 -->
-      <Skeleton :visible="loading" :rows="3" />
+      <Skeleton v-if="loading" :rows="3" />
 
       <!-- 错误兜底：可重试不白屏 -->
       <ErrorPage
