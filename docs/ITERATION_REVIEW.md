@@ -45,15 +45,43 @@
 
 ---
 
-<!-- 模板：下一轮评审复制此节 -->
-## 第 R_ 轮（日期）
+## 第 R2 轮（Sprint R2 · 族谱树与数据核对轨）
 
 ### 一、指标回顾
-| 维度 | 指标 | 目标 | 本轮 | 趋势 |
-|---|---|---|---|---|
 
-### 二、交付清单
+| 维度 | 指标 | 目标 | R2 现状 | 趋势 |
+|---|---|---|---|---|
+| 功能完整性 | 族谱树方案落地 | 物化路径 | ✅ tree.js 纯函数 + member.tree 前缀查询接入 | ↑ |
+| 功能完整性 | 试点数据核对 | 双人 diff 脚本 | ✅ verify-lineage.js（结构/冲突/世代三类校验） | ↑ |
+| 功能完整性 | task/upload/event | 完整接口 | ✅ 打卡幂等+积分联动 / 场景化上传策略 / 大事记族史委门禁 | ↑ |
+| 性能 | 树查询 | 前缀索引+分页 | ✅ members.path 索引 + 200 节点/页预算封顶 | ↑ |
+| 性能 | API P95 | ≤200ms | 仍待真机采集（依赖微信开发者工具环境） | → |
+| 质量 | 单测 | ≥80% | 38 用例全绿（23→38，+65%） | ↑ |
+| 质量 | Lint | 0 error | ✅ 自制检查器全库 140 文件 0E/0W | ↑ |
+
+### 二、本轮交付清单
+
+- `cloud/functions/common/tree.js`：物化路径方案（buildPath/LCA/relationSteps/paginateTree/subtreeRegex），单页 200 节点预算
+- `cloud/functions/member/index.js`：重构——修复 W1 角色比较漏洞（`'EDITOR'>='CHIEF'` 字典序越权）、doc().get() 返回值处理、隐私判定统一走 privacyCheck、tree 前缀查询
+- `scripts/verify-lineage.js`：世系双人核对（CSV diff + 结构校验 + 世代连续性），退出码门禁
+- `scripts/lint-check.js`：自制 lint（console.log/var/==/eval/debugger/超长函数），全库 0E0W
+- `cloud/functions/task|upload|event`：完整接口化（幂等键打卡+积分联动补偿 / 场景化大小类型策略 / HISTORIAN 发布门禁+审计）
+- `database-init.js`：+members.path / task_records.idemKey 索引、+upload_metas 集合
+- 测试 23→38：tree 11 用例（含 relationSteps×kinshipTitle 端到端）+ lineage/lint 6 用例
+- **W1 缺陷修复**：称谓矩阵 (n,m) 几何口径纠正（兄弟=(1,1) 经父，非 (0,0)），测试驱动发现
 
 ### 三、风险登记
 
-### 四、下迭代承诺
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 真机 P95 未采集 | 中 | R2 持续阻塞项：需用户提供微信开发者工具+云环境 |
+| 称谓方言覆盖 | 低 | 矩阵兜底版已定，方言表由族史委评审后入 settings |
+| 世系挂接（path 回填）迁移脚本 | 中 | R3 承诺：现有 members 数据批量构建 path 的一次性脚本 |
+
+### 四、R3 承诺
+
+1. doc 云函数完整接口化（最后一个轻量 stub）+ path 回填迁移脚本
+2. 真机性能采集（依赖用户环境，持续跟踪）
+3. 挂接校验中间件：entry.importExcel 入库时自动 buildPath + 世代互指校验
+
+<!-- 模板：下一轮评审复制「第 N 轮」一节填写，历史不覆写 -->

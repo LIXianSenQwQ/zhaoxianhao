@@ -17,12 +17,15 @@ const collections = {
   },
   
   // 2. members - 族人档案（分级隐私）
+  //    Sprint R2: path 为物化路径 '/001/003/'，族谱树前缀查询与挂接校验的唯一索引依据
   members: {
     indexes: [
       { key: '_id', unique: true },
       { key: 'branchId', index: true },
       { key: 'generation', index: true },
-      { key: 'status', index: true }
+      { key: 'status', index: true },
+      { key: 'path', index: true },
+      { key: 'linkedOpenid', index: true }
     ]
   },
   
@@ -117,7 +120,7 @@ const collections = {
   // 18. tasks / task_records - 任务定义/打卡（L2）
   tasks: { indexes: [] },
   task_records: {
-    indexes: [{ key: 'userId', index: true }, { key: 'taskId', index: true }]
+    indexes: [{ key: 'userId', index: true }, { key: 'taskId', index: true }, { key: 'idemKey', index: true }, { key: 'date', index: true }]
   },
   
   // 19. audit_logs - 审计日志（≥1 年保留）
@@ -185,6 +188,8 @@ const collections = {
   // 辅助集合
   weather_cities: { indexes: [{ key: 'cityId', unique: true }] },
   almanac_ext: { indexes: [{ key: 'year', index: true }] },
+  // Sprint R2: 上传元数据登记（upload.meta 写入，可见性与 owner 查询）
+  upload_metas: { indexes: [{ key: 'ownerOpenid', index: true }, { key: 'fileId', index: true }, { key: 'visibility', index: true }] },
   
   // === V2.0 新增 12 集合 ===
   

@@ -7,8 +7,11 @@
     "build:mp-wechat": "uni build -p mp-wechat",
     "dev:h5": "uni",
     "build:h5": "uni build",
-    "test": "node --test --test-isolation=none tests/roles.test.js tests/privacy.test.js tests/kindship.test.js tests/core.test.js",
-    "sync:common": "node scripts/sync-common.js"
+    "test": "node --test --test-isolation=none tests/roles.test.js tests/privacy.test.js tests/kindship.test.js tests/core.test.js tests/tree.test.js tests/lineage.test.js",
+    "test:watch": "node --test --test-isolation=none --watch tests/roles.test.js tests/privacy.test.js tests/kindship.test.js tests/core.test.js tests/tree.test.js tests/lineage.test.js",
+    "lint": "node scripts/lint-check.js",
+    "sync:common": "node scripts/sync-common.js",
+    "lineage:verify": "node scripts/verify-lineage.js"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-4020920240930001",
