@@ -30,3 +30,6 @@ cloud/**/node_modules/
 # 临时文件
 *.tmp
 *.bak
+
+# 本地 npm 缓存
+.npm-cache/
