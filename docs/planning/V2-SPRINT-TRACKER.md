@@ -45,8 +45,10 @@
 | **模块一 内容库首页** | pages/content/content.vue（网格/列表/分类 chips/上传入口/骨架屏）| ✅ E12/F2 |
 | **模块一 详情/编辑/删除/批量权限** | content.detail/update/delete/batch.setVisibility + detail.vue + upload.vue | ✅ F2 |
 | **模块一 分类管理/搜索页** | category.vue（树形增删改）+ search.vue（组合筛选）+ category.update/delete | ✅ F2 |
+| **模块一 搜索倒排索引** | search_index 集合 + content.index.build/content.search.index + save/update/delete 同步 | ✅ F3a |
+| **模块二 新闻数据源** | news 云函数（ensureSources 5 源登记 + fetchFromSource 指纹去重 + cronPull + searchItems + favoriteToggle）| ✅ F3d |
 | **模块三 内容安全 secscan 加固** | detectText（词库+msgSecCheck 降级）+ detectImage + 审计 | ✅ E14 |
-| 模块二 新闻资讯 | 待 F3/F4（数据源对接/推荐）| ⏳ |
+| 模块二 新闻推荐/定时/离线 | 待 F4（三路召回 + 10min 触发器 + 收藏分组/离线包）| ⏳ |
 | 模块三 家族动态 | plaza 既有；family_moments 迁移脚本既有 | ⏳ |
 | 模块四 合规游戏 | 待 F6-F8 | ⏳ |
 | 模块五 虚拟家园 | 待 F9-F10 | ⏳ |
@@ -54,11 +56,12 @@
 ### 测试覆盖（开发框架二十三 23.5：覆盖率≥90%）
 | 指标 | 数值 | 状态 |
 | --- | --- | --- |
-| 测试总数 | 268（F2 累计 +17）| ✅ F2 |
+| 测试总数 | 278（F3 累计 +10）| ✅ F3 |
 | 失败 | 0 | ✅ |
 | Lint error | 0 | ✅ |
-| 云函数结构校验 | 23/23 | ✅ |
-| **新增测试项** | content.save 正常/敏感强制/非法 visibility、content.search 分类过滤、category.save/list、secscan block/降级/校验、content.detail 三态、content.update/delete 越权、敏感分类批量、组合筛选、分类上限 | ✅ F2 |
+| 云函数结构校验 | 24/24（新增 news）| ✅ |
+| **新增测试项** | content.index.build 软删标记、content.search.index 倒排命中+软删排除、news.ensureSources 5 源、news.fetchFromSource 指纹去重+状态、news.searchItems 关键词 | ✅ F3 |
+| 本次修复 | stub command.neq `__neq` 不一致（F3 搜索暴露）；stub add 兼容标准签名 `{doc}` | ✅ F3 |
 
 ---
 
@@ -88,10 +91,10 @@
 - **F2 模块一全部交付 ✅**
 
 ### F3 模块一收尾 + 模块二启动
-- [ ] search_index 倒排索引接入（当前为正则降级）
+- [x] search_index 倒排索引接入（save/update/delete 同步 + index.build + search.index）
+- [x] 模块二：news_sources 5 源配置 + news_items 指纹去重入库 + cronPull + 搜索/收藏
 - [ ] 自动备份队列（album_photos backupStatus 复用）
 - [ ] 2GB 视频分片上传（upload 云函数分片策略）
-- [ ] 模块二：news_sources 数据源配置 + news_items 入库（5 家源登记）
 
 ### F4 模块二（新闻资讯 + secscan 生产化）
 - [ ] 推荐算法（B.3：三路召回 + 打分排序）
