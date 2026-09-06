@@ -142,7 +142,7 @@ function seedDB({
   worshipLogs = [], tasks = [], taskRecords = [], calendarItems = [], events = [],
   ceremonies = [], entryRecords = [], relations = [],
   settings = [], avatars = [],
-  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = [], complianceSigns = [], localContents = [], contentCategories = []
+  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = [], complianceSigns = [], localContents = [], contentCategories = [], searchIndex = []
 } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
@@ -152,7 +152,7 @@ function seedDB({
       worship_logs: worshipLogs, tasks, task_records: taskRecords,
       calendar_items: calendarItems, events, ceremonies,
       entry_records: entryRecords, relations, avatars,
-      albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules, greeting_cards: greetingCards, weather_cities: weatherCities, compliance_signs: complianceSigns, local_contents: localContents, content_categories: contentCategories
+      albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules, greeting_cards: greetingCards, weather_cities: weatherCities, compliance_signs: complianceSigns, local_contents: localContents, content_categories: contentCategories, search_index: searchIndex
     },
     seq: 1000
   };
@@ -2297,4 +2297,63 @@ test('F2 category.delete: 非属主被拒', async () => {
   );
   assert.equal(res.success, false);
   assert.equal(res.code, 403);
+});
+
+// ═══════════ F3 搜索倒排索引 search_index ═══════════
+test('F3 content.save 后自动写入 search_index', async () => {
+  seedDB({ localContents: [], searchIndex: [] });
+  const res = await FN('content').main(
+    { action: 'content.save', type: 'article', title: '赵州桥游记', content: '周末参观赵州桥', mainCategory: '旅行', visibility: 'PRIVATE' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  const db = require('../scripts/wx-server-sdk-stub.js').getDatabase();
+  const idx = await db.collection('search_index').where({ contentId: res.data.contentId }).get();
+  assert.equal(idx.data.length, 1, '应有 1 条索引');
+  assert.ok(idx.data[0].allText.includes('赵州桥'), '索引应含标题文本');
+  assert.ok(idx.data[0].tokens.length > 0, 'tokens 应非空');
+});
+
+test('F3 content.index.build: 全量重建索引（含软删项标记）', async () => {
+  seedDB({
+    localContents: [
+      { _id: 'c1', openid: 'u-member', type: 'article', title: '梨乡春色', content: '梨花盛开', visibility: 'PRIVATE', updatedAt: '2026-09-06T10:00:00Z' },
+      { _id: 'c2', openid: 'u-member', type: 'photo', title: '已删照片', content: 'x', deleted: true, visibility: 'PRIVATE', updatedAt: '2026-09-06T11:00:00Z' },
+      { _id: 'c3', openid: 'u-other', type: 'article', title: '他人文章', content: '别人写的', visibility: 'PUBLIC', updatedAt: '2026-09-06T12:00:00Z' }
+    ],
+    searchIndex: []
+  });
+  const res = await FN('content').main({ action: 'content.index.build' }, CTX_WITH_ROLE('MEMBER'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.built, 2, '只重建本人 2 条');
+  const db = require('../scripts/wx-server-sdk-stub.js').getDatabase();
+  const all = await db.collection('search_index').get();
+  const mine = all.data.filter(i => i.openid === 'u-member');
+  assert.equal(mine.length, 2);
+  const deletedIdx = mine.find(i => i.contentId === 'c2');
+  assert.equal(deletedIdx.deleted, true, '软删内容索引应标记 deleted');
+});
+
+test('F3 content.search.index: 倒排关键词命中 + 软删排除', async () => {
+  seedDB({
+    localContents: [
+      { _id: 'i1', openid: 'u-member', type: 'article', title: '祖堂点灯', content: '清明祭祖点灯仪式', mainCategory: '祭祀', visibility: 'PRIVATE', updatedAt: '2026-09-06T10:00:00Z' },
+      { _id: 'i2', openid: 'u-member', type: 'photo', title: '远足', content: '爬山记录', mainCategory: '旅行', visibility: 'PRIVATE', updatedAt: '2026-09-06T11:00:00Z' },
+      { _id: 'i3', openid: 'u-member', type: 'record', title: '已删', content: '点灯旧文', deleted: true, mainCategory: '祭祀', visibility: 'PRIVATE', updatedAt: '2026-09-06T12:00:00Z' }
+    ],
+    searchIndex: [
+      { _id: 'ix1', openid: 'u-member', contentId: 'i1', allText: '祖堂点灯 清明祭祖点灯仪式 祭祀', tokens: ['祖堂点灯','清明祭祖'], mainCategory: '祭祀', deleted: false, updatedAt: '2026-09-06T10:00:00Z' },
+      { _id: 'ix2', openid: 'u-member', contentId: 'i2', allText: '远足 爬山记录 旅行', tokens: ['远足','爬山'], mainCategory: '旅行', deleted: false, updatedAt: '2026-09-06T11:00:00Z' },
+      { _id: 'ix3', openid: 'u-member', contentId: 'i3', allText: '已删 点灯旧文 祭祀', tokens: ['已删','点灯'], mainCategory: '祭祀', deleted: true, updatedAt: '2026-09-06T12:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main(
+    { action: 'content.search.index', keyword: '点灯', mainCategory: '祭祀' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  console.log('[DEBUG] index search result:', JSON.stringify(res));
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.contents.length, 1, '应命中 i1（i3 已软删排除）');
+  assert.equal(res.data.contents[0]._id, 'i1');
+  assert.equal(res.data.index, true);
 });

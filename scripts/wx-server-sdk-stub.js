@@ -27,10 +27,11 @@ module.exports = {
         let ok = true;
         if (cond.$gte !== undefined) ok = ok && norm(rv) >= norm(cond.$gte);
         if (cond.$lte !== undefined) ok = ok && norm(rv) <= norm(cond.$lte);
-        if (cond.$neq !== undefined) ok = ok && rv !== cond.$neq;
+        if (cond.__neq !== undefined) ok = ok && rv !== cond.__neq;
         if (cond.__op === 'gte') ok = ok && norm(rv) >= norm(cond.v);
         if (cond.__op === 'lte') ok = ok && norm(rv) <= norm(cond.v);
         if (cond.__and) ok = ok && cond.__and.every(c => matchVal(rv, c));
+        if (Array.isArray(cond.__in)) ok = ok && cond.__in.some(x => x === rv);
         if (ok && typeof cond.test === 'function') ok = ok && cond.test(rv);
         return ok;
       }
@@ -153,7 +154,7 @@ module.exports = {
       collection: chain,
       RegExp: (opts) => new RegExp(opts.regexp, opts.options),
       command: {
-        eq: (v) => v, in: (arr) => arr, inc: (n) => ({ __inc: n }), neq: (v) => ({ __neq: v }),
+        eq: (v) => v, in: (arr) => ({ __in: arr }), inc: (n) => ({ __inc: n }), neq: (v) => ({ __neq: v }),
         gte: (v) => ({ __op: 'gte', v }), lte: (v) => ({ __op: 'lte', v }),
         and: (other) => ({ __and: [other] })
       }

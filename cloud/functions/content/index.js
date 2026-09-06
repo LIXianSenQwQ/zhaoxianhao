@@ -195,6 +195,12 @@ async function contentSave(ctx, userId, params) {
     detail: JSON.stringify({ type, visibility }), time: now
   }).catch(() => {});
 
+  // 同步倒排索引（F3）
+  await syncSearchIndex(db, ctx.openid, res._id, {
+    title: title.trim(), content, mainCategory: mainCategory || '',
+    subCategory: subCategory || '', tags, type
+  }).catch(() => {});
+
   return OK({ contentId: res._id, status: params.status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT' });
 }
 
@@ -233,6 +239,114 @@ async function contentSearch(ctx, userId, params) {
 
   return OK({ contents: res.data || [], page, hasMore: (res.data || []).length === pageSize });
 }
+
+/**
+ * V2.0 模块一（A.4/F3）：search_index 倒排索引
+ * ── 分词：标题 + 正文 + 主/子分类 + 标签 → 全文字段 allText + tokens
+ * ── 维护：content.save/update/delete 后同步 upsert（软删标记跟随）
+ * ── 查询：content.search.index 走索引倒排（关键词必须命 allText）
+ * 说明：存量数据可调 content.index.build 全量重建；content.search 仍保留
+ * 正则降级路径，保证兼容与兜底。
+ */
+
+/** 简易中文分词：按空白/标点切分 + 2~6 字连续滑窗（英文按词） */
+function tokenize(text = '') {
+  const str = String(text).toLowerCase();
+  const pieces = str.split(/[\s,，。.;；:：!！?？、()（）"'“”‘’\-—_/\\#@]+/).filter(Boolean);
+  const tokens = new Set(pieces);
+  // 中文无空格文本：2/3/4 字滑窗补充召回
+  const cjk = str.replace(/[^\u4e00-\u9fa5]/g, '');
+  if (cjk.length > 1) {
+    for (let n = 2; n <= Math.min(6, cjk.length); n++) {
+      for (let i = 0; i + n <= cjk.length; i += 1) tokens.add(cjk.slice(i, i + n));
+    }
+  }
+  return [...tokens].slice(0, 200);
+}
+
+/** 组装搜索索引文本 */
+function buildIndexText(content) {
+  return [
+    content.title || '',
+    content.content || '',
+    content.mainCategory || '',
+    content.subCategory || '',
+    ...(content.tags || [])
+  ].join(' ');
+}
+
+/** upsert search_index（同一 openid+contentId 一行） */
+async function syncSearchIndex(db, openid, contentId, content, deleted = false) {
+  const exist = await db.collection('search_index')
+    .where({ openid, contentId }).limit(1).get();
+  const doc = {
+    openid,
+    contentId,
+    allText: buildIndexText(content),
+    tokens: tokenize(buildIndexText(content)),
+    title: content.title || '',
+    mainCategory: content.mainCategory || '',
+    subCategory: content.subCategory || '',
+    type: content.type || '',
+    deleted,
+    updatedAt: new Date()
+  };
+  if (exist.data && exist.data.length) {
+    await db.collection('search_index').doc(exist.data[0]._id).update({ data: doc });
+  } else {
+    await db.collection('search_index').add({ data: doc });
+  }
+}
+
+/**
+ * V2.0 F3：content.index.build 全量重建本人索引
+ * 兜底修复：删除丢失/新增补录时执行（幂等）
+ */
+async function contentIndexBuild(ctx, userId) {
+  const db = wx.getDatabase();
+  const res = await db.collection('local_contents')
+    .where({ openid: ctx.openid }).limit(500).get();
+  let built = 0;
+  for (const c of res.data || []) {
+    const isDeleted = c.deleted === true;
+    await syncSearchIndex(db, ctx.openid, c._id, c, isDeleted);
+    built++;
+  }
+  return OK({ built, message: '索引已重建' });
+}
+
+/**
+ * V2.0 F3：content.search.index 索引倒排查询
+ * 入参同 content.search；关键词命中 allText 倒排，结果仅含命中 contentId
+ */
+async function contentSearchByIndex(ctx, userId, params) {
+  const db = wx.getDatabase();
+  const { keyword = '', mainCategory = '', type = '', page = 1, pageSize = 20 } = params;
+  if (!keyword) return BAD_REQUEST('索引查询必须提供关键词');
+  const skip = (Math.max(1, Number(page) || 1) - 1) * pageSize;
+
+  const q = { openid: ctx.openid, deleted: db.command.neq(true) };
+  if (mainCategory) q.mainCategory = mainCategory;
+  if (type) q.type = type;
+
+  const kw = String(keyword).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const res = await db.collection('search_index')
+    .where({ ...q, allText: db.RegExp({ regexp: kw, options: 'i' }) })
+    .orderBy('updatedAt', 'desc').skip(skip).limit(pageSize).get();
+
+  const ids = (res.data || []).map((r) => r.contentId);
+  // 回表取内容（保持对外字段一致）
+  let contents = [];
+  if (ids.length) {
+    const back = await db.collection('local_contents')
+      .where({ _id: db.command.in(ids) }).get();
+    const byId = {};
+    for (const c of back.data || []) byId[c._id] = c;
+    contents = ids.map((id) => byId[id]).filter(Boolean);
+  }
+  return OK({ contents, page, hasMore: (res.data || []).length === pageSize, index: true });
+}
+
 
 /**
  * V2.0 模块一（A.2）：分类管理
@@ -398,6 +512,16 @@ async function contentUpdate(ctx, userId, { contentId, title, content, mainCateg
       detail: JSON.stringify(Object.keys(updateData)), time: new Date()
     });
   } catch {}
+
+  // 同步倒排索引（F3）：用最新字段重建
+  await syncSearchIndex(db, ctx.openid, contentId, {
+    title: updateData.title !== undefined ? updateData.title : cur.title,
+    content: updateData.content !== undefined ? updateData.content : cur.content,
+    mainCategory: updateData.mainCategory !== undefined ? updateData.mainCategory : (cur.mainCategory || ''),
+    subCategory: updateData.subCategory !== undefined ? updateData.subCategory : (cur.subCategory || ''),
+    tags: updateData.tags !== undefined ? updateData.tags : (cur.tags || []),
+    type: cur.type || ''
+  }).catch(() => {});
   
   return OK({ message: '已更新' });
 }
@@ -427,6 +551,9 @@ async function contentDelete(ctx, userId, { contentId }) {
       detail: '{}', time: new Date()
     });
   } catch {}
+
+  // 索引同步软删（F3）
+  await syncSearchIndex(db, ctx.openid, contentId, ownerRes.data[0], true).catch(() => {});
   
   return OK({ message: '已删除' });
 }
@@ -496,6 +623,10 @@ module.exports = { main: async (params, context) => {
       return await contentSave(roleCtx, userId, params);
     case 'content.search':
       return await contentSearch(roleCtx, userId, params);
+    case 'content.index.build':
+      return await contentIndexBuild(roleCtx, userId);
+    case 'content.search.index':
+      return await contentSearchByIndex(roleCtx, userId, params);
     case 'category.save':
       return await categorySave(roleCtx, userId, params);
     case 'category.list':
