@@ -491,3 +491,14 @@
 - 匹配：genealogyName / name 大小写不敏感模糊（LIMIT 500 内存过滤；万级再上 db.RegExp/拼音索引）
 - 出参：`hits: [{id, genealogyName, generation, status}]`（白名单，无私密字段）+ `page/hasMore/total`（size=20）
 - 前端：search 页聚合（人物在前 + 文档在后）；成员卡跳 memberDetail；403 静默降级
+
+## 22. V1.1 个人资料模块（R19 启动）
+
+### 22.1 profile.saveAvatar 头像保存（R19 · 蓝图 V1.1 22.1）
+
+- 门禁：本人 or EDITOR+（hasRole）；visibilityCheck（PRIVATE/PUBLIC/GROUP fail-closed）
+- 入参：`{ action: 'saveAvatar', fileId, cropMeta?, visibility?, userId? }`
+- 处理：avatars 集合 add（WEBP 格式占位/isCurrent=true/cropMeta 留档）→ 旧 isCurrent 清理 → audit_logs 留痕
+- 出参：`{ avatarId, message }`
+- CI 压缩占位：thumbUrls 空数组，实际 CI 转码由云存储触发器回调（R20 接入）
+- 前端配套：utils/feature-flags.ts v11Avatar 开关控制入口显隐

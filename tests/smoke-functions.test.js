@@ -1,4 +1,4 @@
-/**
+﻿/**
  * tests/smoke-functions.test.js
  * 云函数行为冒烟测试：stub wx-server-sdk + stub db，
  * 真正调用 main() 验证业务分支（统一响应格式/参数校验/权限门禁）。
@@ -1219,4 +1219,57 @@ test('R18 entry.pendingList：MEMBER 403（鉴权先行）', async () => {
   seedDB({ users: [{ openid: 'u-test', role: 'MEMBER' }] });
   const res = await FN('entry').main({ action: 'pendingList' }, CTX);
   assert.equal(res.code, 403);
+});
+
+
+// ─── Sprint R19：admin.featureFlag 集成 + hero 贯通纯函数 ───
+
+test('R19 featureFlag：CHIEF 设置开关（settings key=featureFlag，含审计）', async () => {
+  seedDB({
+    users: [{ openid: 'u-chief', role: 'CHIEF' }],
+    settings: [{ key: 'featureFlag', value: JSON.stringify({}) }]
+  });
+  const res = await FN('admin').main(
+    { action: 'featureFlag', key: 'v11Avatar', value: { enabled: true }, scope: 'global' },
+    { OPENID: 'u-chief', openid: 'u-chief' }
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  // 审计日志写入
+  const logs = globalThis.__HCS_STUB_SEED__.collections.audit_logs || [];
+  assert.ok(logs.some(l => l.action === 'admin.featureFlag' && l.target === 'v11Avatar'), '审计留痕');
+});
+
+test('R19 featureFlag：MEMBER 不可设置 → 403（蓝图 17.1 族长专属）', async () => {
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  const res = await FN('admin').main(
+    { action: 'featureFlag', key: 'v11Avatar', value: { enabled: true }, scope: 'global' },
+    { OPENID: 'u-m', openid: 'u-m' }
+  );
+  assert.equal(res.code, 403, JSON.stringify(res));
+});
+
+test('R19 featureFlag：读取开关（getFeatureFlags 返回合并结果）', async () => {
+  seedDB({
+    settings: [{ key: 'featureFlag', value: JSON.stringify({ v11Avatar: { enabled: true, scope: 'global' } }) }]
+  });
+  const res = await FN('admin').main({ action: 'getFeatureFlags' }, CTX);
+  assert.equal(res.success, true);
+  assert.equal(res.data.flags['v11Avatar'].enabled, true, '读取到 CHIEF 设置的开关');
+});
+
+test('R19 hero isHeroMember：DECEASED+isHero 才是英烈（memberDetail 入口判定）', () => {
+  const isHeroMember = (m) => !!(m && m.status === 'DECEASED' && m.isHero);
+  assert.equal(isHeroMember({ status: 'DECEASED', isHero: true }), true, '英烈');
+  assert.equal(isHeroMember({ status: 'DECEASED', isHero: false }), false, '普通已故');
+  assert.equal(isHeroMember({ status: 'ALIVE', isHero: true }), false, '在世非英烈');
+  assert.equal(isHeroMember({ status: 'LIVING', isHero: true }), false, 'LIVING 非英烈');
+  assert.equal(isHeroMember(null), false, 'null 防御');
+});
+
+test('R19 visibilityCheck 烟囱测试：PRIVATE 拒绝/PUBLIC 放行/GROUP 名单内放行', () => {
+  const { visibilityCheck } = require('../cloud/functions/common/privacy');
+  const u1 = { openid: 'u1', familyIds: new Set(['f1']), authedTargetIds: new Set() };
+  assert.equal(visibilityCheck(u1, { _id: 'c1', visibility: 'PRIVATE', ownerOpenid: 'u2' }), 'deny');
+  assert.equal(visibilityCheck(u1, { visibility: 'PUBLIC', ownerOpenid: 'u2' }), 'allow');
+  assert.equal(visibilityCheck(u1, { _id: 'c2', visibility: 'GROUP', ownerOpenid: 'u2', groupIds: ['f1'] }), 'allow');
 });

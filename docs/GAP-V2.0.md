@@ -162,3 +162,19 @@
 | member.search 万级扩展 | ⏳ | LIMIT 500 内存过滤；万级需 db.RegExp/拼音索引——V2.0 |
 | 8.0 hero/index → detail 贯通 | ⏳ | R19：heroList 卡片跳详情 |
 | 真机性能实测（1.4 验收底线） | ⏳ | 连续 18 轮阻塞：等待微信开发者工具环境 |
+
+## 二·十三 R19（Sprint R19 · V2.0 蓝图基线切换 + V1.1 启动轨）
+
+| 蓝图条目 | 状态 | 差距说明 |
+|---|---|---|
+| V2.0 蓝图入库 | ✅ | BLUEPRINT-V2.0-INDEX.md（42 集合/23 云函数/82 页/合规红线附录 C）+ feature-flags.ts 前端开关表 |
+| 8.0 hero/index → detail 贯通 | ✅ | hero.vue 卡片 @tap goDetail |
+| 8.0 memberDetail 英烈入口 | ✅ | isHeroMember computed（DECEASED+isHero）+ hero-entry 卡 |
+| V1.1 E1 featureFlag | ✅ | admin.featureFlag/getFeatureFlags（用户已建）+ R19 集成测试 ×3 |
+| V1.1 E1 visibilityCheck | ✅ | common/privacy.js（用户已建）+ R19 烟囱测试 |
+| V1.1 E1 profile.saveAvatar | ✅ | 云函数骨架（门禁+可见性+audit），CI 占位 R20 接入 |
+| V1.1 22.1 CI 数据万象接入 | ⏳ | R20：真实 ImageProcessJob → WEBP/缩略图 |
+| V1.1 22.2 介绍视频 MPS | ⏳ | E2：R20/R21 |
+| V1.1 22.3 多级相册 | ⏳ | E2：album.uploadBatch ≤20 张 |
+| 8.0 hero 留言板 | ⏳ | R20 方案设计（secscan + 频控） |
+| 真机性能实测（1.4 验收底线） | ⏳ | 连续 19 轮阻塞：等待微信开发者工具环境 |

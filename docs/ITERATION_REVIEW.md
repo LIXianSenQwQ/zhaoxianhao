@@ -908,3 +908,59 @@
 4. 性能实测（持续等待用户环境）
 
 <!-- 模板：下一轮评审复制此节 -->
+
+## 第 R19 轮（Sprint R19 · V2.0 蓝图基线切换 + V1.1 启动轨）
+
+> 主题：V2.0 蓝图入库（42 集合/23 云函数/82 页/合规红线）、MVP 收尾（hero 贯通）、V1.1 E1 地基（featureFlag + visibilityCheck + profile 骨架）。
+
+### 一、指标回顾
+
+| 维度 | 指标 | R18 | R19 | 变化 |
+|---|---|---|---|---|
+| 蓝图 | 基线版本 | V1.0+ | **V2.0 五大模块版**（42 集合/23 云函数/82 页/附录 C 合规红线） | ↑ |
+| MVP 收尾 | hero 贯通 | detail 已建，入口断 | **hero/index 卡片跳 detail + memberDetail 英烈入口** | ↑ |
+| V1.1 E1 | 功能开关 | admin.featureFlag 已通 | **profile 云函数骨架**（saveAvatar + visibilityCheck + CI 占位） | ↑ |
+| V1.1 E1 | 三级可见性 | privacy.js 已有 | **集成烟囱测试**（PRIVATE/PUBLIC/GROUP/fail-closed 全覆盖） | ↑ |
+| 质量 | 测试数 | 173 | **178**（+5：featureFlag 集成×3 + isHeroMember + visibility 烟囱） | ↑ |
+| 门禁 | verify | 绿 | **绿**（178 用例 · lint 0E） | = |
+
+### 二、本轮交付清单
+
+**文档：**
+- BLUEPRINT-V2.0-INDEX.md（用户已建：42 集合/23 云函数/82 页索引 + 合规红线）+ utils/feature-flags.ts（前端默认开关表）
+- 本轮补充：ITERATION_REVIEW R19 / API.md 22.1 / GAP 二·十三
+
+**MVP 收尾：**
+1. hero/index → detail 贯通：hero.vue 卡片 @tap goDetail → `/pkg-shrine/pages/hero/detail?memberId=`
+2. memberDetail 英烈入口：`isHeroMember` computed（DECEASED+isHero）+ hero-entry 朱砂左边条卡 + heroNoteBrief 摘要 + goHeroDetail 跳转
+
+**V1.1 E1 地基：**
+1. **profile 云函数骨架**（cloud/functions/profile/）：saveAvatar 接口（蓝图 V1.1 22.1）
+   - 门禁：本人 or EDITOR+（hasRole）
+   - 可见性校验：visibilityCheck（PRIVATE/PUBLIC/GROUP fail-closed）
+   - avatars 集合写入（WEBP 格式占位/isCurrent 唯一/cropMeta）
+   - audit_logs 留痕（保留 ≥1 年）
+   - CI 压缩为占位（thumbUrls 空数组，由 CI 回调更新）
+2. **visibilityCheck 集成烟囱测试**（tests/privacy.test.js 已有 9 个 + R19 补充烟囱 1 个）
+
+**过程：**
+- profile/common 手动同步（sync:common 脚本按已存在目录工作，新函数需手动 Copy-Item）
+- smoke 测试 isHeroMember null 防御修复（`m && ...` → `!!(m && ...)`，显式布尔转换）
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| CI/MPS 未接入（profile 骨架 CI 占位） | 中 | R20 对接数据万象 CI（头像压缩转码）；MPS 视频转码 E2 |
+| sync:common 不自动发现新云函数 | 低 | 手动 Copy-Item 补齐；后续 sync:common 加目录扫描 |
+| hero 留言板未实现（蓝图 8.0） | 中 | R20 方案设计（内容审核 + 频控） |
+| 真机性能实测（连续 19 轮阻塞） | 高 | 继续等待微信开发者工具环境 |
+
+### 四、R20 承诺建议
+
+1. **CI 接入**：profile.saveAvatar 真实调用数据万象（ImageProcessJob）→ WEBP/缩略图 80/200/600
+2. **V1.1 E2**：介绍视频（MPS 转码）+ 相册（album.uploadBatch ≤20 张）
+3. **留言板方案**：hero/detail message 集合 + secscan 内容审核 + 频控（蓝图 8.0/9.2）
+4. 性能实测（持续等待用户环境）
+
+<!-- 模板：下一轮评审复制此节 -->
