@@ -1037,3 +1037,116 @@ test('R16 member.getDetail：非族人访客对 DECEASED 仍可见公开级（�
   assert.ok(res.data.member.genealogyName, '公开级可见');
   assert.ok(res.data.hiddenFields.includes('tomb'), '私密字段隐藏');
 });
+
+// ─── Sprint R17：entry.audit 双人审核链升级 + CHANGE(RELATION) 工单 APPROVED 后 relations 生效 ───
+
+test('R17 entry.audit FIRST_PASS：BRANCH_HEAD 初审正向（蓝图 7.6 初审支系）+ auditChain 留痕', async () => {
+  seedDB({
+    users: [{ openid: 'u-bh', role: 'BRANCH_HEAD' }, { openid: 'u-sub', role: 'MEMBER' }],
+    entryRecords: [{ _id: 'r-fp', type: 'MANUAL', payload: { name: '郝一', generation: 18, branchId: 'long' }, status: 'SUBMITTED', createdBy: 'u-sub', auditChain: [] }]
+  });
+  const res = await FN('entry').main(
+    { action: 'audit', recordId: 'r-fp', auditAction: 'FIRST_PASS', comment: '支系核实无误' },
+    { OPENID: 'u-bh', openid: 'u-bh' });
+  assert.equal(res.success, true, `初审应通过: ${JSON.stringify(res)}`);
+  assert.equal(res.data.status, 'FIRST_PASS');
+  const rec = globalThis.__HCS_STUB_SEED__.collections.entry_records[0];
+  assert.equal(rec.status, 'FIRST_PASS');
+  assert.equal(rec.auditChain[0].action, 'FIRST_PASS');
+  assert.equal(rec.auditChain[0].comment, '支系核实无误');
+});
+
+test('R17 entry.audit：MEMBER 触达审核 403（鉴权先行）+ 提交人自审 400', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }, { openid: 'u-bh', role: 'BRANCH_HEAD' }],
+    entryRecords: [{ _id: 'r-self', type: 'MANUAL', payload: { name: '郝一', generation: 1, branchId: 'b' }, status: 'SUBMITTED', createdBy: 'u-bh', auditChain: [] }]
+  });
+  const r1 = await FN('entry').main(
+    { action: 'audit', recordId: 'r-self', auditAction: 'FIRST_PASS' },
+    { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(r1.code, 403, 'MEMBER 低于 BRANCH_HEAD 粗门禁');
+  const r2 = await FN('entry').main(
+    { action: 'audit', recordId: 'r-self', auditAction: 'FIRST_PASS' },
+    { OPENID: 'u-bh', openid: 'u-bh' });
+  assert.equal(r2.code, 400, '提交人不得自审（初审）');
+});
+
+test('R17 entry.audit SECOND_PASS：HISTORIAN 复审 + 复审人≠初审人（双人审核）+ CHANGE(RELATION) 工单 relations 生效', async () => {
+  seedDB({
+    users: [{ openid: 'u-bh', role: 'BRANCH_HEAD' }, { openid: 'u-his', role: 'HISTORIAN' }],
+    members: [{ _id: 'm-1' }, { _id: 'm-2' }],
+    entryRecords: [{
+      _id: 'r-rel', type: 'CHANGE', status: 'FIRST_PASS', submittedBy: 'u-sub',
+      payload: { changeType: 'RELATION', relation: { fromId: 'm-1', toId: 'm-2', type: 'SIBLING', subType: '' } },
+      auditChain: [{ step: 'FIRST_PASS', userId: 'u-bh', action: 'FIRST_PASS', time: new Date(), comment: '核实' }]
+    }],
+    relations: []
+  });
+  // BRANCH_HEAD 不可复审（细门禁 HISTORIAN）
+  const deny = await FN('entry').main(
+    { action: 'audit', recordId: 'r-rel', auditAction: 'SECOND_PASS' },
+    { OPENID: 'u-bh', openid: 'u-bh' });
+  assert.equal(deny.code, 403, '复审须族史委（蓝图 7.6 族史委 2 人）');
+  // HISTORIAN 复审 → APPROVED → relations 落库
+  const res = await FN('entry').main(
+    { action: 'audit', recordId: 'r-rel', auditAction: 'SECOND_PASS' },
+    { OPENID: 'u-his', openid: 'u-his' });
+  assert.equal(res.success, true, `复审应通过: ${JSON.stringify(res)}`);
+  assert.equal(res.data.status, 'APPROVED');
+  assert.ok(res.data.relationId, '返回 relationId');
+  const seed = globalThis.__HCS_STUB_SEED__;
+  const rel = seed.collections.relations[0];
+  assert.equal(rel.fromId, 'm-1');
+  assert.equal(rel.type, 'SIBLING');
+  assert.equal(rel.status, 'ACTIVE');
+  assert.deepEqual(rel.verifiedBy, ['u-bh', 'u-his'], '双人审核 verifiedBy');
+  assert.equal(seed.collections.audit_logs[0].action, 'entry.approve.relation', 'CHANGE 生效审计');
+});
+
+test('R17 entry.audit SECOND_PASS：复审人=初审人 400（双人审核红线）', async () => {
+  seedDB({
+    users: [{ openid: 'u-his', role: 'HISTORIAN' }],
+    entryRecords: [{
+      _id: 'r-same', type: 'MANUAL', payload: { name: '郝一', generation: 1, branchId: 'b' }, status: 'FIRST_PASS',
+      auditChain: [{ step: 'FIRST_PASS', userId: 'u-his', action: 'FIRST_PASS', time: new Date(), comment: '' }]
+    }]
+  });
+  const res = await FN('entry').main(
+    { action: 'audit', recordId: 'r-same', auditAction: 'SECOND_PASS' },
+    { OPENID: 'u-his', openid: 'u-his' });
+  assert.equal(res.code, 400, '复审人不得与初审人相同');
+});
+
+test('R17 entry.audit REJECT：无意见 400（蓝图 11 驳回必填）+ 有意见正向', async () => {
+  seedDB({
+    users: [{ openid: 'u-his', role: 'HISTORIAN' }],
+    entryRecords: [{ _id: 'r-rj', type: 'MANUAL', payload: {}, status: 'SUBMITTED', createdBy: 'u-sub', auditChain: [] }]
+  });
+  const r1 = await FN('entry').main(
+    { action: 'audit', recordId: 'r-rj', auditAction: 'REJECT' },
+    { OPENID: 'u-his', openid: 'u-his' });
+  assert.equal(r1.code, 400, '驳回必须填写意见');
+  const r2 = await FN('entry').main(
+    { action: 'audit', recordId: 'r-rj', auditAction: 'REJECT', comment: '材料不全' },
+    { OPENID: 'u-his', openid: 'u-his' });
+  assert.equal(r2.success, true);
+  assert.equal(r2.data.status, 'REJECTED');
+  assert.equal(globalThis.__HCS_STUB_SEED__.collections.entry_records[0].auditChain[0].comment, '材料不全');
+});
+
+test('R17 entry.audit SECOND_PASS：CHANGE 工单与 ACTIVE 边重复 → 400（与 relation.edit 口径一致）', async () => {
+  seedDB({
+    users: [{ openid: 'u-his', role: 'HISTORIAN' }],
+    entryRecords: [{
+      _id: 'r-dup', type: 'CHANGE', status: 'FIRST_PASS', submittedBy: 'u-sub',
+      payload: { changeType: 'RELATION', relation: { fromId: 'm-1', toId: 'm-2', type: 'SIBLING' } },
+      auditChain: [{ step: 'FIRST_PASS', userId: 'u-bh', action: 'FIRST_PASS', time: new Date(), comment: '' }]
+    }],
+    relations: [{ _id: 'rel-exist', fromId: 'm-1', toId: 'm-2', type: 'SIBLING', status: 'ACTIVE' }]
+  });
+  const res = await FN('entry').main(
+    { action: 'audit', recordId: 'r-dup', auditAction: 'SECOND_PASS' },
+    { OPENID: 'u-his', openid: 'u-his' });
+  assert.equal(res.code, 400);
+  assert.ok(String(res.message).includes('已存在'), '重复 ACTIVE 边拦截');
+});

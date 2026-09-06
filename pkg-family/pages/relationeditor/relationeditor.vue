@@ -55,6 +55,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { onLoad } from '@dcloudio/uni-app';
 import { write } from '@/services/request';
 import { useUserStore } from '@/stores/user';
 import EmptyState from '@/components/common/EmptyState.vue';
@@ -76,6 +77,11 @@ const note = ref('');
 const submitting = ref(false);
 const result = ref<{ recordId: string } | null>(null);
 const err = ref('');
+
+// R17：memberDetail 入口带入 memberId 预填申请人
+onLoad((q: any = {}) => {
+  if (q.memberId) fromId.value = String(q.memberId);
+});
 
 function onTypeChange(e: any) {
   typeIdx.value = Number(e.detail?.value ?? -1);

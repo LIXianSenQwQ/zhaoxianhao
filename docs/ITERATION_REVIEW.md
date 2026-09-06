@@ -808,3 +808,52 @@
 3. **性能实测**（持续等待用户环境；本版本首屏优化已完成：缓存 + 骨架屏 + 懒加载）
 
 <!-- 模板：下一轮评审复制此节 -->
+
+## 第 R17 轮（Sprint R17 · MVP 收口轨：双人审核闭环——审核工作流真实现 + relations 生效 + 详情页入口）
+
+> 主题：兑现 R16 承诺①②——entry.audit 升级（蓝图 7.6 分级门禁/必填意见）+ CHANGE(RELATION) 工单 APPROVED 后 relations 落库生效（R16 工单制最后一块）+ memberDetail 两入口。
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R16 | R17 | 变化 |
+|---|---|---|---|---|---|
+| 蓝图还原 | 7.6 双人审核链 | 初审支系/复审族史委/驳回必填 | 单一 HISTORIAN 门禁 | **分级门禁真实现**（初审 BRANCH_HEAD+，复审 HISTORIAN+，双人≠，自审禁） | ↑ |
+| 蓝图还原 | 7.7 修谱变更生效 | APPROVED 后生效 | 工单到 APPROVED 即断 | **relations 真落库**（status=ACTIVE + verifiedBy 双人 + sourceRecordId 回溯） | ↑ |
+| 蓝图还原 | 11 审核定案 | 驳回必填意见 | 未强制 | **REJECT 无 comment → 400** | ↑ |
+| 前端 | 详情页操作入口 | 申请关系变更/人生书 | 页面孤岛 | **memberDetail 管理操作卡**（EDITOR+ 可见，memberId 预填） | ↑ |
+| 质量 | 测试数 | ≥80% | 156 | **162**（+6：初审正向/MEMBER403+自审/复审403+CHANGE生效/复审人≠/REJECT必填/重复边400） | ↑ |
+| 门禁 | npm run verify | 全绿 | 绿 | **绿**（162 用例 0 fail · lint 0E · 路由 20 页对齐） | = |
+
+### 二、本轮交付清单
+
+**后端（entry.audit 升级，修复 3 缺口）：**
+1. **分级门禁**（蓝图 7.6）：粗门禁 BRANCH_HEAD+ 鉴权先行 → 查单后细门禁（复审/已入审单 REJECT 需 HISTORIAN+「族史委 2 人」）
+2. **REJECT 必填意见**（蓝图 11）：无 comment → 400「驳回必须填写意见」
+3. **CHANGE(RELATION) 工单闭环**：SECOND_PASS 时识别 `payload.changeType==='RELATION'` → `finalizeApprovedRelation`：防重复 ACTIVE 边（与 relation.edit 建单同口径）→ relations.add({...,status:'ACTIVE',verifiedBy:[初审人,复审人],sourceRecordId}) → `entry.approve.relation` 审计 → 返回 relationId；原入谱工单走 finalizeApprovedMember 不变
+4. **自审检查兼容**：`record.createdBy || record.submittedBy`（R16 CHANGE 工单字段名）
+
+**前端：**
+- memberDetail/detail.vue 新增「管理操作」卡（`user.isAdmin` 可见）：**申请关系变更**（跳 relationeditor，memberId 预填 fromId）+ **查看人生书**（跳 lifebook）
+- relationeditor.vue 补 `onLoad(q)` 读取 memberId 预填申请人编号（对齐 privacy.vue 惯例）
+
+**测试 +6（156→162）**：BRANCH_HEAD 初审正向（auditChain 留痕）/ MEMBER 403 粗门禁 + 提交人自审 400 / BRANCH_HEAD 复审 403 细门禁 + HISTORIAN 复审 → APPROVED → relations 落库（verifiedBy 双人断言 + entry.approve.relation 审计）/ 复审人=初审人 400 / REJECT 无意见 400 + 有意见正向 / CHANGE 与 ACTIVE 边重复 400。
+
+**文档同步：** ITERATION_REVIEW R17 / API.md 8.10（entry.audit 分级门禁+CHANGE 生效）/ GAP 二·十一。
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 公示期（PUBLICITY）阶段未落状态机 | 低 | MVP 口径 SECOND_PASS 直 APPROVED（蓝图 7.6 完整链含公示 7 天）——GAP 登记，V1.1 补 |
+| 审核工作台 UI（列表+操作页）未建 | 中 | 后端工单流转已通；R18 前端 pkg-growth/audit 页接 entry.mySubmissions + audit 动作 |
+| 蓝图 7.6 初审门禁放宽为 BRANCH_HEAD | 低 | 与旧实现（HISTORIAN）相比放宽；双人审核红线（≠/自审禁）测试全覆盖，风险受控 |
+| 真机性能实测（连续 17 轮阻塞） | 高 | 继续等待微信开发者工具环境 |
+
+### 四、R18 承诺建议
+
+1. **审核工作台前端**（pkg-growth/audit 页升级：工单列表 mySubmissions + 初审/复审/驳回操作 UI，打通 7.6 全链路 UI）
+2. **hero/detail 英烈事迹详情页**（蓝图 8.0 hero/detail：事迹+留言）
+3. **搜索页接 member.search**（/pages/search/search 全局搜真数据）
+4. 性能实测（持续等待用户环境）
+
+<!-- 模板：下一轮评审复制此节 -->

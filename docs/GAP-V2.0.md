@@ -137,3 +137,16 @@
 | 审核工作台 UI（初审/复审/公示页） | ⏳ | R17：entry.audit 工单审核 UI + APPROVED 后 relation 生效逻辑 |
 | tree/members 跳转入口 | ⏳ | R17：人物详情/家族群加「申请关系变更」按钮 |
 | 真机性能实测（1.4 验收底线） | ⏳ | 连续 16 轮阻塞：等待微信开发者工具环境 |
+
+## 二·十一 R17（Sprint R17 · 双人审核闭环：entry.audit 升级 + relations 生效 + 详情页入口）
+
+| 蓝图条目 | 状态 | 差距说明 |
+|---|---|---|
+| 7.6 双人审核链（分级门禁） | ✅ | 初审 BRANCH_HEAD+（支系）/ 复审 HISTORIAN+（族史委 2 人）/ 自审禁 / 双人≠，测试全覆盖 |
+| 7.7 修谱变更 APPROVED 后生效 | ✅ | CHANGE(RELATION) 工单复审通过 → relations 落库（verifiedBy 双人 + sourceRecordId 回溯 + 防重复 ACTIVE） |
+| 11 驳回必填意见 | ✅ | REJECT 无 comment → 400 |
+| 详情页操作入口 | ✅ | memberDetail 管理操作卡 → relationeditor（memberId 预填）/ lifebook |
+| 7.6 公示期 PUBLICITY 状态 | ◐ | MVP 口径 SECOND_PASS 直 APPROVED；完整链（公示 7 天）GAP 登记 V1.1 补 |
+| 审核工作台前端 UI | ⏳ | R18：pkg-growth/audit 接 mySubmissions + 初审/复审/驳回操作 |
+| 8.0 hero/detail 英烈事迹页 | ⏳ | R18 |
+| 真机性能实测（1.4 验收底线） | ⏳ | 连续 17 轮阻塞：等待微信开发者工具环境 |

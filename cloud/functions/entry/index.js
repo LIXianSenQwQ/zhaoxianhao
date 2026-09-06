@@ -99,8 +99,9 @@ async function submitEntry(db, openid, type, payload) {
  * 双人链：初审、复审、提交 三者两两不同人
  */
 async function auditEntry(db, openid, { recordId, auditAction, comment }) {
+  // 鉴权先行（粗门禁）：仅房长及以上可触达审核（蓝图 7.6 初审支系 BRANCH_HEAD；复审细门禁查单后判定）
   const role = await roleOf(db, openid);
-  if (!hasRole(role, 'HISTORIAN')) return FORBIDDEN('仅族史委可执行审核');
+  if (!hasRole(role, 'BRANCH_HEAD')) return FORBIDDEN('仅房长及以上可执行审核');
 
   if (!recordId || !['FIRST_PASS', 'SECOND_PASS', 'REJECT'].includes(auditAction)) {
     return BAD_REQUEST('缺少 recordId 或 auditAction 非法');
@@ -113,10 +114,22 @@ async function auditEntry(db, openid, { recordId, auditAction, comment }) {
     return BAD_REQUEST(`工单状态 ${record.status} 不可审核`);
   }
 
+  // 细门禁（蓝图 7.6）：复审/驳回已入审的工单须 HISTORIAN+（族史委）
+  const needHistorian = record.status === 'FIRST_PASS' || auditAction === 'SECOND_PASS';
+  if (needHistorian && !hasRole(role, 'HISTORIAN')) {
+    return FORBIDDEN('仅族史委可执行复审');
+  }
+
+  // 蓝图 11：通过/驳回必填意见（驳回强制留痕）
+  if (auditAction === 'REJECT' && !(comment && String(comment).trim())) {
+    return BAD_REQUEST('驳回必须填写意见（蓝图 11 审核定案）');
+  }
+
+  const submitter = record.createdBy || record.submittedBy; // R16 CHANGE 工单用 submittedBy
   const step = { userId: openid, action: auditAction, time: new Date(), comment: comment || '' };
 
   if (auditAction === 'FIRST_PASS') {
-    if (record.createdBy === openid) return BAD_REQUEST('提交人不得自审（初审）');
+    if (submitter === openid) return BAD_REQUEST('提交人不得自审（初审）');
     await db.collection('entry_records').doc(recordId).update({
       data: { status: 'FIRST_PASS', auditChain: [...(record.auditChain || []), step] }
     });
@@ -127,14 +140,27 @@ async function auditEntry(db, openid, { recordId, auditAction, comment }) {
     const firstPass = (record.auditChain || []).find(s => s.step === 'FIRST_PASS');
     if (!firstPass) return BAD_REQUEST('须先完成初审');
     if (firstPass.userId === openid) return BAD_REQUEST('复审人不得与初审人相同（双人审核）');
-    if (record.createdBy === openid) return BAD_REQUEST('提交人不得自审（复审）');
+    if (submitter === openid) return BAD_REQUEST('提交人不得自审（复审）');
 
-    // 入库：挂接校验
+    const stepChain = [...(record.auditChain || []), step];
+
+    // R17：关系变更工单（R16 relation.edit 产物）→ APPROVED 后 relations 生效（蓝图 7.7）
+    if (record.payload && record.payload.changeType === 'RELATION') {
+      const fin = await finalizeApprovedRelation(db, record, [firstPass.userId, openid]);
+      if (!fin.ok) return BAD_REQUEST(`关系生效失败: ${fin.reasons.join('；')}`);
+      await db.collection('entry_records').doc(recordId).update({
+        data: { status: 'APPROVED', relationId: fin.relationId, auditChain: stepChain }
+      });
+      await writeAudit(db, { userId: openid, action: 'entry.approve.relation', target: recordId, detail: fin.relationId });
+      return OK({ status: 'APPROVED', relationId: fin.relationId });
+    }
+
+    // 入谱工单：挂接校验 + 正式写入 members
     const fin = await finalizeApprovedMember(db, record);
     if (!fin.ok) return BAD_REQUEST(`入库挂接失败: ${fin.reasons.join('；')}`);
 
     await db.collection('entry_records').doc(recordId).update({
-      data: { status: 'APPROVED', memberId: fin.memberId, auditChain: [...(record.auditChain || []), step] }
+      data: { status: 'APPROVED', memberId: fin.memberId, auditChain: stepChain }
     });
     await writeAudit(db, { userId: openid, action: 'entry.approve', target: recordId, detail: fin.memberId });
     return OK({ status: 'APPROVED', memberId: fin.memberId });
@@ -145,6 +171,33 @@ async function auditEntry(db, openid, { recordId, auditAction, comment }) {
     data: { status: 'REJECTED', auditChain: [...(record.auditChain || []), step] }
   });
   return OK({ status: 'REJECTED' });
+}
+
+/** R17：CHANGE(RELATION) 工单 APPROVED → relations 落库生效（蓝图 5.3 边结构 + 双审核人 verifiedBy） */
+async function finalizeApprovedRelation(db, record, verifiedBy) {
+  const rel = record.payload && record.payload.relation;
+  if (!rel || !rel.fromId || !rel.toId || !rel.type) {
+    return { ok: false, reasons: ['工单缺 relation 载荷'] };
+  }
+  // 终审时防重复：同 fromId/toId/type 已有 ACTIVE 边则拒绝（与 relation.edit 建单口径一致）
+  const dup = await db.collection('relations').where({ fromId: rel.fromId, toId: rel.toId, type: rel.type, status: 'ACTIVE' }).count();
+  if (dup && dup.total > 0) return { ok: false, reasons: ['该关系已存在（ACTIVE）'] };
+
+  const addRes = await db.collection('relations').add({
+    data: {
+      fromId: rel.fromId,
+      toId: rel.toId,
+      type: rel.type,
+      subType: rel.subType || '',
+      startDate: rel.startDate || '',
+      endDate: rel.endDate || '',
+      status: 'ACTIVE',
+      verifiedBy,
+      sourceRecordId: record._id,
+      createdAt: new Date()
+    }
+  });
+  return { ok: true, relationId: addRes._id };
 }
 
 /** 复审通过 → 正式写入 members（含挂接校验 + 物化路径） */

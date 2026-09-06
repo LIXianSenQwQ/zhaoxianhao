@@ -443,3 +443,36 @@
 - `pkg-family/pages/lifebook/lifebook.vue`：生平时间线 + deeds + motto + heroNote
 
 <!-- 模板：API 小节结束 -->
+
+### 8.10 entry.audit 双人审核链升级（R17 · 蓝图 7.6/7.7/11 定案落地）
+
+#### 门禁模型（分级 + 鉴权先行）
+
+| 阶段 | 门禁 | 说明 |
+|---|---|---|
+| 粗门禁（进入） | BRANCH_HEAD+ | 鉴权先行，VISITOR/MEMBER 一律 403 |
+| 初审 FIRST_PASS | BRANCH_HEAD+（蓝图 7.6 初审支系） | 提交人不得自审 |
+| 复审 SECOND_PASS | HISTORIAN+（蓝图 7.6 族史委 2 人） | 复审人 ≠ 初审人 ≠ 提交人 |
+| 驳回 REJECT | 当前阶段同级 | **必填 comment**（蓝图 11：无意见 → 400） |
+
+#### CHANGE(RELATION) 工单生效（R16 relation.edit 闭环补全）
+
+- SECOND_PASS 识别 `payload.changeType === 'RELATION'` → `finalizeApprovedRelation`：
+  - 防重复：同 fromId/toId/type 已有 ACTIVE 边 → 400（与 relation.edit 建单口径一致）
+  - relations.add：`{fromId, toId, type, subType, startDate, endDate, status:'ACTIVE', verifiedBy:[初审人,复审人], sourceRecordId, createdAt}`
+  - 审计：`entry.approve.relation`（target=工单号，detail=relationId）
+- 入谱工单（MANUAL/OCR/EXCEL）行为不变：finalizeApprovedMember → members 入库
+
+#### 出参
+
+| 场景 | 出参 |
+|---|---|
+| FIRST_PASS | `{status:'FIRST_PASS'}` |
+| SECOND_PASS（入谱） | `{status:'APPROVED', memberId}` |
+| SECOND_PASS（关系变更） | `{status:'APPROVED', relationId}` |
+| REJECT | `{status:'REJECTED'}` |
+
+#### 前端（R17）
+
+- memberDetail「管理操作」卡（EDITOR+ 可见）：申请关系变更 / 查看人生书
+- relationeditor onLoad 预填 memberId

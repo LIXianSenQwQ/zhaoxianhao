@@ -44,6 +44,14 @@
         <view class="row"><text class="label">世系路径：</text><text class="path-value">{{ member.path || '-' }}</text></view>
       </BaseCard>
 
+      <!-- R17：快捷入口 → 申请关系变更/人生书（蓝图 8.0/9.1） -->
+      <BaseCard v-if="user.isAdmin" title="管理操作">
+        <view class="btn-row">
+          <button size="mini" class="btn-primary" @click="goRelationEditor">申请关系变更</button>
+          <button size="mini" class="btn-primary" @click="goLifebook">查看人生书</button>
+        </view>
+      </BaseCard>
+
       <!-- 受限字段模糊遮罩（Sprint R9：字段级权限提示） -->
       <BaseCard v-if="hiddenFields.length" title="受限信息">
         <view v-for="f in hiddenFields" :key="f" class="row">
@@ -158,6 +166,14 @@ function getAvatar(m: any): string {
   return m.avatarUrl || (m.gender === 'FEMALE' ? '/static/female.png' : '/static/male.png');
 }
 
+/** R17：跳转关系变更表单（relation.edit 工单）与人生书（传记查看） */
+function goRelationEditor() {
+  uni.navigateTo({ url: `/pkg-family/pages/relationeditor/relationeditor?memberId=${member.value._id}` });
+}
+function goLifebook() {
+  uni.navigateTo({ url: `/pkg-family/pages/lifebook/lifebook?memberId=${member.value._id}` });
+}
+
 /** 打开授权申请页（Sprint R7：needAuthCard 授权卡闭环） */
 async function openApply() {
   if (!props.id) return;
@@ -193,4 +209,8 @@ function goEdit() {
 .status-deceased { color: #8A5A2B; }
 
 .edit-btn { text-align: center; padding: 16px; background: #FFF; border-top: 1px solid #EEE7DA; }
+
+/* R17：管理操作按钮行 */
+.btn-row { display: flex; gap: 8px; justify-content: space-between; margin-top: 12px; }
+.btn-primary { flex: 1; height: 36px; font-size: 13px; background: linear-gradient(135deg,#D4B06A 0%,#C9A063 50%,#B8924F 100%); color: #FFF; border-radius: 6px; border: none; }
 </style>
