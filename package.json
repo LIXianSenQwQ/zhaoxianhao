@@ -14,7 +14,8 @@
     "check:env": "node scripts/check-env.js",
     "verify": "npm run check:env && npm run test && npm run lint && npm run check:functions",
     "sync:common": "node scripts/sync-common.js",
-    "lineage:verify": "node scripts/verify-lineage.js"
+    "lineage:verify": "node scripts/verify-lineage.js",
+    "pr:merge": "node scripts/pr-merge.js"
   },
   "engines": {
     "node": ">=18 <=25",

@@ -4,14 +4,24 @@
  * - 干支纪年/纪月/纪日、生肖（公式精确）
  * - 二十四节气（21 世纪通用近似公式，交节日 ±1 日内）
  * - 宜忌（内置通用规则 + settings.almanacExt 族史委定制扩展）
- * - 农历月日：真实部署时接入 lunar-javascript 离线库（1900-2100），
- *   本骨架返回 source:'lunar-placeholder' 并给出部署接入点注释
+ * - 农历月日：真实部署时接入 lunar-javascript 离线库（1900-2100）——
+ *   经 lib/lunar-data.js 统一加载；未安装且无离线缓存时，
+ *   返回 source:'lunar-placeholder'（规则层仍保证干支/节气可测）
  */
 
 const wx = require('wx-server-sdk');
 const { OK, BAD_REQUEST } = require('./common/response');
 
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
+
+// V1.1 E4 lunar 接入层：优先 lunar-javascript，其次离线缓存，缺省 none
+let lunarEngine = null;
+try {
+  const lunarLoader = require('../../lib/lunar-data.js');
+  lunarEngine = lunarLoader.detect();
+} catch (e) {
+  lunarEngine = { kind: 'none', error: 'lib/lunar-data.js 未找到' };
+}
 
 // ─── 基础常量 ───
 const STEMS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
@@ -163,13 +173,25 @@ async function almanac(ctx, date) {
     }
   } catch (e) { /* stub / 无配置时忽略 */ }
 
+  // ── lunar 数据：lunar-javascript / 离线缓存 / 公式占位 三档 ──
+  let lunar = { source: 'lunar-placeholder', note: '真实部署接入 lunar-javascript（1900-2100）' };
+  if (lunarEngine && lunarEngine.kind !== 'none') {
+    try {
+      const lunarLoader = require('../../lib/lunar-data.js');
+      const info = lunarLoader.lunarOf(lunarEngine, y, m, d);
+      if (info && info.source) {
+        lunar = info;
+        // 缓存/引擎可靠时回填干支纪年，覆盖极端年份边界
+        if (info.yearGanZhi && !info.ganZhiY) info.ganZhiY = info.yearGanZhi;
+      }
+    } catch (e) {
+      lunar = { source: 'lunar-error', note: e.message };
+    }
+  }
+
   return OK({
     date,
-    lunar: {
-      source: 'lunar-placeholder',
-      note: '真实部署接入 lunar-javascript（1900-2100）',
-      // 部署接入点：const { Lunar } = require('lunar-javascript'); Lunar.fromYmd(y,m,d)
-    },
+    lunar,
     ganzhi: { year: yearGanzhi, month: monthGz, day: dayGz.ganzhi },
     zodiac: zodiacOf(y),
     solarTerm: term, // null = 非节气日

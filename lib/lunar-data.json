@@ -1,0 +1,1 @@
+{"generated":"2026-09-06T08:43:40.616Z","fromYear":2000,"toYear":2027,"type":"minimal-anchor","note":"仅含可确证锚点（干支/节气），非权威农历数据；部署环境请 npm i lunar-javascript 后重跑生成全量","anchors":[{"date":"2000-01-01","year":"己卯","ganZhiDay":"戊午"},{"date":"2026-02-04","year":"丙午","term":"立春"},{"date":"2026-06-21","year":"丙午","term":"夏至"},{"date":"2026-09-07","year":"丙午","term":"白露"}]}

@@ -1,0 +1,49 @@
+name: CI
+
+# 触发条件：PR 开向 dev/main；push 到 dev/main；手动触发
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Verify (tests + lint + cloud-fn structure)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          # 本仓库无 lockfile 时 npm ci 会失败 → 用 fallback（见下步）
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Environment probe (non-blocking)
+        run: npm run check:env || echo "::warning::check:env reported issues (expected offline)"
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Check cloud functions structure
+        run: npm run check:functions
+
+      - name: Full verify (single gate)
+        run: npm run verify
