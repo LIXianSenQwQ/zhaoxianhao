@@ -267,6 +267,65 @@ async function categoryList(ctx, userId) {
 }
 
 /**
+ * V2.0 模块一（A.2）：分类重命名
+ */
+async function categoryUpdate(ctx, userId, { categoryId, name }) {
+  const db = wx.getDatabase();
+  if (!categoryId || !name || !name.trim()) return BAD_REQUEST('缺少必要参数');
+
+  // 权限校验：仅属主
+  const ownerRes = await db.collection('content_categories')
+    .where({ _id: categoryId, openid: ctx.openid }).limit(1).get();
+  if (!ownerRes.data || !ownerRes.data.length) return FORBIDDEN('无权限修改该分类');
+
+  await db.collection('content_categories').doc(categoryId).update({
+    data: { name: name.trim(), updatedAt: new Date() }
+  });
+
+  try {
+    await db.collection('audit_logs').add({
+      userId: ctx.openid, action: 'category.update', target: categoryId,
+      detail: JSON.stringify({ name }), time: new Date()
+    });
+  } catch {}
+
+  return OK({ message: '已重命名' });
+}
+
+/**
+ * V2.0 模块一（A.2）：删除分类（软删除；返回被该分类使用的内容数量提示）
+ */
+async function categoryDelete(ctx, userId, { categoryId }) {
+  const db = wx.getDatabase();
+  if (!categoryId) return BAD_REQUEST('缺少 categoryId');
+
+  // 权限校验：仅属主
+  const ownerRes = await db.collection('content_categories')
+    .where({ _id: categoryId, openid: ctx.openid }).limit(1).get();
+  if (!ownerRes.data || !ownerRes.data.length) return FORBIDDEN('无权限删除该分类');
+
+  // 统计使用该分类的内容数量（主分类维度；子分类删除同 name 检索可扩展）
+  const usedByName = ownerRes.data[0].name || '';
+  const usedCount = usedByName
+    ? (await db.collection('local_contents')
+        .where({ mainCategory: usedByName, openid: ctx.openid }).count()).total || 0
+    : 0;
+
+  await db.collection('content_categories').doc(categoryId).update({
+    data: { deleted: true, deletedAt: new Date(), updatedAt: new Date() }
+  });
+
+  try {
+    await db.collection('audit_logs').add({
+      userId: ctx.openid, action: 'category.delete', target: categoryId,
+      detail: JSON.stringify({ usedByContents: usedCount }), time: new Date()
+    });
+  } catch {}
+
+  return OK({ message: '分类已删除', usedByContents: usedCount });
+}
+
+/**
  * V2.0 模块一（A.7）：内容详情（按可见性过滤）
  */
 async function contentDetail(ctx, userId, { contentId }) {
@@ -441,6 +500,10 @@ module.exports = { main: async (params, context) => {
       return await categorySave(roleCtx, userId, params);
     case 'category.list':
       return await categoryList(roleCtx, userId);
+    case 'category.update':
+      return await categoryUpdate(roleCtx, userId, params);
+    case 'category.delete':
+      return await categoryDelete(roleCtx, userId, params);
     case 'content.detail':
       return await contentDetail(roleCtx, userId, params);
     case 'content.update':

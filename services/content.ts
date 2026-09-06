@@ -61,6 +61,16 @@ export function listCategories() {
   return call('content', { action: 'category.list' }, 'content:cats', 60000);
 }
 
+/** 重命名分类（主/子/标签） */
+export function updateCategory(categoryId: string, name: string) {
+  return write('content', { action: 'category.update', categoryId, name }, 'category', `cat_upd_${Date.now()}`);
+}
+
+/** 删除分类（软删除） */
+export function deleteCategory(categoryId: string) {
+  return write('content', { action: 'category.delete', categoryId }, 'category', `cat_del_${Date.now()}`);
+}
+
 /** 获取内容详情（本人或 PUBLIC 可见） */
 export function getContentDetail(contentId: string) {
   return call('content', { action: 'content.detail', contentId }, undefined);
