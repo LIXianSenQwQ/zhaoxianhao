@@ -657,3 +657,58 @@
 4. **性能实测**（持续等待用户环境——微信开发者工具真机调试）
 
 <!-- 模板：下一轮评审复制此节 -->
+
+## 第 R14 轮（Sprint R14 · MVP 收口轨：R13 承诺兑现——通知卡流 + 打卡闭环 + 史记时间轴）
+
+> 主题：兑现 R14 承诺①③——notify.digest 首页卡流真数据、史记时间轴页；顺带大修 notify（四处缺陷：必崩点/水平越权/个人通知不可见/无兜底）并完成 R13 遗留的 task 打卡页②（积分联动闭环最后一环）。
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R13 | R14 | 变化 |
+|---|---|---|---|---|---|
+| 功能覆盖 | 云函数可用 | 23 计划 | 17/23 | **18/23**（notify 大修收口，list/digest 达蓝图 0.3.2/7.9 口径） | ↑ |
+| 功能覆盖 | 前端页面 | 82 计划 | ~26/82 | **~28/82**（task 打卡页 + 史记时间轴页，pages.json 17 页全对齐） | ↑ |
+| 联动 | 首页三聚合 | 0.6.3 | digest 半残 + homeCards 空占位 | **atmosphere.today + notify.digest 双接口同口径真数据**（common/homecards 单一实现） | ↑ |
+| 缺陷 | notify 缺陷点 | 0 | 4 处 | **0**（broadcast 必崩/markRead 越权/个人通知不可见/空态无兜底） | ↑ |
+| 质量 | 测试数 | ≥80% | 134 | **142**（+8：digest 卡序/兜底/门禁/list 合并/markRead 越权+broadcast 正向/atmosphere 卡流×2） | ↑ |
+| 门禁 | npm run verify | 全绿 | 绿 | **绿**（142 用例 0 fail · lint 0E · 云函数 15/15 · 路由 17 页对齐） | = |
+
+### 二、本轮交付清单
+
+**缺陷修复（notify 大修，蓝图 0.3.2/7.9 对齐）：**
+- 修复 `wx.cloud.generateObjectId()` 不存在（broadcast 必崩，stub/真机同源缺陷；_id 由 add 自动生成——R12 points/R13 ceremony 同口径第三处清零）
+- **封堵 markRead 水平越权**：旧版任何登录者可标记任意通知已读；现个人通知仅本人可标记（doc.userId 比对 403）+ readAt 留痕
+- **修复个人通知永不可见**：旧版 list 仅查 `scope:'ALL'`，remindScan 忌日提醒/审核结果等站内通知全部丢失；现合并个人通知（userId=openid）+ 全员广播（createdAt 倒序），他人通知隔离
+- digest 空态降级「祖训今日」卡（蓝图 0.3.3 首屏不空）：settings.daily_motto 可配，默认「敬宗睦族，诗礼传家」
+
+**架构收口（common/homecards.js 新建）：**
+- `buildHomeCards(db, openid)` 首页卡流单一实现（蓝图 0.3.2 五级：仪式朱砂置顶→个人提醒→个人未读通知→动态摘要→祖训兜底），notify.digest 与 atmosphere.today.homeCards 共用（0.6.3 双聚合同口径）
+- 全子查询 try/catch 容错：任一集合缺失/异常仅跳过该级不阻塞卡流；匿名访客走祖训兜底（公开接口不空屏）
+
+**atmosphere 收口：**
+- homeCards 从 R13 空数组占位 → 真数据接入（带 openid 下发四级卡流；无 openid 祖训兜底）
+
+**新增前端页面（+2，~28/82）：**
+- `pkg-growth/pages/task/task.vue`（蓝图 task/index）：今日任务列表（进度 n/N）+ 打卡按钮（服务端当日幂等 + R13 common/points 积分 toast 反馈）+ 已打卡态
+- `pkg-shrine/pages/history/history.vue`（蓝图 8.0 history/index）：年份筛选横滑条 + 按年分组时间轴（金色节点+竖线）+ 行内展开全文
+- **index.vue 三处失配修复**：快捷条旧路由（pkg-shrine/shrine/index→pages/shrine/shrine、pkg-genealogy/jiapu/index→pkg-family/pages/tree/tree、pkg-points/task/index→pkg-growth/pages/task/task）+ `mutedPeriod`→`muted` 字段对齐 R13 口径 + openCard 按卡类型分流（ceremony/notice→日历、moment→广场、motto→祖训提示）
+
+**测试 +8（134→142）**：digest 卡序+朱砂标记 / 祖训兜底（默认+settings 覆盖）/ 未登录 403 / list 合并（个人+广播+他人隔离+倒序）/ markRead 越权 403+本人 OK / broadcast EDITOR 正向无崩+审计 / atmosphere 卡流真数据 / 匿名祖训兜底。
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 真机 P95/首屏采集（连续 14 轮阻塞） | 高 | 沙箱侧全部就绪；**突破必须依赖微信开发者工具环境** |
+| 广播已读为共享态（全族一致） | 低 | V1.1 per-user 已读回执（moment_interactions 体系）；个人通知已按本人隔离 |
+| list 深翻页仅个人通知参与分页 | 低 | 广播量级小（首页并入最新 20 条）；如实测量大再引入 union 查询 |
+| index.vue 速览卡仍为占位「—」 | 低 | 速览数据源（member 统计）未排期，R15 评估 member.stats 聚合 |
+
+### 四、R15 承诺
+
+1. **首页家族速览真数据**（member.stats 聚合或在世人口/最新代数/本月大事，蓝图 0.3.2 ④）
+2. **ceremony.worship 前端打磨**（烛火粒子 + 音效 + 合拜入口，蓝图 11 点灯交互定案）
+3. **英烈的献花页 hero**（蓝图 8.0 hero/index，接 ceremony.type=flower + events.tag=英烈）
+4. **性能实测**（持续等待用户环境——微信开发者工具真机调试）
+
+<!-- 模板：下一轮评审复制此节 -->

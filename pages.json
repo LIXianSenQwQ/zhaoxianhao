@@ -79,6 +79,10 @@
 					"style": {}
 				},
 				{
+					"path": "pages/task/task",
+					"style": {}
+				},
+				{
 					"path": "pages/flags/flags",
 					"style": {}
 				}
@@ -90,6 +94,10 @@
 			"pages": [
 				{
 					"path": "pages/shrine/shrine",
+					"style": {}
+				},
+				{
+					"path": "pages/history/history",
 					"style": {}
 				}
 			]

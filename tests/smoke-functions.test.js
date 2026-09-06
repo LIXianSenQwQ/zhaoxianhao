@@ -138,7 +138,8 @@ test('member.exportFile：VISITOR → 403（鉴权先行）', async () => {
 function seedDB({
   users = [], members = [], authRequests = [], authorizations = [], auditLogs = [],
   plazaPosts = [], notifications = [], accounts = [], pointsLogs = [],
-  worshipLogs = [], tasks = [], taskRecords = [], calendarItems = [], events = []
+  worshipLogs = [], tasks = [], taskRecords = [], calendarItems = [], events = [],
+  ceremonies = []
 } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
@@ -146,7 +147,7 @@ function seedDB({
       audit_logs: auditLogs, notifications, plaza_posts: plazaPosts, settings: [],
       points_accounts: accounts, points_logs: pointsLogs,
       worship_logs: worshipLogs, tasks, task_records: taskRecords,
-      calendar_items: calendarItems, events
+      calendar_items: calendarItems, events, ceremonies
     },
     seq: 1000
   };
@@ -724,4 +725,114 @@ test('R13 atmosphere：24 节气表完整 + 圆环匹配（跨年回卷冬至段
   assert.equal(atm.resolveTerm(new Date('2025-04-06T04:00:00Z')).name, '清明');
   assert.equal(atm.resolveTerm(new Date('2025-08-09T04:00:00Z')).name, '立秋');
   assert.equal(atm.resolveTerm(new Date('2025-12-25T04:00:00Z')).name, '冬至');
+});
+
+// ─── Sprint R14：notify 大修（卡流/合并列表/越权封堵）+ atmosphere.homeCards 真数据 ───
+
+const NOW = Date.now();
+
+test('R14 notify.digest：蓝图 0.3.2 卡序（仪式朱砂→提醒→个人通知→动态）', async () => {
+  seedDB({
+    ceremonies: [{ _id: 'c-1', title: '清明祭祖', desc: '梨园集中祭扫', status: 'ACTIVE', date: new Date('2026-04-05T00:00:00Z') }],
+    calendarItems: [{ _id: 'ci-1', userId: 'u-m', title: '族谱核对', notified: false }],
+    notifications: [{ _id: 'n-1', userId: 'u-m', title: '忌日提醒', body: '今日是先人的忌日', read: false }],
+    plazaPosts: [{ _id: 'p-1', authorName: '郝三叔', content: '家族梨园开园了，欢迎大家来采摘', createdAt: new Date(NOW) }]
+  });
+  const res = await FN('notify').main({ action: 'digest' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true);
+  const types = res.data.cards.map(c => c.type);
+  assert.deepEqual(types, ['ceremony', 'reminder', 'notice', 'moment'], '卡流按 0.3.2 权重排序');
+  assert.equal(res.data.cards[0].accent, 'cinnabar', '仪式卡朱砂边条标记');
+  assert.equal(res.data.cards[2].title, '忌日提醒');
+});
+
+test('R14 notify.digest：空态祖训今日兜底（默认祖训 + settings 覆盖）', async () => {
+  seedDB({});
+  const res = await FN('notify').main({ action: 'digest' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.data.cards.length, 1);
+  assert.equal(res.data.cards[0].type, 'motto');
+  assert.equal(res.data.cards[0].desc, '敬宗睦族，诗礼传家', '默认祖训（0.3.3 首屏不空）');
+
+  // settings.daily_motto 自定义覆盖
+  globalThis.__HCS_STUB_SEED__.collections.settings = [{ _id: 's-1', key: 'daily_motto', value: '耕读传家久，诗书继世长' }];
+  const res2 = await FN('notify').main({ action: 'digest' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res2.data.cards[0].desc, '耕读传家久，诗书继世长');
+});
+
+test('R14 notify.digest：未登录 403（本人接口，蓝图 9.1）', async () => {
+  seedDB({});
+  const res = await FN('notify').main({ action: 'digest' }, {});
+  assert.equal(res.code, 403);
+});
+
+test('R14 notify.list：个人通知与全员广播合并（旧版个人通知永不可见已修复）', async () => {
+  seedDB({
+    notifications: [
+      { _id: 'n-old', userId: 'u-m', title: '旧忌日提醒', body: 'a', read: true, createdAt: new Date(NOW - 86400000) },
+      { _id: 'n-mine', userId: 'u-m', title: '审核结果', body: '入谱已通过', read: false, createdAt: new Date(NOW) },
+      { _id: 'n-all', scope: 'ALL', title: '紧急通知', body: '台风预警', read: false, createdAt: new Date(NOW - 3600000) },
+      { _id: 'n-other', userId: 'u-x', title: '他人通知', body: 'b', read: false, createdAt: new Date(NOW) }
+    ]
+  });
+  const res = await FN('notify').main({ action: 'list' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true);
+  const ids = res.data.records.map(n => n._id);
+  assert.ok(ids.includes('n-mine'), '个人通知在列');
+  assert.ok(ids.includes('n-all'), '全员广播在列');
+  assert.ok(!ids.includes('n-other'), '他人通知不可见');
+  assert.ok(ids.includes('n-old'), '通知中心含已读个人通知');
+  assert.equal(ids[0], 'n-mine', 'createdAt 倒序合并');
+});
+
+test('R14 notify.markRead：越权 403（旧版水平越权封堵）+ 本人 OK', async () => {
+  seedDB({
+    notifications: [
+      { _id: 'n-mine', userId: 'u-m', title: '忌日提醒', body: 'x', read: false },
+      { _id: 'n-all', scope: 'ALL', title: '广播', body: 'y', read: false }
+    ]
+  });
+  const denied = await FN('notify').main({ action: 'markRead', notificationId: 'n-mine' }, { OPENID: 'u-x', openid: 'u-x' });
+  assert.equal(denied.code, 403, '仅本人可标记个人通知已读');
+  const ok = await FN('notify').main({ action: 'markRead', notificationId: 'n-mine' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(ok.success, true);
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.equal(seed.collections.notifications.find(n => n._id === 'n-mine').read, true);
+  assert.ok(seed.collections.notifications.find(n => n._id === 'n-mine').readAt, 'readAt 留痕');
+});
+
+test('R14 notify.broadcast：EDITOR 正向无崩（generateObjectId 移除）+ 审计', async () => {
+  seedDB({
+    users: [{ openid: 'u-e', role: 'EDITOR', status: 'ACTIVE' }]
+  });
+  const res = await FN('notify').main({ action: 'broadcast', content: '明日族谱核对', level: 'MEDIUM' }, { OPENID: 'u-e', openid: 'u-e' });
+  assert.equal(res.success, true, '旧版此处因 generateObjectId 必崩');
+  assert.ok(res.data.broadcastId, '_id 由 add 自动生成');
+  assert.equal(res.data.notifiedCount, 0, '订阅消息未配置时跳过不阻塞');
+  const seed = globalThis.__HCS_STUB_SEED__;
+  const note = seed.collections.notifications.find(n => n.type === 'EMERGENCY');
+  assert.ok(note, '广播落库');
+  assert.equal(note.scope, 'ALL');
+  assert.ok(seed.collections.audit_logs.some(a => a.action === 'notify.broadcast'));
+});
+
+test('R14 atmosphere.homeCards：真数据接入（与 digest 同口径）', async () => {
+  seedDB({
+    ceremonies: [{ _id: 'c-1', title: '冬至祭', desc: '', status: 'ACTIVE', date: new Date('2026-12-22T00:00:00Z') }],
+    calendarItems: [{ _id: 'ci-1', userId: 'u-m', title: '请安提醒', notified: false }],
+    notifications: [{ _id: 'n-1', userId: 'u-m', title: '忌日提醒', body: '宜上香', read: false }],
+    plazaPosts: [{ _id: 'p-1', authorName: '郝大伯', content: '新谱初稿完成', createdAt: new Date(NOW) }]
+  });
+  const res = await FN('atmosphere').main({ action: 'today' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.homeCards[0].type, 'ceremony', '卡流首卡为仪式');
+  assert.equal(res.data.homeCards.length, 4, '四级卡流全量下发');
+  assert.ok(/^#[0-9A-F]{6}$/i.test(res.data.moodTheme.top), '氛围端点色不回归');
+});
+
+test('R14 atmosphere.homeCards：匿名访客祖训兜底（公开接口不空屏）', async () => {
+  seedDB({});
+  const res = await FN('atmosphere').main({ action: 'today' }, {});
+  assert.equal(res.success, true);
+  assert.equal(res.data.homeCards[0].type, 'motto');
+  assert.ok(res.data.homeCards[0].desc.length > 0);
 });

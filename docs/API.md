@@ -362,3 +362,29 @@
 #### task.checkin（R13 联动修复）
 
 打卡响应新增 `points` 字段（awardSystemPoints 结果）；积分失败不阻塞打卡本体（console.warn + 审计兜底，补偿扫描按 dateStr）。
+
+### 8.7 notify 大修 + atmosphere.homeCards 真数据（R14 · 蓝图 0.3.2/0.6.3/7.9 对齐）
+
+#### notify（R14 四处缺陷清零）
+
+| action | 入参 | 出参 | 权限 | 说明 |
+|---|---|---|---|---|
+| digest | — | `{cards[]}` | 登录 | 首页要事卡流（common/homecards 单一实现）：仪式(朱砂 accent)→个人提醒→个人未读通知→动态摘要→祖训今日兜底（settings.daily_motto 可配）；蓝图 0.3.2 权重排序 |
+| list | page? | `{records[], page, hasMore}` | 登录 | 个人通知（userId=openid，含已读）+ 全员广播（scope:ALL 未读）合并 createdAt 倒序；**旧版仅查广播导致个人通知永不可见已修复** |
+| markRead | notificationId | `{marked}` | 本人 | **水平越权封堵**：个人通知仅本人可标记（他人 403）+ readAt 留痕；广播为共享已读态（V1.1 per-user 回执） |
+| broadcast | content, level | `{broadcastId, notifiedCount}` | EDITOR+ | `wx.cloud.generateObjectId` 移除（必崩点第三处清零）；订阅消息未配置跳过不阻塞；审计 notify.broadcast |
+
+#### common/homecards（R14 新建）
+
+`buildHomeCards(db, openid)` → 卡片 `{type, accent?, id, title, desc, date?}`
+- type 枚举：`ceremony / reminder / notice / moment / motto`；ceremony 带 `accent:'cinnabar'`（前端朱砂边条）
+- notify.digest 与 atmosphere.today.homeCards **共用同一实现**（蓝图 0.6.3 首页聚合口径唯一）；全子查询容错跳过，匿名→祖训兜底
+
+#### atmosphere.today（R14 增量）
+
+- `homeCards` 从空占位 → 真数据（携带 openid 四级卡流；匿名祖训兜底卡）
+- 响应字段不变：`{solarTerm, season, moodTheme, greeting, muted, festival, homeCards}`
+
+#### 前端路由失配修复（R14）
+
+- index.vue 快捷条路由对齐 pages.json 注册页（shrine/tree/task 三处）+ `muted` 字段对齐；openCard 按卡类型分流（ceremony/notice→日历、moment→广场、motto→提示）

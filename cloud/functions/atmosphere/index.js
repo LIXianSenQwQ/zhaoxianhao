@@ -17,6 +17,7 @@
  */
 const wx = require('wx-server-sdk');
 const { OK } = require('./common/response');
+const { buildHomeCards } = require('./common/homecards');
 
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
 
@@ -73,18 +74,20 @@ const SEASON_GREETINGS = Object.freeze({
   冬: '岁暮天寒，围炉向暖，家风不熄'
 });
 
-async function main(params) {
+async function main(params, context) {
   const { action } = params || {};
   switch (action) {
     case 'today':
-      return await todayAtmosphere();
+      return await todayAtmosphere(context);
     default:
       return OK({ solarTerm: '', season: '', moodTheme: { ...SEASON_THEMES.冬 }, greeting: '', muted: false, festival: '', homeCards: [] });
   }
 }
 
-/** 今日氛围聚合（公开接口） */
-async function todayAtmosphere() {
+/** 今日氛围聚合（公开接口；携带 openid 时下发个性化首页卡流，匿名走祖训兜底） */
+async function todayAtmosphere(context) {
+  const openid = (context && (context.OPENID || context.openid)) || '';
+  const db = wx.getDatabase();
   const today = new Date();
 
   const term = findSolarTerm(today);
@@ -96,6 +99,16 @@ async function todayAtmosphere() {
     ? '慎终追远，静默致哀'
     : (TERM_GREETINGS[term.name] || SEASON_GREETINGS[term.season] || '四季流转，家风永存');
 
+  // 首页卡流（蓝图 0.3.2）：与 notify.digest 同口径（common/homecards）；
+  // 失败降级祖训兜底卡，不阻塞氛围下发
+  let homeCards = [];
+  try {
+    homeCards = await buildHomeCards(db, openid);
+  } catch (e) {
+    console.warn('[atmosphere] homeCards fallback:', e.message);
+    homeCards = [{ type: 'motto', id: 'daily-motto', title: '祖训今日', desc: '敬宗睦族，诗礼传家' }];
+  }
+
   return OK({
     solarTerm: term.name,
     season: muted ? '' : term.season,
@@ -103,7 +116,7 @@ async function todayAtmosphere() {
     greeting,
     muted,
     festival: '',          // 一期：传统节日随族议会年历更新
-    homeCards: composeHomeCards(term, muted)
+    homeCards
   });
 }
 
@@ -128,11 +141,6 @@ async function checkActiveFuneral() {
   } catch (e) {
     return false; // 查询异常不阻塞氛围下发
   }
-}
-
-/** 首页卡流占位：R14 接 notify.digest / 公告 / 仪式提醒（服务端配置驱动） */
-function composeHomeCards(term, muted) {
-  return [];
 }
 
 module.exports = { main, SOLAR_TERMS, resolveTerm: findSolarTerm };

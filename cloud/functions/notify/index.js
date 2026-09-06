@@ -1,19 +1,27 @@
 /**
  * cloud/functions/notify/index.js
  * 通知聚合 + 首页摘要 + 紧急广播
- * Sprint R3 完整化：
- *   - 修复 list 调用未定义函数的 ReferenceError
- *   - 统一响应格式（旧版 broadcast 返回裸 {error}）
- *   - 权限判定统一 hasRole（旧版字符串枚举比较遗漏 ADMIN）
+ *
+ * Sprint R3 完整化：统一响应 / hasRole 门禁 / list 分页
+ * Sprint R14 大修（蓝图 0.3.2 / 7.9 对齐）：
+ *   - digest 接 common/homecards 卡流（仪式→提醒→个人通知→动态→祖训兜底），
+ *     与 atmosphere.today.homeCards 同口径
+ *   - list 合并「个人通知（userId=openid，含 remindScan 忌日提醒）」与「全员广播」，
+ *     旧版仅查 scope:'ALL' 导致站内个人通知永远不可见
+ *   - markRead 补属主校验（旧版任何登录者可标记任意通知已读——水平越权）
+ *   - broadcast 移除 wx.cloud.generateObjectId()（不存在的 API，stub/真机均必崩；
+ *     _id 由 add 自动生成，与 R12 points / R13 ceremony 同口径修复）
  */
 const wx = require('wx-server-sdk');
-const { OK, BAD_REQUEST, FORBIDDEN } = require('./common/response');
+const { OK, BAD_REQUEST, FORBIDDEN, NOT_FOUND } = require('./common/response');
 const { hasRole } = require('./common/roles');
 const { writeAudit } = require('./common/audit');
+const { buildHomeCards } = require('./common/homecards');
 
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
 
 const LIST_LIMIT = 50;
+const LIST_SIZE = 20;
 
 async function main(event, context) {
   const openid = context.OPENID || context.openid;
@@ -40,57 +48,47 @@ async function roleOf(db, openid) {
   return (res.data[0] && res.data[0].role) || 'VISITOR';
 }
 
-/** 首页摘要卡：仪式 > 日程 > 动态（优先级排序，缓存 60s 由前端 request 层管理） */
+/** 首页摘要卡（蓝图 0.3.2 卡流）：与 atmosphere.homeCards 共用 common/homecards */
 async function getHomeDigest(db, openid) {
-  const cards = [];
-
-  // 1. 仪式/红白事（最高优先级）
-  const ceremonies = await db.collection('ceremonies')
-    .where({ status: 'ACTIVE' })
-    .orderBy('date', 'asc')
-    .limit(3).get();
-
-  for (const c of ceremonies.data) {
-    cards.push({ type: 'ceremony', title: c.title || c.type, desc: c.desc, date: c.date, id: c._id });
-  }
-
-  // 2. 提醒/日程
-  const reminders = await db.collection('calendar_items')
-    .where({ userId: openid, notified: false })
-    .limit(5).get();
-
-  for (const r of reminders.data) {
-    cards.push({ type: 'reminder', title: r.title, desc: r.desc, date: r.date });
-  }
-
-  // 3. 家族动态摘要
-  const moments = await db.collection('plaza_posts')
-    .orderBy('createdAt', 'desc')
-    .limit(3).get();
-
-  for (const m of moments.data) {
-    cards.push({ type: 'moment', title: m.authorName, desc: m.content ? m.content.substring(0, 50) : '', id: m._id });
-  }
-
+  const cards = await buildHomeCards(db, openid);
   return OK({ cards });
 }
 
-/** 我的通知列表：分页倒序 */
+/**
+ * 我的通知列表：个人通知 + 全员广播合并（createdAt 倒序）
+ * 深翻页以个人通知为准（广播量级小，仅首页并入；V1.1 广播已读回执走 per-user 状态）
+ */
 async function listNotifications(db, openid, page = 1) {
-  const size = 20;
   const p = Math.max(1, Number(page) || 1);
-  const res = await db.collection('notifications')
-    .where({ scope: 'ALL', read: false }) // 全员广播未读；个人通知 V1.1
+  const mine = await db.collection('notifications')
+    .where({ userId: openid })
     .orderBy('createdAt', 'desc')
-    .skip((p - 1) * size).limit(size)
+    .skip((p - 1) * LIST_SIZE).limit(LIST_SIZE)
     .get();
-  return OK({ records: res.data, page: p, hasMore: res.data.length === size });
+  if (!mine.data || p > 1) {
+    return OK({ records: mine.data || [], page: p, hasMore: (mine.data || []).length === LIST_SIZE });
+  }
+  const alls = await db.collection('notifications')
+    .where({ scope: 'ALL', read: false })
+    .orderBy('createdAt', 'desc')
+    .limit(LIST_SIZE)
+    .get();
+  const merged = (mine.data || []).concat(alls.data || [])
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+    .slice(0, LIST_SIZE);
+  return OK({ records: merged, page: p, hasMore: (mine.data || []).length === LIST_SIZE });
 }
 
-/** 标记已读 */
+/** 标记已读：仅本人可标记个人通知；全员广播为共享已读态（V1.1 升级 per-user 回执） */
 async function markRead(db, openid, notificationId) {
   if (!notificationId) return BAD_REQUEST('缺少 notificationId');
-  await db.collection('notifications').doc(notificationId).update({ data: { read: true } });
+  const res = await db.collection('notifications').doc(notificationId).get().catch(() => null);
+  const doc0 = res && res.data && !Array.isArray(res.data) ? res.data : (res && res.data && res.data[0]);
+  if (!doc0) return NOT_FOUND('通知不存在');
+  if (doc0.userId && doc0.userId !== openid) return FORBIDDEN('仅本人可标记已读');
+  await db.collection('notifications').doc(notificationId).update({
+    data: { read: true, readAt: new Date() }
+  });
   return OK({ marked: true });
 }
 
@@ -100,8 +98,8 @@ async function broadcastToAll(db, openid, { content, level }) {
   if (!hasRole(role, 'EDITOR')) return FORBIDDEN('仅编辑及以上可发布紧急广播');
   if (!content || !String(content).trim()) return BAD_REQUEST('缺广播内容');
 
-  const broadcastId = wx.cloud.generateObjectId();
-  await db.collection('notifications').add({
+  // _id 由 add 自动生成（generateObjectId 为不存在的 API，R14 移除）
+  const addRes = await db.collection('notifications').add({
     data: {
       type: 'EMERGENCY',
       level: ['HIGH', 'MEDIUM'].includes(level) ? level : 'HIGH',
@@ -113,8 +111,9 @@ async function broadcastToAll(db, openid, { content, level }) {
       createdBy: openid
     }
   });
+  const broadcastId = addRes._id;
 
-  // 订阅消息推送（失败不阻塞通知本体）
+  // 订阅消息推送（失败不阻塞通知本体；模板未配置时整体跳过）
   let notifiedCount = 0;
   try {
     const users = await db.collection('users').where({ status: 'ACTIVE' }).limit(1000).get();

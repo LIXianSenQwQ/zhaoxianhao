@@ -87,12 +87,12 @@ const overviewStats = ref([
   { value: '—', label: '我的字辈' }
 ]);
 
-// 快捷 5 键（图标用字形占位，切图后替换 image）
+// 快捷 5 键（图标用字形占位，切图后替换 image；路由对齐 pages.json 注册页）
 const quickItems = [
-  { id: 'lamp', label: '点灯', glyph: '🕯', url: '/pkg-shrine/shrine/index' },
+  { id: 'lamp', label: '点灯', glyph: '🕯', url: '/pkg-shrine/pages/shrine/shrine' },
   { id: 'qingan', label: '请安', glyph: '🙏', url: '' },
-  { id: 'zupu', label: '族谱', glyph: '📜', url: '/pkg-genealogy/jiapu/index' },
-  { id: 'daka', label: '打卡', glyph: '✅', url: '/pkg-points/task/index' },
+  { id: 'zupu', label: '族谱', glyph: '📜', url: '/pkg-family/pages/tree/tree' },
+  { id: 'daka', label: '打卡', glyph: '✅', url: '/pkg-growth/pages/task/task' },
   { id: 'more', label: '更多', glyph: '⋯', url: '/pages/mine/mine' }
 ];
 
@@ -120,8 +120,8 @@ async function loadTodayCards() {
   if (atm.data) {
     const d = atm.data.data ?? atm.data;
     solarTerm.value = d.solarTerm || '';
-    isMutedPeriod.value = !!d.mutedPeriod;
-    weatherInfo.value = d.weather || '晴';
+    isMutedPeriod.value = !!d.muted; // R13 atmosphere 字段口径：muted
+    weatherInfo.value = d.weather || '晴'; // V1.1 weather.current 接入后替换
     loaded.value = true;
   }
 
@@ -160,9 +160,15 @@ function handleQuickClick(item: typeof quickItems[number]) {
 
 function openCard(card: { id: string; type: string }) {
   if (card.type === 'ceremony') {
-    uni.navigateTo({ url: '/pkg-calendar/calendar/index', fail: () => {} });
+    uni.navigateTo({ url: '/pkg-calendar/pages/calendar/calendar', fail: () => {} });
+  } else if (card.type === 'moment') {
+    uni.navigateTo({ url: '/pkg-family/pages/plaza/plaza', fail: () => {} });
+  } else if (card.type === 'notice' || card.type === 'reminder') {
+    uni.navigateTo({ url: '/pkg-calendar/pages/calendar/calendar', fail: () => {} });
+  } else if (card.type === 'motto') {
+    uni.showToast({ title: '祖训今日 · 点击翻转看注解（V1.1）', icon: 'none' });
   } else {
-    uni.navigateTo({ url: '/pkg-social/plaza/index', fail: () => {} });
+    uni.navigateTo({ url: '/pkg-family/pages/plaza/plaza', fail: () => {} });
   }
 }
 </script>

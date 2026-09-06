@@ -93,3 +93,19 @@
 | 0.3.2 首页卡流 | ⏳ | 依赖 notify.digest（R14） |
 | V1.1 老皇历（calendar.almanac） | ⏳ | 日历页已留切换位（v11Almanac），E4 交付 lunar 引擎 |
 | 真机性能实测（1.4 验收底线） | ⏳ | 连续 13 轮阻塞：等待微信开发者工具环境 |
+
+## 二·八 R14（Sprint R14 · 通知卡流/打卡闭环/史记时间轴）
+
+| 蓝图条目 | 状态 | 差距说明 |
+|---|---|---|
+| 0.3.2 首页卡流（四级权重+祖训兜底） | ✅ | common/homecards 单一实现；notify.digest 与 atmosphere.homeCards 同口径；朱砂仪式卡 accent 下发 |
+| 0.3.3 首屏不空（祖训今日降级） | ✅ | settings.daily_motto 可配 + 默认祖训 |
+| 0.6.3 首页三聚合接口 | ◐ | atmosphere.today + notify.digest 双通；**weather.current 为 V1.1（E3）** |
+| 7.9 notify.dispatch 站内通知 | ✅ | list 合并个人+广播；markRead 越权封堵；订阅消息推送留接口（模板未配置跳过） |
+| 9.1 notify.digest/list（本人） | ✅ | 未登录 403；他人通知隔离 |
+| 8.0 task.today/checkin 打卡页 | ✅ | pkg-growth/pages/task/task.vue；积分 toast 反馈接 R13 common/points 闭环 |
+| 8.0 history 史记时间轴页 | ✅ | pkg-shrine/pages/history/history.vue（年份分组+筛选+行内展开）；发布侧 event.create 已有（HISTORIAN） |
+| 0.3.2 ④ 家族速览卡真数据 | ⏳ | member.stats 聚合未排期（R15 评估）；前端仍占位「—」 |
+| 0.2.1 天气小件 | ⏳ | V1.1 E3 weather.current；index.vue 已留 weather 字段位 |
+| 广播 per-user 已读回执 | ⏳ | V1.1（个人通知已按本人隔离，广播共享态如实登记） |
+| 真机性能实测（1.4 验收底线） | ⏳ | 连续 14 轮阻塞：等待微信开发者工具环境 |
