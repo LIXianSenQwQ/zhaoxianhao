@@ -80,6 +80,16 @@ async function submitEntry(db, openid, type, payload) {
   const char = await genealogyChar(db, payload.generation, payload.branchId);
   const genealogyName = `郝${char}${payload.name}`;
 
+  // 谱名冲突检测（蓝图 7.7）：与在库谱名查重——命中不阻断（人工复核决策），随单返回统计供审核参考
+  let conflictCount = 0;
+  try {
+    const same = await db.collection('members')
+      .where({ genealogyName }).limit(11).get();
+    conflictCount = (same.data || []).length;
+  } catch (e) {
+    console.warn('[entry.submit] genealogyName conflict scan failed:', e.message);
+  }
+
   const addRes = await db.collection('entry_records').add({
     data: {
       idemKey: key,
@@ -93,7 +103,13 @@ async function submitEntry(db, openid, type, payload) {
     }
   });
   await writeAudit(db, { userId: openid, action: 'entry.submit', target: addRes._id, detail: genealogyName });
-  return OK({ recordId: addRes._id, genealogyName });
+  return OK({
+    recordId: addRes._id,
+    genealogyName,
+    conflict: conflictCount > 0,
+    conflictCount,
+    conflictHint: conflictCount > 0 ? `在库已有 ${conflictCount} 位同谱名成员，请核对字辈/名后由族史委裁决` : ''
+  });
 }
 
 /**

@@ -2815,3 +2815,21 @@ test('F4 news.cron.refresh: 定时刷新入口成功返回统计（空源不崩�
   assert.equal(res.data.published24h, 1, '应统计到 24h 内已发布条目');
   assert.ok(res.data.refreshedAt, '应返回刷新时间');
 });
+
+// ─── Sprint F5: §7.7 谱名冲突检测 ───
+test('F5 entry.submit：谱名冲突检测（在库成员同名，statistic return）', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    members: [{ _id: 'm-1', genealogyName: '郝守忠', status: 'DECEASED' }] // pre-existing same genealogyName
+  });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  const res = await FN('entry').main(
+    { action: 'submit', type: 'MANUAL', payload: { name: '守忠', generation: 18, branchId: 'long' } },
+    ctx
+  );
+  assert.equal(res.success, true);
+  assert.equal(res.data.genealogyName, '郝守忠', '谱名构造正确');
+  assert.equal(res.data.conflict, true, '应检出同谱名');
+  assert.equal(res.data.conflictCount, 1, '命中 1 位');
+  assert.ok(res.data.conflictHint.includes('在库已有'), '返回提示');
+});
