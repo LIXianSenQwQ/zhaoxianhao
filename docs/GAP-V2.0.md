@@ -123,3 +123,17 @@
 | 8.0 relationeditor 关系编辑页 | ⏳ | R16（族谱核心最后缺口；relation.edit 后端已有） |
 | 8.0 lifebook 传记查看页 | ⏳ | R16 |
 | 真机性能实测（1.4 验收底线） | ⏳ | 连续 15 轮阻塞：等待微信开发者工具环境 |
+
+## 二·十 R16（Sprint R16 · 关系编辑页 / 传记查看页 / 英名录录入通道）
+
+| 蓝图条目 | 状态 | 差距说明 |
+|---|---|---|
+| 9.1 relation.edit 关系变更 | ✅ | 工单制落地（entry_records type=CHANGE 双人审核链），类型白名单/自环/重复/404 校验齐 |
+| 7.7 修谱变更流程 | ✅ | 编辑不可直改 relations，走工单 → 审核通过后生效 |
+| 8.0 relationeditor 关系编辑页 | ✅ | L4 表单（成员编号+类型 picker+subType+备注）+ 工单提交反馈 |
+| 8.0 lifebook 传记查看页 | ✅ | 生平时间线 + deeds 善行事迹 + motto 家训 + heroNote 英烈事迹 |
+| 6.3 英名录 admin 录入通道 | ✅ | admin.heroTag（HISTORIAN+，members.isHero/heroNote + audit）配 R15 heroList 闭环 |
+| 5.2 members.getDetail 传记字段 | ✅ | PUBLIC 组增 deeds/motto/heroNote（蓝图 5.2 德行公开） |
+| 审核工作台 UI（初审/复审/公示页） | ⏳ | R17：entry.audit 工单审核 UI + APPROVED 后 relation 生效逻辑 |
+| tree/members 跳转入口 | ⏳ | R17：人物详情/家族群加「申请关系变更」按钮 |
+| 真机性能实测（1.4 验收底线） | ⏳ | 连续 16 轮阻塞：等待微信开发者工具环境 |

@@ -353,7 +353,7 @@ async function getDetail(db, openid, memberId) {
   // 字段级 L 级判定（口径：privacyCheck 纯函数）
   const view = {};
   const hiddenFields = []; // Sprint R9: 被隐私分级隐藏的字段（前端渲染模糊遮罩 + 申请入口）
-  const PUBLIC = { _id: 1, genealogyName: 1, generation: 1, gender: 1, branchId: 1, lifespan: 1, status: 1 };
+  const PUBLIC = { _id: 1, genealogyName: 1, generation: 1, gender: 1, branchId: 1, lifespan: 1, status: 1, deeds: 1, motto: 1, heroNote: 1 };
   const LIMITED = { name: 1, birthDate: 1, deathDate: 1, birthPlace: 1 };
   const PRIVATE = { tomb: 1, marriage: 1, occupation: 1, specialNotes: 1 };
 

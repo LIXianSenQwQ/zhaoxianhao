@@ -8,7 +8,7 @@
  *   - auditList 分页（filterPage，蓝图 26.3 管理员审计页可检索）
  */
 const wx = require('wx-server-sdk');
-const { OK, BAD_REQUEST, FORBIDDEN } = require('./common/response');
+const { OK, BAD_REQUEST, FORBIDDEN, NOT_FOUND } = require('./common/response');
 const { hasRole } = require('./common/roles');
 const { writeAudit } = require('./common/audit');
 
@@ -35,10 +35,46 @@ async function main(params, context) {
     return await queryAuditLogs(dbo, openid, { userId, startDate, endDate, filterPage });
   }
 
+  if (action === 'heroTag') {
+    return await setHeroTag(dbo, openid, params);
+  }
+
   return BAD_REQUEST(`unknown action: ${action}`);
 }
 
 function db() { return wx.getDatabase(); }
+
+/**
+ * R16 英名录录入通道（蓝图 6.3 英烈由族史委维护 + R15 member.heroList 配套）：
+ * HISTORIAN+ 设置 members.isHero / heroNote（GAP 登记 schema 增量），全程审计。
+ */
+async function setHeroTag(dbo, openid, params) {
+  const userRes = await dbo.collection('users').where({ openid }).limit(1).get();
+  const role = (userRes.data[0] && userRes.data[0].role) || 'VISITOR';
+  if (!hasRole(role, 'HISTORIAN')) return FORBIDDEN('仅族史委及以上可维护英名录');
+
+  const { memberId, isHero, heroNote } = params || {};
+  if (!memberId) return BAD_REQUEST('缺少 memberId');
+  if (typeof isHero !== 'boolean') return BAD_REQUEST('isHero 须为布尔值');
+  if (heroNote !== undefined && typeof heroNote !== 'string') return BAD_REQUEST('heroNote 须为字符串');
+
+  const mRes = await dbo.collection('members').doc(memberId).get().catch(() => null);
+  const m = mRes && mRes.data && !Array.isArray(mRes.data) ? mRes.data : (mRes && mRes.data && mRes.data[0]);
+  if (!m) return NOT_FOUND('族人不存在');
+
+  await dbo.collection('members').doc(memberId).update({
+    data: { isHero, heroNote: heroNote || '', updatedAt: new Date() }
+  });
+
+  await writeAudit(dbo, {
+    userId: openid,
+    action: 'admin.heroTag',
+    target: memberId,
+    detail: `isHero=${isHero} heroNote=${(heroNote || '').slice(0, 50)}`
+  }).catch(() => {});
+
+  return OK({ memberId, isHero, heroNote: heroNote || '' });
+}
 
 // V2.0 核心功能：功能开关（Feature Flags）——蓝图 17.2 开关表
 const defaultFlags = {

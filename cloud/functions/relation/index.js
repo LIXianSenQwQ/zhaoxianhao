@@ -87,13 +87,65 @@ async function calcRelation(db, openid, aId, bId) {
   });
 }
 
-/** L4 权限关系编辑（双人审核走 entry 工单；此处仅校验+占位） */
+/**
+ * L4 关系编辑（蓝图 9.1 relation.edit + 7.6/7.7 定案）：
+ * 审核封存后修改须走修谱变更流程 → 不直改 relations，而是创建
+ * entry_records(type=CHANGE) 工单进入双人审核链（初审→复审→公示→APPROVED 后生效）。
+ * R16 兑现：占位桩 → 校验（类型白名单/自环/双方存在/重复 ACTIVE 边）+ 建工单 + 审计。
+ */
+const RELATION_TYPES = ['PARENT_CHILD', 'SPOUSE', 'SIBLING', 'ADOPTED', 'MENTOR'];
+
 async function editRelationship(db, openid, params) {
   const userRes = await db.collection('users').where({ openid }).limit(1).get();
   const role = (userRes.data[0] && userRes.data[0].role) || 'VISITOR';
   if (!hasRole(role, 'EDITOR')) return FORBIDDEN('仅编辑及以上可维护关系');
 
-  return BAD_REQUEST('关系变更请走入谱工作流 entry.submit(type=CHANGE)（双人审核链）');
+  const { fromId, toId, type, subType, startDate, endDate, note } = params || {};
+  if (!fromId || !toId) return BAD_REQUEST('缺少 fromId 或 toId');
+  if (fromId === toId) return BAD_REQUEST('不能对同一成员建立关系');
+  if (!RELATION_TYPES.includes(type)) {
+    return BAD_REQUEST(`关系类型须为：${RELATION_TYPES.join(' / ')}`);
+  }
+  if (subType && typeof subType !== 'string') return BAD_REQUEST('subType 须为字符串');
+
+  const [aRes, bRes] = await Promise.all([
+    db.collection('members').doc(fromId).get().catch(() => null),
+    db.collection('members').doc(toId).get().catch(() => null)
+  ]);
+  if (!pickDoc(aRes)) return NOT_FOUND('fromId 成员不存在');
+  if (!pickDoc(bRes)) return NOT_FOUND('toId 成员不存在');
+
+  const dup = await db.collection('relations')
+    .where({ fromId, toId, type, status: 'ACTIVE' }).count();
+  if ((dup && dup.total) > 0) return BAD_REQUEST('该关系已存在（ACTIVE）');
+
+  const now = new Date();
+  const addRes = await db.collection('entry_records').add({
+    data: {
+      type: 'CHANGE',
+      payload: {
+        changeType: 'RELATION',
+        relation: { fromId, toId, type, subType: subType || '', startDate: startDate || '', endDate: endDate || '' }
+      },
+      status: 'SUBMITTED',
+      auditChain: [{ step: 'SUBMITTED', userId: openid, action: 'CREATE', time: now, comment: note || '' }],
+      submittedBy: openid,
+      createdAt: now
+    }
+  });
+
+  await writeAudit(db, {
+    userId: openid,
+    action: 'relation.edit',
+    target: `${fromId}->${toId}:${type}`,
+    detail: `工单 ${addRes._id}（双人审核链）`
+  }).catch(() => {});
+
+  return OK({
+    recordId: addRes._id,
+    status: 'SUBMITTED',
+    message: '已提交修谱变更工单，双人审核通过并公示后生效'
+  });
 }
 
 module.exports = { main };

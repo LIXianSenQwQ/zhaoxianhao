@@ -413,3 +413,33 @@
 - `pkg-shrine/pages/hero/hero.vue`：英烈名录 + 献花（ceremony.worship type=flower，功德分按日幂等）+ 花瓣粒子
 - `pkg-shrine/pages/shrine/shrine.vue`：合拜（group）第四按钮 + 祭拜成功烛火/花瓣粒子（类型区分）
 - `pages/index/index.vue`：家族速览卡接 member.stats（5min 缓存，未认证保持占位）
+
+### 8.9 relation.edit 关系变更工单（R16 · 蓝图 9.1 L4 / 7.6/7.7 修谱变更流程）
+
+#### relation.edit（EDITOR+）
+
+| 入参 | 出参 | 说明 |
+|---|---|---|
+| fromId, toId, type, subType?, note? | `{success:true, recordId:string, status:"SUBMITTED", message}` | 校验（类型白名单/PARENT_CHILD/SPOUSE/SIBLING/ADOPTED/MENTOR, fromId/toId 存在，自环禁止，ACTIVE 重复禁止）→ 创建 entry_records(type=CHANGE, status=SUBMITTED, payload.relation) + 审计 → 返回工单号 |
+| MEMBER/VISITOR | `{code:403}` | 仅编辑及以上 |
+| bad params | `{code:400}` | 自环/非法类型/缺失必填 |
+
+> 设计定案：不直改 relations，而是建工单进入双人审核链（初审→复审→公示→APPROVED 后生效），避免绕过审核直接修改世系（蓝图 7.7）。
+
+#### admin.heroTag（HISTORIAN+，英名录录入通道）
+
+| 入参 | 出参 | 说明 |
+|---|---|---|
+| memberId, isHero(bool), heroNote?(string) | `{success:true, memberId, isHero, heroNote}` | 更新 members.isHero + heroNote（GAP schema 增量，read 兼容缺失=false/空）→ audit("admin.heroTag") → 立即可见于 member.heroList |
+| EDITOR 及以下 | `{code:403}` | 族史委专属 |
+
+#### member.getDetail（R16 传记字段扩展）
+
+- 增加 `deeds[{title,date,desc}]`(蓝图 5.2 公开)、`motto`(家训关联展示)、`heroNote`(R15 公开标记)，PUBLIC 组视图字段；隐藏字段通过 `hiddenFields` 返回前端渲染遮罩/授权入口
+
+#### 前端页面（R16）
+
+- `pkg-family/pages/relationeditor/relationeditor.vue`：fromId/toId 输入 + 类型 picker + subType/备注 → relation.edit 工单提交
+- `pkg-family/pages/lifebook/lifebook.vue`：生平时间线 + deeds + motto + heroNote
+
+<!-- 模板：API 小节结束 -->

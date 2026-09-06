@@ -762,3 +762,49 @@
 4. **性能实测**（持续等待用户环境——微信开发者工具真机调试）
 
 <!-- 模板：下一轮评审复制此节 -->
+
+## 第 R16 轮（Sprint R16 · MVP 收口轨：关系编辑页 / 传记查看页 / 英名录录入通道）
+
+> 主题：兑现 R15 承诺①②③——relation.editor L4 维护、lifebook 篇章浏览、admin.heroTag 英名录族史委通道。
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R15 | R16 | 变化 |
+|---|---|---|---|---|---|
+| 功能覆盖 | 云函数接口 | 23 函数计划 | 18/23 | **18/23**（relation.edit 真实现 + admin.heroTag 两 action，数不变） | ↑ |
+| 功能覆盖 | 前端页面 | 82 计划 | ~29/82 | **~30/82**（relationeditor/lifebook；pkg-family 4→6） | ↑ |
+| 蓝图还原 | 关系变更流程 | 双人审核链 | 占位桩 | **工单系统走通**（edit → entry_records type=CHANGE status=SUBMITTED） | ↑ |
+| 蓝图还原 | 传记查看页 | 篇章浏览 | 缺失 | **lifebook/index** 上线（deeds+motto+heroNote） | ↑ |
+| 质量 | 测试数 | ≥80% | 148 | **156**（+8：edit 正向/MEMBER403/自环/缺成员/重复/白名单 + heroTag/HISTORIAN403/getDetail 传记字段） | ↑ |
+| 门禁 | npm run verify | 全绿 | 绿 | **绿**（156 用例 0 fail · lint 0E · 云函数 15/15 · 路由 20 页对齐） | = |
+
+### 二、本轮交付清单
+
+**后端接口升级：**
+- `relation.edit`（**EDITOR+**，蓝图 9.1 L4 关系变更）：类型白名单 PARENT_CHILD/SPOUSE/SIBLING/ADOPTED/MENTOR + fromId/toId 存在校验 + 自环/重复 ACTIVE 边校验 → **创建 entry_records(type=CHANGE, status=SUBMITTED) 工单**进入双人审核链 → writeAudit("relation.edit") → 返回 {recordId,status}
+- `admin.heroTag`（**HISTORIAN+**，英名录录入通道，蓝图 6.3 族史委维护）：设置 members.isHero + heroNote（GAP schema 增量）→ 落库 members + audit("admin.heroTag") → 立即可见于 member.heroList
+- `member.getDetail` 扩展输出 **deeds/motto/heroNote**（PUBLIC 级，蓝图 5.2 德行公开；motto 家训展示位；heroNote R15 公开展示），lifebook 数据源完备
+
+**前端页面新增：**
+- `pkg-family/pages/relationeditor/relationeditor.vue`（L4 关系维护表单）：fromId/toId 输入 + 类型 picker + subType + 备注 → relation.edit 工单提交 → 结果提示（含工单号）
+- `pkg-family/pages/lifebook/lifebook.vue`（传记查看，蓝图 8.0 lifebook/index）：生平时间线 + deeds 善行事迹列表 + motto 家风家训 + heroNote 英烈事迹高亮（card 朱砂左条）
+
+**测试验证：** edit 正向建工单（entry_records[0] type=CHANGE status=SUBMITTED payload.relation 完整）/ MEMBER403 / 自环 400 / 缺成员 404 / 重复 ACTIVE 400 / 类型白名单 400；heroTag HISTORIAN 正向（members.isHero/heroNote 落库+audit）+ EDITOR403；getDetail deeds/motto/heroNote 可见；DECEASED 访客公开级可读。
+
+**文档同步：** ITERATION_REVIEW R16 / API.md 8.9 (relation.edit/heroTag) / GAP 二·十（relationship editor/L4 权限/英雄录入通道）。
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 关系变更入口未接 tree/members 页 | 低 | 蓝图页面已上，后续接跳转入口（当前 ID 可手输） |
+| entry_records 审核流 UI 缺失 | 低 | R17/R18 补审核详情页 + 公示页（工单号已落地） |
+| 成员选择器简化（非完整搜索弹出） | 低 | ID 输入 + search api 可用；最佳实践由族史委指导 |
+
+### 四、R17 承诺建议
+
+1. **entry_reviews/workflow** 审核工作台（初审/复审/公示 UI + member 生效逻辑，完成 7.6 双人审核闭环）
+2. **tree/members 关联入口**：人物详情/家族群加「申请关系变更」「申请英烈标记」按钮
+3. **性能实测**（持续等待用户环境；本版本首屏优化已完成：缓存 + 骨架屏 + 懒加载）
+
+<!-- 模板：下一轮评审复制此节 -->

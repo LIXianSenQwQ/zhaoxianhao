@@ -139,7 +139,7 @@ function seedDB({
   users = [], members = [], authRequests = [], authorizations = [], auditLogs = [],
   plazaPosts = [], notifications = [], accounts = [], pointsLogs = [],
   worshipLogs = [], tasks = [], taskRecords = [], calendarItems = [], events = [],
-  ceremonies = []
+  ceremonies = [], entryRecords = [], relations = []
 } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
@@ -147,7 +147,8 @@ function seedDB({
       audit_logs: auditLogs, notifications, plaza_posts: plazaPosts, settings: [],
       points_accounts: accounts, points_logs: pointsLogs,
       worship_logs: worshipLogs, tasks, task_records: taskRecords,
-      calendar_items: calendarItems, events, ceremonies
+      calendar_items: calendarItems, events, ceremonies,
+      entry_records: entryRecords, relations
     },
     seq: 1000
   };
@@ -922,4 +923,117 @@ test('R15 ceremony.worship：合拜 group 正向（第四祭拜类型走通）',
   assert.equal(res.data.blessing.delta, 10, '合拜同入功德池');
   const seed = globalThis.__HCS_STUB_SEED__;
   assert.equal(seed.collections.worship_logs[0].type, 'group');
+});
+
+// ─── Sprint R16：relation.edit 真实现 + admin.heroTag 英名录录入 + getDetail 传记字段 ───
+
+test('R16 relation.edit：EDITOR 正向 → entry_records 建 CHANGE 工单（双人审核链）', async () => {
+  seedDB({
+    users: [{ openid: 'u-ed', role: 'EDITOR' }],
+    members: [{ _id: 'm-1', name: '郝一' }, { _id: 'm-2', name: '郝二' }],
+    relations: []
+  });
+  const res = await FN('relation').main(
+    { action: 'edit', fromId: 'm-1', toId: 'm-2', type: 'SIBLING', note: '族谱勘误' },
+    { OPENID: 'u-ed', openid: 'u-ed' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.status, 'SUBMITTED');
+  assert.ok(res.data.recordId, '返回工单号');
+  const seed = globalThis.__HCS_STUB_SEED__;
+  const rec = seed.collections.entry_records[0];
+  assert.equal(rec.type, 'CHANGE', '蓝图 7.7：关系变更走 CHANGE 工单');
+  assert.equal(rec.payload.changeType, 'RELATION');
+  assert.equal(rec.payload.relation.type, 'SIBLING');
+  assert.equal(rec.status, 'SUBMITTED');
+  assert.equal(seed.collections.audit_logs[0].action, 'relation.edit');
+});
+
+test('R16 relation.edit：MEMBER 越权 403（L4 门禁）', async () => {
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }], members: [{ _id: 'm-1' }] });
+  const res = await FN('relation').main(
+    { action: 'edit', fromId: 'm-1', toId: 'm-1', type: 'SIBLING' },
+    { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.code, 403);
+});
+
+test('R16 relation.edit：自环 400 + 非法类型 400', async () => {
+  seedDB({
+    users: [{ openid: 'u-ed', role: 'EDITOR' }],
+    members: [{ _id: 'm-1' }]
+  });
+  const r1 = await FN('relation').main(
+    { action: 'edit', fromId: 'm-1', toId: 'm-1', type: 'SIBLING' },
+    { OPENID: 'u-ed', openid: 'u-ed' });
+  assert.equal(r1.code, 400, '自环');
+  const r2 = await FN('relation').main(
+    { action: 'edit', fromId: 'm-1', toId: 'm-1', type: 'COUSIN' },
+    { OPENID: 'u-ed', openid: 'u-ed' });
+  assert.equal(r2.code, 400, '蓝图 5.3 类型白名单外');
+});
+
+test('R16 relation.edit：成员不存在 404 + 重复 ACTIVE 边 400', async () => {
+  seedDB({
+    users: [{ openid: 'u-ed', role: 'EDITOR' }],
+    members: [{ _id: 'm-1' }, { _id: 'm-2' }],
+    relations: [{ _id: 'rel-1', fromId: 'm-1', toId: 'm-2', type: 'SIBLING', status: 'ACTIVE' }]
+  });
+  const r1 = await FN('relation').main(
+    { action: 'edit', fromId: 'm-1', toId: 'm-ghost', type: 'SIBLING' },
+    { OPENID: 'u-ed', openid: 'u-ed' });
+  assert.equal(r1.code, 404, 'toId 不存在');
+  const r2 = await FN('relation').main(
+    { action: 'edit', fromId: 'm-1', toId: 'm-2', type: 'SIBLING' },
+    { OPENID: 'u-ed', openid: 'u-ed' });
+  assert.equal(r2.code, 400, '重复 ACTIVE 关系');
+});
+
+test('R16 admin.heroTag：HISTORIAN 正向设置 isHero+heroNote（配 heroList）', async () => {
+  seedDB({
+    users: [{ openid: 'u-his', role: 'HISTORIAN' }],
+    members: [{ _id: 'h-9', name: '郝忠烈', status: 'DECEASED' }]
+  });
+  const res = await FN('admin').main(
+    { action: 'heroTag', memberId: 'h-9', isHero: true, heroNote: '抗战殉国' },
+    { OPENID: 'u-his', openid: 'u-his' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.isHero, true);
+  assert.equal(res.data.heroNote, '抗战殉国');
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.equal(seed.collections.members[0].isHero, true, '落库');
+  assert.equal(seed.collections.audit_logs[0].action, 'admin.heroTag', '全程审计');
+  // 英名录立即可见（R15 heroList 闭环）
+  const hero = await FN('member').main({ action: 'heroList' }, { OPENID: 'u-x', openid: 'u-x' });
+  assert.equal(hero.data.heroes.length, 1);
+});
+
+test('R16 admin.heroTag：EDITOR 越权 403（族史委专属）', async () => {
+  seedDB({ users: [{ openid: 'u-ed', role: 'EDITOR' }], members: [{ _id: 'm-1' }] });
+  const res = await FN('admin').main(
+    { action: 'heroTag', memberId: 'm-1', isHero: true },
+    { OPENID: 'u-ed', openid: 'u-ed' });
+  assert.equal(res.code, 403);
+});
+
+test('R16 member.getDetail：公开级输出传记字段 deeds/motto/heroNote', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER', memberId: 'm-me' }],
+    members: [{ _id: 'm-1', genealogyName: '郝忠烈', generation: 4, status: 'DECEASED',
+      deeds: [{ title: '修桥', date: '1938', desc: '义修石桥' }], motto: '敬宗睦族', heroNote: '英烈' }]
+  });
+  const res = await FN('member').main({ action: 'getDetail', memberId: 'm-1' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true);
+  assert.deepEqual(res.data.member.deeds, [{ title: '修桥', date: '1938', desc: '义修石桥' }]);
+  assert.equal(res.data.member.motto, '敬宗睦族');
+  assert.equal(res.data.member.heroNote, '英烈');
+});
+
+test('R16 member.getDetail：非族人访客对 DECEASED 仍可见公开级（蓝图 7.4）', async () => {
+  seedDB({
+    users: [{ openid: 'u-v', role: 'VISITOR' }],
+    members: [{ _id: 'm-1', genealogyName: '郝先祖', generation: 1, status: 'DECEASED', tomb: { place: 'x' } }]
+  });
+  const res = await FN('member').main({ action: 'getDetail', memberId: 'm-1' }, { OPENID: 'u-v', openid: 'u-v' });
+  assert.equal(res.success, true);
+  assert.ok(res.data.member.genealogyName, '公开级可见');
+  assert.ok(res.data.hiddenFields.includes('tomb'), '私密字段隐藏');
 });

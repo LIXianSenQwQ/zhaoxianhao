@@ -59,6 +59,18 @@
 				{
 					"path": "pages/plaza/plaza",
 					"style": {}
+				},
+				{
+					"path": "pages/relationeditor/relationeditor",
+					"style": {
+						"navigationBarTitleText": "关系变更"
+					}
+				},
+				{
+					"path": "pages/lifebook/lifebook",
+					"style": {
+						"navigationBarTitleText": "人生书"
+					}
 				}
 			]
 		},
