@@ -96,19 +96,27 @@
 
 **前端**：detail.vue 的 PrivacyCard 点击 → `/pages/privacy/privacy?memberId=&name=` 申请表单页。
 
-### 1.7 reviewAuth（授权审批，Sprint R8）
+### 1.7 reviewAuth（授权审批，Sprint R8/R9）
 
-**请求**：`{ action: 'reviewAuth', op: 'list' | 'approve' | 'reject', requestId?: string, comment?: string }`
+**请求**：`{ action: 'reviewAuth', op: 'list' | 'approve' | 'reject', requestId?: string, comment?: string, status?: string, grantee?: string, target?: string, filterPage?: number }`
 
 **权限**：仅 `CHIEF`
 
-- `op=list`：返回 `auth_requests` 中 `status=PENDING` 的待审列表（按 createdAt 倒序，≤50 条）
-- `op=approve`：requestId 必传；幂等保护（非 PENDING 返回 400）；批准后向 `authorizations` 写入 `{grantee, target, grantedBy}` + audit_log
+- `op=list`（Sprint R9 筛选+分页）：
+  - `status`：`PENDING`（默认）/ `APPROVED` / `REJECTED`，白名单校验，非法值 400
+  - `grantee` / `target`：可选过滤
+  - `filterPage`：页码（默认 1，每页 50 条）
+  - 响应：`{ requests, page, hasMore }`
+- `op=approve`：requestId 必传；幂等保护（非 PENDING 返回 400）；批准后 **upsert 检查** `authorizations` 中 grantee+target 是否已存在（存在→skip 写入并审计 upsert_skip；不存在→写入）+ audit_log
 - `op=reject`：requestId 必传；同幂等保护
 
-**响应**：`{ success: true, data: { requests } }`（list）或 `{ success: true, data: { status } }`（approve/reject）
+**前端**：`/pkg-growth/pages/reviewAuth/reviewAuth.vue` 审批工作台（三态 Tab：待审/已批准/已驳回 + 加载更多）。
 
-**前端**：`/pkg-growth/pages/reviewAuth/reviewAuth.vue` 审批工作台（mine 页 CHIEF 入口进入）。
+### 1.8 getDetail（成员详情，Sprint R9 字段级提示增强）
+
+**响应新增**：`{ member: view, hiddenFields: string[] }`——被隐私分级隐藏的字段名数组（该字段在原始数据中存在但当前用户无权查看）。
+
+**前端**：detail.vue 渲染"受限信息"卡（模糊遮挡 ████ + "申请授权查看 N 项受限字段"按钮 → 授权申请页）。
 
 ---
 

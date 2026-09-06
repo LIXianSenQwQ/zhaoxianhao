@@ -388,3 +388,56 @@
 4. **成员详情字段级权限卡片扩展**：L 级字段不可见时显示具体原因而非整卡（可选）
 
 <!-- 模板：下一轮评审复制此节 -->
+
+---
+
+## 第 R9 轮（Sprint R9 · 幂等 upsert/审批筛选分页/字段级权限提示/stub 数据注入）
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R8 现状 | R9 现状 | 趋势 |
+|---|---|---|---|---|---|
+| 功能完整性 | authorizations 幂等 upsert | approve 去重写入 | ❌ add 可能重复 | ✅ 先查 grantee+target→skip+审计 upsert_skip | ↑↑ |
+| 功能完整性 | 审批列表筛选分页 | status/grantee/target+翻页 | ❌ 仅 PENDING 固定 | ✅ 三态白名单+skip/limit 分页+hasMore | ↑ |
+| 体验 | 字段级权限提示 | L 级字段遮罩+申请入口 | ❌ 整卡授权 | ✅ getDetail hiddenFields→detail 模糊遮罩卡+一键申请 | ↑↑ |
+| 质量 | 测试正向路径 | CHIEF/MEMBER 分支可测 | ❌ stub 全空仅 403 | ✅ stub 数据注入（seed）→5 正向用例 | ↑↑ |
+| 质量 | 测试数 | ≥80% (R8:103) | 103 | **108** (+5) | ↑ |
+
+### 二、本轮交付清单
+
+**功能模块：**
+- `member/index.js` reviewAuth approve **upsert 幂等**：authorizations 已存在（grantee+target）→ skip 写入 + `review_auth_upsert_skip` 审计
+- `member/index.js` reviewAuth list **筛选+分页**：status（PENDING/APPROVED/REJECTED 白名单，非法 400）/grantee/target/filterPage → `{requests, page, hasMore}`
+- `member/index.js` getDetail **hiddenFields**：分级判定改为 else 分支收集被隐藏字段名数组返回
+- `pkg-growth/pages/reviewAuth/reviewAuth.vue`：三态 Tab（待审/已批准/已驳回）+ 加载更多 + 状态徽章 + 非 PENDING 视图就地更新
+- `pkg-family/pages/memberDetail/detail.vue`：**受限信息卡**（█ 遮罩 + "申请授权查看 N 项受限字段"→授权申请页）
+
+**质量基建（本轮核心）：**
+- `scripts/wx-server-sdk-stub.js` **v2 数据注入**：`globalThis.__HCS_STUB_SEED__` 预置集合（where 全等匹配/orderBy/skip/limit/doc(id)/add 生成 _id/update/count），默认空 seed 完全向后兼容
+- 解锁此前不可测的 CHIEF/MEMBER 正向路径，smoke 从"仅门禁"升级为"业务闭环验证"
+
+**测试 +5（103→108）：**
+1. reviewAuth list CHIEF 正向：PENDING 过滤正确、APPROVED 不混入、hasMore=false
+2. reviewAuth list 非法 status → 400（白名单）
+3. applyAuth MEMBER 重复申请 → duplicate:true（幂等）
+4. approve upsert：已存在授权 → 不重复写入（authorizations 仍 1 条）+ 状态流转 APPROVED
+5. approve 新授权：authorizations 写入 + audit_log 审计记录
+
+**门禁：** npm run verify 全绿（108 用例 · 0 fail · 1W · 云函数 14/14）。
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 真机 P95/首屏采集（连续 9 轮阻塞） | 高 | 沙箱侧全部就绪；**突破必须依赖微信开发者工具环境** |
+| stub 匹配仅全等（无 $in/$ne 等操作符） | 低 | 当前云函数查询均为全等/前缀正则；后续如需复杂查询再扩展 |
+| hiddenFields 前端缓存 | 低 | detail 缓存键不变，授权生效后 refreshRoot/重新进入即更新 |
+
+### 四、R10 承诺
+
+1. **授权生效联动**：approve 成功后通知 grantee（notify 云函数接入，站内消息"您的授权申请已通过"）
+2. **applyAuth 我的申请列表**：申请人查看自己历史申请与状态（pages/privacy 增加列表区）
+3. **性能实测**：真机环境验证（持续等待用户环境）
+4. **审计日志查询接口**：CHIEF 查看最近导出/审批操作流水（audit_log list API）
+
+<!-- 模板：下一轮评审复制此节 -->

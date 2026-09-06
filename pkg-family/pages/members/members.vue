@@ -28,7 +28,7 @@
             <text class="name">{{ m.genealogyName || m.name }}</text>
             <text class="meta">{{ m.branchId }} · {{ m.generation }}世</text>
           </view>
-          <Button size="mini" type="default" @click="goDetail(m)">详情</Button>
+           <button class="btn-default btn-detail" size="mini" @click="goDetail(m)">详情</button>
         </view>
       </BaseCard>
 
@@ -50,7 +50,6 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import PrivacyCard from '@/components/common/PrivacyCard.vue';
-import Button from '@/uni_modules/uview-ui/components/u-button/u-button.vue';
 // uni-app select-v2 组件略，使用自定义弹窗代替
 
 const user = useUserStore();

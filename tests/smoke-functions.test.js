@@ -132,6 +132,86 @@ test('member.exportFile：VISITOR → 403（鉴权先行）', async () => {
   assert.equal(denied.code, 403);
 });
 
+// ─── Sprint R9: stub 数据注入 + CHIEF 正向路径 + 幂等 upsert ───
+
+/** 预置 seed 数据（getDatabase 每次 main() 调用时读全局 seed，无需重新 require） */
+function seedDB({ users = [], members = [], authRequests = [], authorizations = [] } = {}) {
+  globalThis.__HCS_STUB_SEED__ = {
+    collections: {
+      users, members, auth_requests: authRequests, authorizations,
+      audit_log: []
+    },
+    seq: 1000
+  };
+}
+
+const CHIEF_CTX = { OPENID: 'u-chief', openid: 'u-chief' };
+
+test('R9 reviewAuth list：CHIEF 正向路径返回 PENDING 列表', async () => {
+  seedDB({
+    users: [{ openid: 'u-chief', role: 'CHIEF' }],
+    authRequests: [
+      { _id: 'r-1', grantee: 'u-a', target: 'm-1', status: 'PENDING', createdAt: '2025-01-01T00:00:00Z' },
+      { _id: 'r-2', grantee: 'u-b', target: 'm-2', status: 'APPROVED', createdAt: '2025-01-02T00:00:00Z' }
+    ]
+  });
+  const res = await FN('member').main({ action: 'reviewAuth', op: 'list' }, CHIEF_CTX);
+  assert.equal(res.success, true);
+  assert.equal(res.data.requests.length, 1, '默认只返回 PENDING');
+  assert.equal(res.data.requests[0]._id, 'r-1');
+  assert.equal(res.data.hasMore, false);
+});
+
+test('R9 reviewAuth list：非法 status → 400（白名单校验）', async () => {
+  seedDB({ users: [{ openid: 'u-chief', role: 'CHIEF' }] });
+  const res = await FN('member').main({ action: 'reviewAuth', op: 'list', status: 'HACK' }, CHIEF_CTX);
+  assert.equal(res.success, false);
+  assert.equal(res.code, 400);
+});
+
+test('R9 applyAuth：MEMBER 重复申请 → duplicate:true（幂等）', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    members: [{ _id: 'm-1', genealogyName: '郝一', path: '/001/' }],
+    authRequests: [
+      { _id: 'r-dup', grantee: 'u-m', target: 'm-1', status: 'PENDING' }
+    ]
+  });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  const res = await FN('member').main(
+    { action: 'applyAuth', memberId: 'm-1', reason: '需要查看该支系详细资料以便核对世系。' }, ctx);
+  assert.equal(res.success, true);
+  assert.equal(res.data.duplicate, true, '已有 PENDING 申请应幂等返回');
+});
+
+test('R9 reviewAuth approve：authorizations upsert 幂等（已存在→skip）', async () => {
+  seedDB({
+    users: [{ openid: 'u-chief', role: 'CHIEF' }],
+    authRequests: [{ _id: 'r-1', grantee: 'u-a', target: 'm-1', status: 'PENDING' }],
+    authorizations: [{ grantee: 'u-a', target: 'm-1', grantedBy: 'u-other' }]
+  });
+  const res = await FN('member').main({ action: 'reviewAuth', op: 'approve', requestId: 'r-1' }, CHIEF_CTX);
+  assert.equal(res.success, true);
+  assert.equal(res.data.status, 'APPROVED');
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.equal(seed.collections.authorizations.length, 1, '已存在授权不得重复写入（upsert skip）');
+  assert.equal(seed.collections.auth_requests.find(r => r._id === 'r-1').status, 'APPROVED');
+});
+
+test('R9 reviewAuth approve：新授权正常写入 + 审计', async () => {
+  seedDB({
+    users: [{ openid: 'u-chief', role: 'CHIEF' }],
+    authRequests: [{ _id: 'r-2', grantee: 'u-b', target: 'm-2', status: 'PENDING' }],
+    authorizations: []
+  });
+  const res = await FN('member').main({ action: 'reviewAuth', op: 'approve', requestId: 'r-2' }, CHIEF_CTX);
+  assert.equal(res.success, true);
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.equal(seed.collections.authorizations.length, 1, '新授权应写入');
+  assert.equal(seed.collections.authorizations[0].grantee, 'u-b');
+  assert.ok(seed.collections.audit_log.length >= 1, '审计应记录 review_auth_approve');
+});
+
 // ─── Sprint R3 冒烟：doc / entry / notify ───
 
 test('doc.list：类型筛选 + 未知类型拒绝', async () => {

@@ -70,9 +70,9 @@
 
       <!-- 工具栏：刷新 / 年长模式 / 导出（Sprint R5） -->
       <View class="toolbar">
-        <Button class="tool-btn" type="default" @tap="refreshRoot">刷新树视图</Button>
+        <button class="tool-btn btn-default" @tap="refreshRoot">刷新树视图</button>
         <template v-if="user.isChief">
-          <Button class="tool-btn export-btn" type="primary" @tap="exportCsv">导出 CSV</Button>
+          <button class="tool-btn btn-primary" @tap="exportCsv">导出 CSV</button>
         </template>
       </View>
     </template>
@@ -87,7 +87,6 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import ErrorPage from '@/components/common/ErrorPage.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import Button from '@/uni_modules/uview-ui/components/u-button/u-button.vue';
 
 const store = useTreeStore();
 const user = useUserStore();

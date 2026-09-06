@@ -173,20 +173,36 @@ async function applyAuth(db, openid, { memberId, reason }) {
 }
 
 /**
- * 授权审批（CHIEF 专属；Sprint R8：申请闭环最后一环）
- * op: 'list'（待审列表）| 'approve'（批准→authorizations 授予）| 'reject'（驳回）
+ * 授权审批（CHIEF 专属；Sprint R8：申请闭环最后一环 / Sprint R9：分页筛选）
+ * op: 'list'（审批列表）| 'approve'（批准→authorizations 授予）| 'reject'（驳回）
+ * list 筛选参数：status（PENDING/APPROVED/REJECTED，默认 PENDING）/ grantee / target / filterPage（页码）
  */
-async function reviewAuth(db, openid, { op = 'list', requestId, comment }) {
+async function reviewAuth(db, openid, { op = 'list', requestId, comment, status, grantee, target, filterPage = 1 }) {
   const ctx = await requesterCtx(db, openid);
   if (!hasRole(ctx.role, 'CHIEF')) return FORBIDDEN('仅族长可审批授权申请');
 
   if (op === 'list') {
+    // Sprint R9: 筛选条件（白名单校验 status，防注入）
+    const where = {};
+    const STATUS_SET = ['PENDING', 'APPROVED', 'REJECTED'];
+    if (status) {
+      const s = String(status).toUpperCase();
+      if (!STATUS_SET.includes(s)) return BAD_REQUEST(`非法 status：${status}`);
+      where.status = s;
+    } else {
+      where.status = 'PENDING';
+    }
+    if (grantee) where.grantee = String(grantee).trim();
+    if (target) where.target = String(target).trim();
+
+    const page = Math.max(1, Number(filterPage) || 1);
     const res = await db.collection('auth_requests')
-      .where({ status: 'PENDING' })
+      .where(where)
       .orderBy('createdAt', 'desc')
-      .limit(LIST_LIMIT)
+      .skip((page - 1) * LIST_LIMIT).limit(LIST_LIMIT)
       .get();
-    return OK({ requests: (res && res.data) || [] });
+    const items = (res && res.data) || [];
+    return OK({ requests: items, page, hasMore: items.length === LIST_LIMIT });
   }
 
   if (!requestId) return BAD_REQUEST('缺少 requestId');
@@ -207,11 +223,21 @@ async function reviewAuth(db, openid, { op = 'list', requestId, comment }) {
     }
   });
 
-  // 批准 → 授予 authorizations（getDetail 的 authedMemberIds 即读此集合）
+  // 批准 → 授予 authorizations（getDetail 的 authedMemberIds 即读此集合）- Sprint R9: upsert 幂等保护
   if (op === 'approve') {
-    await db.collection('authorizations').add({
-      data: { grantee: req.grantee, target: req.target, grantedBy: openid, createdAt: new Date().toISOString() }
-    });
+    // 检查是否已存在授权记录（grantee+target 唯一）
+    const existing = await db.collection('authorizations')
+      .where({ grantee: req.grantee, target: req.target })
+      .limit(1)
+      .get();
+    if (existing && Array.isArray(existing.data) && existing.data.length) {
+      // 已存在，跳过写入但审计记录上跳过的幂等情况
+      await writeExportAudit(db, openid, `member.review_auth_upsert_skip`, `request=${requestId} target=${req.target}`);
+    } else {
+      await db.collection('authorizations').add({
+        data: { grantee: req.grantee, target: req.target, grantedBy: openid, createdAt: new Date().toISOString() }
+      });
+    }
   }
 
   await writeExportAudit(db, openid, `member.review_auth_${op}`, `request=${requestId} target=${req.target}`);
@@ -289,6 +315,7 @@ async function getDetail(db, openid, memberId) {
 
   // 字段级 L 级判定（口径：privacyCheck 纯函数）
   const view = {};
+  const hiddenFields = []; // Sprint R9: 被隐私分级隐藏的字段（前端渲染模糊遮罩 + 申请入口）
   const PUBLIC = { _id: 1, genealogyName: 1, generation: 1, gender: 1, branchId: 1, lifespan: 1, status: 1 };
   const LIMITED = { name: 1, birthDate: 1, deathDate: 1, birthPlace: 1 };
   const PRIVATE = { tomb: 1, marriage: 1, occupation: 1, specialNotes: 1 };
@@ -298,6 +325,10 @@ async function getDetail(db, openid, memberId) {
       for (const k of Object.keys(fields)) {
         if (member[k] !== undefined) view[k] = member[k];
       }
+    } else {
+      for (const k of Object.keys(fields)) {
+        if (member[k] !== undefined) hiddenFields.push(k);
+      }
     }
   }
 
@@ -305,7 +336,7 @@ async function getDetail(db, openid, memberId) {
   if (!view._id) {
     return { success: false, code: 403, message: '该族人资料需授权查看', needAuthCard: true, applyRoute: '/pages/privacy/privacy' };
   }
-  return OK({ member: view });
+  return OK({ member: view, hiddenFields });
 }
 
 /**

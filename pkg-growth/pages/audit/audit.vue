@@ -38,14 +38,14 @@
 
           <!-- 操作按钮 -->
           <view class="actions" v-if="curTab !== 'APPROVED' && curTab !== 'REJECTED'">
-            <Button size="mini" type="primary" @click="doAudit(r, 'FIRST_PASS')">初审</Button>
-            <Button 
+            <button class="mini-btn btn-primary" size="mini" @click="doAudit(r, 'FIRST_PASS')">初审</button>
+            <button 
+              class="mini-btn btn-default" 
               size="mini" 
-              type="default" 
               v-if="r.status === 'FIRST_PASS'" 
               @click="doAudit(r, 'SECOND_PASS')"
-            >复审</Button>
-            <Button size="mini" type="warn" @click="doAudit(r, 'REJECT')">驳回</Button>
+            >复审</button>
+            <button class="mini-btn btn-warn" size="mini" @click="doAudit(r, 'REJECT')">驳回</button>
           </view>
 
           <!-- 已通过 / 已驳回 -->
@@ -86,7 +86,6 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import ErrorPage from '@/components/common/ErrorPage.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import Button from '@/uni_modules/uview-ui/components/u-button/u-button.vue';
 
 const user = useUserStore();
 const loading = ref(true);
@@ -207,6 +206,10 @@ onMounted(loadList);
 .name { font-size: 15px; font-weight: 600; display: block; }
 .meta { font-size: 11px; color: #8A8378; margin-top: 2px; display: block; }
 .actions { display: flex; gap: 8px; margin-top: 8px; }
+.mini-btn { font-size: 12px; line-height: 2; margin: 0; }
+.btn-primary { background: #7A9A5F; color: #FFF; }
+.btn-default { background: #EEECE4; color: #2B2320; }
+.btn-warn { background: #C44D4D; color: #FFF; }
 .actioned { text-align: center; padding: 8px; font-size: 12px; color: #8A8378; }
 .comment { display: block; font-size: 12px; color: #999; margin-top: 6px; }
 

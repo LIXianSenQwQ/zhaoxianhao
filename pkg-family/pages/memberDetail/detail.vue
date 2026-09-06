@@ -44,6 +44,17 @@
         <view class="row"><text class="label">世系路径：</text><text class="path-value">{{ member.path || '-' }}</text></view>
       </BaseCard>
 
+      <!-- 受限字段模糊遮罩（Sprint R9：字段级权限提示） -->
+      <BaseCard v-if="hiddenFields.length" title="受限信息">
+        <view v-for="f in hiddenFields" :key="f" class="row">
+          <text class="label">{{ FIELD_LABEL[f] || f }}：</text>
+          <text class="value masked">████████</text>
+        </view>
+        <view class="unlock-row" @tap="openApply">
+          <text class="unlock-text">🔒 申请授权查看 {{ hiddenFields.length }} 项受限字段</text>
+        </view>
+      </BaseCard>
+
       <!-- 扩展字段（仅可见时显示） -->
       <template v-if="showMarriage">
         <BaseCard title="婚姻状况">
@@ -60,7 +71,7 @@
 
       <!-- 编辑入口（本人为会员或管理员） -->
       <view v-if="user.isLoggedIn && (user.isAdmin || isSelf)" class="edit-btn" @click="goEdit">
-        <Button type="primary" size="mini">申请修订</Button>
+        <button class="btn-primary btn-edit" size="mini">申请修订</button>
       </view>
     </template>
   </view>
@@ -74,7 +85,6 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import ErrorPage from '@/components/common/ErrorPage.vue';
 import PrivacyCard from '@/components/common/PrivacyCard.vue';
-import Button from '@/uni_modules/uview-ui/components/u-button/u-button.vue';
 
 const user = useUserStore();
 const loading = ref(true);
@@ -83,6 +93,13 @@ const needAuthCard = ref(false);
 const authError = ref(false);
 const applyRoute = ref('/pages/privacy/privacy'); // 默认授权页
 const member = ref<any>({});
+const hiddenFields = ref<string[]>([]); // Sprint R9: 被隐私分级隐藏的字段
+
+// 受限字段中文标签
+const FIELD_LABEL: Record<string, string> = {
+  name: '本名', birthDate: '生年', deathDate: '卒年', birthPlace: '出生地',
+  tomb: '墓地', marriage: '婚姻', occupation: '职业', specialNotes: '族史备注'
+};
 
 const props = defineProps({ id: String });
 
@@ -107,6 +124,7 @@ async function loadMember(id: string) {
       return;
     }
     member.value = res.data.member || res.data;
+    hiddenFields.value = res.data.hiddenFields || [];
   } catch (e: any) {
     authError.value = true;
   } finally {
@@ -159,6 +177,11 @@ function goEdit() {
 .info { flex: 1; }
 .name { font-size: 18px; font-weight: 600; display: block; }
 .meta { font-size: 12px; color: #8A8378; margin-top: 2px; display: block; }
+
+/* 受限字段遮罩（Sprint R9） */
+.value.masked { filter: blur(3px); color: #B0A99A; user-select: none; letter-spacing: 2px; }
+.unlock-row { margin-top: 10px; padding: 8px 12px; background: #EFECE4; border-radius: 8px; text-align: center; }
+.unlock-text { font-size: 12px; color: #2E7D32; }
 
 .row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
 .label { font-size: 14px; color: #8A8378; }

@@ -21,9 +21,9 @@
         <text class="counter">{{ reason.length }}/500</text>
 
         <view class="actions">
-          <Button type="primary" :disabled="reason.trim().length < 5 || submitting" @click="submit">
+          <button class="btn-primary submit-btn" :disabled="reason.trim().length < 5 || submitting" @click="submit">
             {{ submitting ? '提交中…' : '提交申请' }}
-          </Button>
+          </button>
         </view>
         <text class="tip">提交后由族长（CHIEF）审批，审批通过即可查看该族人全部字段。</text>
       </template>
@@ -37,7 +37,6 @@ import { onLoad } from '@dcloudio/uni-app';
 import { read } from '@/services/request';
 import BaseCard from '@/components/common/BaseCard.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import Button from '@/uni_modules/uview-ui/components/u-button/u-button.vue';
 
 const memberId = ref('');
 const targetName = ref('');

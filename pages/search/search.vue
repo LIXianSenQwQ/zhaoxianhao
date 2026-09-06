@@ -5,7 +5,7 @@
     <view class="search-bar">
       <image class="icon" src="/static/search.png" mode="aspectFit" />
       <input class="input" type="text" placeholder="文档关键词/谱库检索词" v-model="query" @confirm="doSearch" @input="onInput" />
-      <Button class="btn-clear" v-if="query" size="mini" @click="clearQuery">清除</Button>
+      <button class="btn-clear" v-if="query" size="mini" @click="clearQuery">清除</button>
     </view>
 
     <!-- 加载骨架 -->
@@ -60,7 +60,6 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import ErrorPage from '@/components/common/ErrorPage.vue';
 import PrivacyCard from '@/components/common/PrivacyCard.vue';
-import Button from '@/uni_modules/uview-ui/components/u-button/u-button.vue';
 
 const user = useUserStore();
 const query = ref('');
