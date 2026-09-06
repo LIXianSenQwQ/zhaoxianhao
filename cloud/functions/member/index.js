@@ -38,6 +38,8 @@ async function main(event, context) {
       return await exportToFile(db, openid, event);
     case 'applyAuth':
       return await applyAuth(db, openid, event);
+    case 'reviewAuth':
+      return await reviewAuth(db, openid, event);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }
@@ -123,7 +125,9 @@ async function exportToFile(db, openid, { branchId }) {
     const g = await wx.cloud.getTempFileURL({ fileList: [fileID] });
     fileURL = (g.fileList && g.fileList[0] && g.fileList[0].tempFileURL) || '';
   } catch (e) {
-    return { success: false, code: 500, message: '导出文件上传云存储失败', detail: cloudPath };
+    // 降级策略（Sprint R8）：上传失败不白错误，回落 CSV 剪贴板模式
+    await writeExportAudit(db, openid, 'member.export_file_fallback', `path=${cloudPath} total=${rows.length}`);
+    return OK({ fallback: true, csv, total: rows.length, reason: '云存储上传失败，已降级为剪贴板模式' });
   }
 
   await writeExportAudit(db, openid, 'member.export_file', `branch=${branchId || 'all'} total=${rows.length} path=${cloudPath}`);
@@ -166,6 +170,52 @@ async function applyAuth(db, openid, { memberId, reason }) {
   });
   await writeExportAudit(db, openid, 'member.apply_auth', `target=${memberId}`);
   return OK({ submitted: true });
+}
+
+/**
+ * 授权审批（CHIEF 专属；Sprint R8：申请闭环最后一环）
+ * op: 'list'（待审列表）| 'approve'（批准→authorizations 授予）| 'reject'（驳回）
+ */
+async function reviewAuth(db, openid, { op = 'list', requestId, comment }) {
+  const ctx = await requesterCtx(db, openid);
+  if (!hasRole(ctx.role, 'CHIEF')) return FORBIDDEN('仅族长可审批授权申请');
+
+  if (op === 'list') {
+    const res = await db.collection('auth_requests')
+      .where({ status: 'PENDING' })
+      .orderBy('createdAt', 'desc')
+      .limit(LIST_LIMIT)
+      .get();
+    return OK({ requests: (res && res.data) || [] });
+  }
+
+  if (!requestId) return BAD_REQUEST('缺少 requestId');
+  if (op !== 'approve' && op !== 'reject') return BAD_REQUEST(`unknown op: ${op}`);
+
+  const reqRes = await db.collection('auth_requests').doc(requestId).get().catch(() => null);
+  const req = reqRes && reqRes.data && !Array.isArray(reqRes.data) ? reqRes.data : (reqRes && reqRes.data && reqRes.data[0]);
+  if (!req) return NOT_FOUND('申请不存在');
+  if (req.status !== 'PENDING') return BAD_REQUEST('该申请已处理（幂等保护）');
+
+  const newStatus = op === 'approve' ? 'APPROVED' : 'REJECTED';
+  await db.collection('auth_requests').doc(requestId).update({
+    data: {
+      status: newStatus,
+      reviewer: openid,
+      reviewedAt: new Date().toISOString(),
+      comment: String(comment || '').slice(0, 200)
+    }
+  });
+
+  // 批准 → 授予 authorizations（getDetail 的 authedMemberIds 即读此集合）
+  if (op === 'approve') {
+    await db.collection('authorizations').add({
+      data: { grantee: req.grantee, target: req.target, grantedBy: openid, createdAt: new Date().toISOString() }
+    });
+  }
+
+  await writeExportAudit(db, openid, `member.review_auth_${op}`, `request=${requestId} target=${req.target}`);
+  return OK({ status: newStatus });
 }
 
 /**

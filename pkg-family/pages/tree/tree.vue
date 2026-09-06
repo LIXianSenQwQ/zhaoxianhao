@@ -149,11 +149,24 @@ function goDetail(id: string) {
   uni.navigateTo({ url: `/pkg-family/pages/memberDetail/detail?id=${id}` });
 }
 
-/** 批量导出 CSV（Sprint R5，CHIEF 权限） */
+/** 批量导出（Sprint R5+R8：先试文件下载，失败自动降级剪贴板） */
 async function exportCsv() {
   try {
-    const res = await read('member', { action: 'export', page: 1 }, null, 10000);
-    if (res.data?.csv) {
+    const res = await read('member', { action: 'exportFile' }, null, 10000);
+    if (res.data?.fileURL) {
+      // 直接复制文件 URL
+      uni.setClipboardData({
+        data: res.data.fileURL,
+        success: () => uni.showToast({ title: `已复制下载链接`, icon: 'none' })
+      });
+    } else if (res.data?.fallback && res.data?.csv) {
+      // 降级模式：云存储上传失败，返回 CSV 走剪贴板（R8 降级策略）
+      uni.setClipboardData({
+        data: res.data.csv,
+        success: () => uni.showToast({ title: `已降级复制 ${res.data.total} 条到剪贴板`, icon: 'none' })
+      });
+    } else if (res.data?.csv) {
+      // 兼容旧 API export 直接返回 csv（不降级）
       uni.setClipboardData({
         data: res.data.csv,
         success: () => uni.showToast({ title: `已复制 ${res.data.total} 条到剪贴板`, icon: 'none' })

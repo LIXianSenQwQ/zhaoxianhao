@@ -335,3 +335,56 @@
 4. **搜索页空态文案优化**：按家族文化调整占位语（祖训卡扩展）
 
 <!-- 模板：下一轮评审复制此节 -->
+
+---
+
+## 第 R8 轮（Sprint R8 · 授权审批闭环/导出降级/搜索空态祖训）
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R7 现状 | R8 现状 | 趋势 |
+|---|---|---|---|---|---|
+| 功能完整性 | 授权审批 UI | CHIEF 审核工作台 | ❌ 缺审批入口 | ✅ pkg-growth/pages/reviewAuth 审批页 + mine 页 CHIEF 入口 + pages.json 注册 | ↑↑ |
+| 功能完整性 | 云存储降级策略 | uploadFile 失败回落剪贴板 | ❌ 直接 500 | ✅ exportFile fallback:true+csv 降级，tree.vue 先试文件后降级 | ↑↑ |
+| 体验 | 搜索空态文案 | 区分两态 + 祖训 | ❌ 单态“暂无结果” | ✅ "未搜索"与"无结果"两态，祖训文案（水有源/参天之木） | ↑ |
+| 质量 | smoke 门禁 | VISITOR 鉴权先行 | 100 用例 | **103** (+3 reviewAuth/exportFile 403) | ↑ |
+| 可用性与容错 | 云上传失败不白屏 | - | 500 | fallback 模式自动降级 | ↑↑ |
+
+### 二、本轮交付清单
+
+**功能模块：**
+- `member/index.js` +reviewAuth action（op:list/approve/reject）：CHIEF 门禁 / 幂等保护（非 PENDING 拒绝）/ approve→authorizations 授予 + audit_log 审计
+- `member/index.js` +exportFile fallback：catch(e) 返回 `{fallback:true, csv, total}`，消除 500 白错误
+- `pkg-growth/pages/reviewAuth/reviewAuth.vue`: 审批工作台（PENDING 列表、批准/驳回按钮、确认弹窗、成功 Toast、实时移除已处理申请）
+- `pages/mine/mine.vue`: entries computed 加 `{key:'reviewAuth',label:'授权审批',url:'/pkg-growth/pages/reviewAuth/reviewAuth'}`（isChief 可见）
+- `pkg-family/pages/tree/tree.vue`: exportCsv 逻辑升级为"先试 exportFile → fallback?csv → export:csv"三级兜底，前端 Toast 反馈明确
+
+**体验优化：**
+- `pages/search/search.vue`: hasSearched 状态区分"未搜索/无结果"两态，custom slot 替代 EmptyState props，文案祖训化（水有源/参天之木），移除 Unused Import
+- 灰度降级策略消除用户侧 500 错误感知（纯服务端 catch）
+
+**缺陷修复：**
+- 无阻塞性 bug；exportFile fallback 属主动防御设计（R8 特性）
+
+**重构与质量：**
+- `tests/smoke-functions.test.js` +3 smoke 用例（reviewAuth list 403 / approve 403 / exportFile 403），延续"鉴权先行"风格
+- 测试总数：**100 → 103**（+3，覆盖核心门禁）
+
+**门禁：** npm run verify 全绿（103 用例 · 0 fail · 1W · 云函数 14/14）。warn 仍为 avatar 占位图资源物理缺失（逻辑已就位，正式机补充 PNG）。
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 真机 P95/首屏采集（连续 7 轮阻塞） | 高 | 沙箱侧性能侧全部就绪（缓存/重试/分包预下载/懒加载/预算埋点），**突破必须依赖微信开发者工具环境** |
+| authorizations 幂等写入 | 中 | reviewAuth approve 时 add 可能重复；实际场景申请人不会重复提交且 stub 未模拟并发，R9 评估唯一索引兜底 |
+| avatar 默认图资源 404 | 低 | fallback 逻辑已就位；PNG 资源可在正式机部署时补充 |
+
+### 四、R9 承诺
+
+1. **作者 permissions/authorizations 幂等保护**：增加 unique index 或 upsert 逻辑（避免重复授权导致 view 集合膨胀）
+2. **授权申请审核列表查询过滤**：可按 status/grantee/target 筛选、分页翻页
+3. **性能实测**：真机环境验证分包预下载效果 + request.ts retry 成功率统计
+4. **成员详情字段级权限卡片扩展**：L 级字段不可见时显示具体原因而非整卡（可选）
+
+<!-- 模板：下一轮评审复制此节 -->

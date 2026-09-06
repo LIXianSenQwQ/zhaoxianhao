@@ -61,6 +61,10 @@
 				{
 					"path": "pages/audit/audit",
 					"style": {}
+				},
+				{
+					"path": "pages/reviewAuth/reviewAuth",
+					"style": {}
 				}
 			]
 		}

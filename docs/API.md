@@ -96,6 +96,20 @@
 
 **前端**：detail.vue 的 PrivacyCard 点击 → `/pages/privacy/privacy?memberId=&name=` 申请表单页。
 
+### 1.7 reviewAuth（授权审批，Sprint R8）
+
+**请求**：`{ action: 'reviewAuth', op: 'list' | 'approve' | 'reject', requestId?: string, comment?: string }`
+
+**权限**：仅 `CHIEF`
+
+- `op=list`：返回 `auth_requests` 中 `status=PENDING` 的待审列表（按 createdAt 倒序，≤50 条）
+- `op=approve`：requestId 必传；幂等保护（非 PENDING 返回 400）；批准后向 `authorizations` 写入 `{grantee, target, grantedBy}` + audit_log
+- `op=reject`：requestId 必传；同幂等保护
+
+**响应**：`{ success: true, data: { requests } }`（list）或 `{ success: true, data: { status } }`（approve/reject）
+
+**前端**：`/pkg-growth/pages/reviewAuth/reviewAuth.vue` 审批工作台（mine 页 CHIEF 入口进入）。
+
 ---
 
 ## 2. 入谱（entry）

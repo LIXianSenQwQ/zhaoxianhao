@@ -11,11 +11,20 @@
     <!-- 加载骨架 -->
     <Skeleton v-if="loading" :rows="8" />
 
-    <!-- 空态 -->
-    <EmptyState v-else-if="!error && !hits.length" desc="暂无搜索结果" />
+    <!-- 空态：区分"未搜索/无结果"两态（Sprint R8 祖训文案） -->
+    <view v-if="!error && !hasSearched" class="empty-search">
+      <text class="empty-title">寻根问谱</text>
+      <text class="empty-sub">水有源，木有本——输入谱名、地名或事件关键词，检索族中文档</text>
+    </view>
 
     <!-- 错误兜底 -->
     <ErrorPage v-else-if="error" :message="error" @retry="doSearch" />
+
+    <!-- 无结果空态 -->
+    <view v-else-if="!hits.length" class="empty-search">
+      <text class="empty-title">无匹配结果</text>
+      <text class="empty-sub">参天之木必有其根，换个关键词或减少筛选条件再试</text>
+    </view>
 
     <!-- 结果列表 -->
     <scroll-view scroll-y v-else class="results-scroll">
@@ -50,7 +59,6 @@ import { read } from '@/services/request';
 import BaseCard from '@/components/common/BaseCard.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import ErrorPage from '@/components/common/ErrorPage.vue';
-import EmptyState from '@/components/common/EmptyState.vue';
 import PrivacyCard from '@/components/common/PrivacyCard.vue';
 import Button from '@/uni_modules/uview-ui/components/u-button/u-button.vue';
 
@@ -62,6 +70,7 @@ const page = ref(1);
 const loading = ref(false);
 const loadingMore = ref(false);
 const error = ref('');
+const hasSearched = ref(false); // Sprint R8：区分"未搜索/无结果"空态
 
 // 防抖延迟
 let timer: number | null = null;
@@ -78,6 +87,7 @@ async function clearQuery() {
   hasMore.value = false;
   page.value = 1;
   error.value = '';
+  hasSearched.value = false;
 }
 
 async function doSearch(keyword?: string) {
@@ -86,8 +96,10 @@ async function doSearch(keyword?: string) {
     hits.value = [];
     hasMore.value = false;
     error.value = '';
+    hasSearched.value = false;
     return;
   }
+  hasSearched.value = true;
   loading.value = true;
   error.value = '';
   try {
@@ -145,6 +157,9 @@ const privacyDesc = computed(() => isVisitingUser.value ? '登录后可查看全
 .btn-clear { min-width: 50px; }
 
 .results-scroll { flex: 1; padding: 12px; }
+.empty-search { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; color: #999; }
+.empty-title { font-size: 15px; font-weight: 600; color: #2B2320; text-align: center; }
+.empty-sub { font-size: 13px; color: #999; text-align: center; margin-top: 8px; }
 .row { display: flex; align-items: center; gap: 10px; }
 .type-icon { width: 32px; height: 32px; border-radius: 8px; background: #EEE7DA; }
 .info { flex: 1; }

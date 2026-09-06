@@ -107,6 +107,31 @@ test('member.applyAuth：缺 openid → 403', async () => {
   assert.equal(noOpenid.code, 403);
 });
 
+// ─── Sprint R8: member.reviewAuth smoke gates ───
+
+test('member.reviewAuth：VISITOR → 403（鉴权先行，list）', async () => {
+  const denied = await FN('member').main(
+    { action: 'reviewAuth', op: 'list' }, CTX);
+  assert.equal(denied.success, false);
+  assert.equal(denied.code, 403);
+});
+
+test('member.reviewAuth：VISITOR → 403（鉴权先行，approve）', async () => {
+  const denied = await FN('member').main(
+    { action: 'reviewAuth', op: 'approve', requestId: 'r-1' }, CTX);
+  assert.equal(denied.success, false);
+  assert.equal(denied.code, 403);
+});
+
+// ─── Sprint R8: exportFile fallback smoke gate ───
+
+test('member.exportFile：VISITOR → 403（鉴权先行）', async () => {
+  const denied = await FN('member').main(
+    { action: 'exportFile', branchId: 'long' }, CTX);
+  assert.equal(denied.success, false);
+  assert.equal(denied.code, 403);
+});
+
 // ─── Sprint R3 冒烟：doc / entry / notify ───
 
 test('doc.list：类型筛选 + 未知类型拒绝', async () => {

@@ -98,6 +98,10 @@ const entries = computed(() => {
   if (store.isAdmin) {
     base.push({ key: 'audit', label: '入谱审核', url: '/pkg-growth/pages/audit/audit' });
   }
+  // 族长可见授权审批入口
+  if (store.isChief) {
+    base.push({ key: 'reviewAuth', label: '授权审批', url: '/pkg-growth/pages/reviewAuth/reviewAuth' });
+  }
   return base;
 });
 
