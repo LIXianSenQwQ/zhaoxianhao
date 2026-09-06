@@ -964,3 +964,54 @@
 4. 性能实测（持续等待用户环境）
 
 <!-- 模板：下一轮评审复制此节 -->
+
+## 第 R20 轮（Sprint R20 · V1.1 E2 · CI/MPS 接入 + 留言板方案）
+
+> 主题：数据万象 CI / 媒体处理 MPS 触发器真实接口 + profile.updateIntro/updateFamilyInfo 修复 + content 留言云函数骨架 + stub 扩展。
+
+### 一、指标回顾
+
+| 维度 | 指标 | R19 | R20 | 变化 |
+|---|---|---|---|---|
+| V1.1 E2 | CI 接入 | CI 占位（thumbUrls=[]） | **upload.triggerCi + profile.saveAvatar 真实调用链**（WEBP/80/200/600 三档） | ↑ |
+| V1.1 E2 | MPS 骨架 | 无 | **upload.triggerMps**（≤60s 校验 + H.264 转码占位 + cover_frame） | ↑ |
+| V1.1 E2 | profile 接口 | saveAvatar 单接口 | **+ updateIntro / updateFamilyInfo**（家训≤500 字/字辈≤3 字校验） | ↑ |
+| 蓝图 8.0 | 留言板 | 方案未设计 | **content 云函数骨架**（频控 ≤5 条/5min + secscan 占位 + audit） | ↑ |
+| 质量 | 测试数 | 178 | **189**（+11：CI/MPS/Intro/FamilyInfo/留言/GROUP 跨组拒绝） | ↑ |
+| 门禁 | verify | 绿 | **绿**（189 用例 · lint 0E） | = |
+
+### 二、本轮交付清单
+
+**云函数：**
+1. **upload.triggerCi**（数据万象触发器）：avatar/album 场景 → try 真实 CI（ci 云函数 ImageProcessJob）→ catch 降级占位 URL 模板（cdn-thumb-{ts}/80/200/600.webp）
+2. **upload.triggerMps**（媒体处理触发器）：duration>60s → 400；templates=['h264_mp4_720p','cover_frame'] → 降级占位 ID
+3. **profile.saveAvatar** 接入 CI 调用链（wx.cloud.callFunction name='upload' action='triggerCi'）
+4. **profile.updateIntro**：greeting ≤200 字 / introVideoFileId ≤256 字符 / 门禁 本人 or EDITOR+ / audit
+5. **profile.updateFamilyInfo**：familyMotto ≤500 字（EDITOR+）/ generationChars 每项≤3 字（EDITOR+）/ settings upsert（where→update or add 模式）
+6. **content 云函数骨架**：sendMessage（频控 ≤5 条/5min + 长度 1-500 + audit_logs + secscan 占位 auditResult='pass'）
+
+**基础设施：**
+- scripts/wx-server-sdk-stub.js：**doc().set() upsert 方法新增**（保留显式 _id，stats.updated/created）
+- cloud/db-schemas/：**content_messages.schema.json**（频控索引 idx_target_time/idx_author_time）
+
+**修复：**
+- profile.updateFamilyInfo 原有 `.update({data}).concat(await .get()).concat()` 非法链式语法 → 重写为 where→update or add upsert 模式（对齐 admin.featureFlag 惯例）
+- smoke 测试 CTX_WITH_ROLE openid 与 userId 不匹配导致的 403（u1→u-member/u-visitor/u-editor 对齐）
+- R19 遗留：isHeroMember `m && ...` → `!!(m && ...)` 显式布尔转换
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| CI/MPS 真实云函数（'ci'/'mps'）未部署 | 中 | 占位降级已就绪；R21 部署真实云函数（云开发扩展 ImageProcessJob/MPS Task） |
+| content 留言 secscan 为 mock（auditResult='pass'） | 中 | R21 接 msgSecCheck（微信内容安全接口）+ 敏感词库 |
+| hero/detail 前端留言板 UI 未实现 | 中 | R21 联调 content.sendMessage + 留言列表组件 |
+| 真机性能实测（连续 20 轮阻塞） | 高 | 继续等待微信开发者工具环境 |
+
+### 四、R21 承诺建议
+
+1. **CI 真实部署**：ci/mps 云函数（腾讯云数据万象/媒体处理 HTTP API + 签名）
+2. **secscan 内容安全**：msgSecCheck 接入 + 敏感词 + 人工复核队列（蓝图 9.2 secscan 云函数）
+3. **hero 留言板前端**：hero/detail 留言列表 + 发布框 + 审核状态展示（联调 content.sendMessage）
+4. **album 多级相册**（V1.1 E2 剩余）：album.save/uploadBatch/tag（≤20 张批量）
+5. 性能实测（持续等待用户环境）

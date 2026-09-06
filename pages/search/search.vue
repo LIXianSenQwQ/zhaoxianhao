@@ -163,8 +163,15 @@ async function loadMore() {
   loadingMore.value = false;
 }
 
+const TYPE_ICON_MAP = {
+  old_genealogy: '/static/genealogy.png',
+  photo: '/static/photo.png',
+  stele: '/static/stele.png',
+  document: '/static/doc.png'
+};
+
 function getTypeIcon(type: string): string {
-  return { old_genealogy: '/static/genealogy.png', photo: '/static/photo.png', stele: '/static/stele.png', document: '/static/doc.png' }[type] || '/static/doc.png';
+  return TYPE_ICON_MAP[type] || '/static/doc.png';
 }
 
 function formatType(t: string): string {

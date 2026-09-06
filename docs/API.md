@@ -502,3 +502,11 @@
 - 出参：`{ avatarId, message }`
 - CI 压缩占位：thumbUrls 空数组，实际 CI 转码由云存储触发器回调（R20 接入）
 - 前端配套：utils/feature-flags.ts v11Avatar 开关控制入口显隐
+
+### 22.2 profile.updateIntro / updateFamilyInfo（R20）
+
+- **updateIntro**：`{ action:'updateIntro', userId?, greeting?, introVideoFileId? }` → 门禁本人 or EDITOR+；greeting ≤200 字、introVideoFileId ≤256 字符；写 users 集合 + audit_logs
+- **updateFamilyInfo**：`{ action:'updateFamilyInfo', userId?, familyMotto?, generationChars? }` → 仅 EDITOR+；motto ≤500 字、字辈每项≤3 字；settings upsert（key='family_motto'/'generation_chars'）
+- **upload.triggerCi**：`{ action:'triggerCi', fileId, scene }` → 数据万象 CI 触发（avatar/album），未配置降级占位 URL（80/200/600 三档缩略图 + WEBP 压缩）
+- **upload.triggerMps**：`{ action:'triggerMps', fileId, duration }` → duration>60s 拒收；H.264 MP4 转码 + cover_frame 封面截取
+- **content.sendMessage**：`{ action:'sendMessage', targetMemberId, content }` → 频控 ≤5 条/5min、长度 1-500、audit 留痕、secscan 占位 pass

@@ -121,7 +121,14 @@ async function awardPointsAtomic(db, operatorId, pool, bizType, bizId, targetUse
     }
   });
 
-  await writeAudit(db, { userId: operatorId, action: 'points.award', target: addRes._id, detail: `to=${userId} pool=${pool} delta=${amount} biz=${bizType}:${bizId}` }).catch(() => {});
+  // 审计日志（超行优化 ≤160 字符）
+  const auditDetail = `to=${userId} pool=${pool} delta=${amount} biz=${bizType}:${bizId}`;
+  await writeAudit(db, { 
+    userId: operatorId, 
+    action: 'points.award', 
+    target: addRes._id, 
+    detail: auditDetail 
+  }).catch(() => {});
 
   return OK({ duplicated: false, logId: addRes._id, delta: amount, pool, userId });
 }

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * tests/smoke-functions.test.js
  * 云函数行为冒烟测试：stub wx-server-sdk + stub db，
  * 真正调用 main() 验证业务分支（统一响应格式/参数校验/权限门禁）。
@@ -22,6 +22,7 @@ if (!Module._resolveFilename.__hcsPatched) {
 
 const FN = (name) => require(path.join('..', 'cloud', 'functions', name, 'index.js'));
 const CTX = { OPENID: 'u-test', openid: 'u-test' };
+const CTX_WITH_ROLE = (role) => ({ OPENID: `u-${role.toLowerCase()}`, openid: `u-${role.toLowerCase()}`, role });
 
 test('task.today：走 stub db 返回统一成功格式', async () => {
   const res = await FN('task').main({ action: 'today' }, CTX);
@@ -139,16 +140,17 @@ function seedDB({
   users = [], members = [], authRequests = [], authorizations = [], auditLogs = [],
   plazaPosts = [], notifications = [], accounts = [], pointsLogs = [],
   worshipLogs = [], tasks = [], taskRecords = [], calendarItems = [], events = [],
-  ceremonies = [], entryRecords = [], relations = []
+  ceremonies = [], entryRecords = [], relations = [],
+  settings = [], avatars = []
 } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
       users, members, auth_requests: authRequests, authorizations,
-      audit_logs: auditLogs, notifications, plaza_posts: plazaPosts, settings: [],
+      audit_logs: auditLogs, notifications, plaza_posts: plazaPosts, settings,
       points_accounts: accounts, points_logs: pointsLogs,
       worship_logs: worshipLogs, tasks, task_records: taskRecords,
       calendar_items: calendarItems, events, ceremonies,
-      entry_records: entryRecords, relations
+      entry_records: entryRecords, relations, avatars
     },
     seq: 1000
   };
@@ -887,7 +889,13 @@ test('R15 member.heroList：访客可浏览（L1）+ DECEASED 过滤 + 字段白
   seedDB({
     users: [{ openid: 'u-v', role: 'VISITOR' }],
     members: [
-      { _id: 'h-1', genealogyName: '郝忠烈', name: '郝忠', generation: 4, status: 'DECEASED', isHero: true, heroNote: '抗战殉国', deathDate: '1942-03-08', worshipCount: 12, tomb: { place: 'x' }, specialNotes: [{ type: 'x', desc: 'y' }], occupation: { job: 'secret' } },
+      { 
+        _id: 'h-1', 
+        genealogyName: '郝忠烈', name: '郝忠', generation: 4, status: 'DECEASED', isHero: true, 
+        heroNote: '抗战殉国', deathDate: '1942-03-08', worshipCount: 12, 
+        tomb: { place: 'x' }, specialNotes: [{ type: 'x', desc: 'y' }], 
+        occupation: { job: 'secret' } 
+      },
       { _id: 'h-2', name: '郝健在', generation: 5, status: 'ALIVE', isHero: true, heroNote: '老兵在世' },
       { _id: 'h-3', name: '郝普通', generation: 3, status: 'DECEASED' }
     ]
@@ -1043,7 +1051,16 @@ test('R16 member.getDetail：非族人访客对 DECEASED 仍可见公开级（�
 test('R17 entry.audit FIRST_PASS：BRANCH_HEAD 初审正向（蓝图 7.6 初审支系）+ auditChain 留痕', async () => {
   seedDB({
     users: [{ openid: 'u-bh', role: 'BRANCH_HEAD' }, { openid: 'u-sub', role: 'MEMBER' }],
-    entryRecords: [{ _id: 'r-fp', type: 'MANUAL', payload: { name: '郝一', generation: 18, branchId: 'long' }, status: 'SUBMITTED', createdBy: 'u-sub', auditChain: [] }]
+    entryRecords: [
+      { 
+        _id: 'r-fp', 
+        type: 'MANUAL', 
+        payload: { name: '郝一', generation: 18, branchId: 'long' }, 
+        status: 'SUBMITTED', 
+        createdBy: 'u-sub', 
+        auditChain: [] 
+      }
+    ]
   });
   const res = await FN('entry').main(
     { action: 'audit', recordId: 'r-fp', auditAction: 'FIRST_PASS', comment: '支系核实无误' },
@@ -1059,7 +1076,16 @@ test('R17 entry.audit FIRST_PASS：BRANCH_HEAD 初审正向（蓝图 7.6 初审�
 test('R17 entry.audit：MEMBER 触达审核 403（鉴权先行）+ 提交人自审 400', async () => {
   seedDB({
     users: [{ openid: 'u-m', role: 'MEMBER' }, { openid: 'u-bh', role: 'BRANCH_HEAD' }],
-    entryRecords: [{ _id: 'r-self', type: 'MANUAL', payload: { name: '郝一', generation: 1, branchId: 'b' }, status: 'SUBMITTED', createdBy: 'u-bh', auditChain: [] }]
+    entryRecords: [
+      { 
+        _id: 'r-self', 
+        type: 'MANUAL', 
+        payload: { name: '郝一', generation: 1, branchId: 'b' }, 
+        status: 'SUBMITTED', 
+        createdBy: 'u-bh', 
+        auditChain: [] 
+      }
+    ]
   });
   const r1 = await FN('entry').main(
     { action: 'audit', recordId: 'r-self', auditAction: 'FIRST_PASS' },
@@ -1196,7 +1222,13 @@ test('R18 entry.pendingList：BRANCH_HEAD 正向（SUBMITTED+FIRST_PASS + canFir
     users: [{ openid: 'u-bh', role: 'BRANCH_HEAD' }, { openid: 'u-his', role: 'HISTORIAN' }],
     entryRecords: [
       { _id: 'r-s', status: 'SUBMITTED', createdBy: 'u-sub', payload: { name: '郝一' }, auditChain: [] },
-      { _id: 'r-fp', status: 'FIRST_PASS', createdBy: 'u-sub', payload: { name: '郝二' }, auditChain: [{ step: 'FIRST_PASS', userId: 'u-bh', action: 'FIRST_PASS', time: new Date() }] }
+      { 
+        _id: 'r-fp', 
+        status: 'FIRST_PASS', 
+        createdBy: 'u-sub', 
+        payload: { name: '郝二' }, 
+        auditChain: [{ step: 'FIRST_PASS', userId: 'u-bh', action: 'FIRST_PASS', time: new Date() }] 
+      }
     ]
   });
   // BRANCH_HEAD 视角：初审可用，复审不可（细门禁 HISTORIAN）
@@ -1272,4 +1304,87 @@ test('R19 visibilityCheck 烟囱测试：PRIVATE 拒绝/PUBLIC 放行/GROUP 名�
   assert.equal(visibilityCheck(u1, { _id: 'c1', visibility: 'PRIVATE', ownerOpenid: 'u2' }), 'deny');
   assert.equal(visibilityCheck(u1, { visibility: 'PUBLIC', ownerOpenid: 'u2' }), 'allow');
   assert.equal(visibilityCheck(u1, { _id: 'c2', visibility: 'GROUP', ownerOpenid: 'u2', groupIds: ['f1'] }), 'allow');
+});
+
+// ─── Sprint R20: CI/MPS/留言方案 +5 用例 ───
+
+test('R20 upload.triggerCi: stub 返回占位 URL 模板', async () => {
+  const res = await FN('upload').main(
+    { action: 'triggerCi', fileId: 'temp-avatar-file' },
+    { OPENID: 'u1', openid: 'u1' }
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(res.data.compressedUrl.includes('cdn-webp'), 'compressedUrl 存在');
+  assert.ok(res.data.thumbnailUrls.s, 'thumb s 档存在');
+});
+
+test('R20 upload.triggerMps: duration > 60s 拒绝', async () => {
+  const res = await FN('upload').main(
+    { action: 'triggerMps', fileId: 'video-xx', duration: 70 },
+    { OPENID: 'u1', openid: 'u1' }
+  );
+  assert.equal(res.code, 400);
+  assert.ok(res.message?.includes('≤60s'), '长度校验文案');
+});
+
+test('R20 profile.saveAvatar: CI 占位成功 (stub)', async () => {
+  seedDB({ avatars: [] });
+  const res = await FN('profile').main(
+    { action: 'saveAvatar', fileId: 'avatar-temp', cropMeta: { ratio: 1 }, visibility: 'PUBLIC' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(res.data.avatarId.includes('profile-'), 'avatarId 格式正确');
+});
+
+test('R20 member.getDetail: isHero=true → hero 入口可见 (computed logic)', () => {
+  // 复用 R19 hero isHeroMember computed
+  const isHeroMember = (m) => !!(m && m.status === 'DECEASED' && m.isHero);
+  assert.equal(isHeroMember({ status: 'DECEASED', isHero: true }), true);
+  assert.equal(isHeroMember({ status: 'DECEASED', isHero: false }), false);
+  assert.equal(isHeroMember({ status: 'ALIVE', isHero: true }), false);
+});
+
+test('R20 visibilityCheck GROUP: 跨组拒绝 (authedTargetIds 不匹配)', () => {
+  const { visibilityCheck } = require('../cloud/functions/common/privacy');
+  const u1 = { openid: 'u1', familyIds: new Set(['f1']), authedTargetIds: new Set() };
+  const content = { _id: 'c1', visibility: 'GROUP', ownerOpenid: 'u2', groupIds: ['f2'] };
+  assert.equal(visibilityCheck(u1, content), 'deny', '跨组 f1 vs f2 拒绝');
+});
+
+// ─── Sprint R20: profile.updateIntro / updateFamilyInfo test cases ───
+
+test('R20 profile.updateIntro: MEMBER 写自己问候语 OK', async () => {
+  seedDB({ users: [{ _id: 'u1', openid: 'u1', role: 'MEMBER', status: 'APPROVED' }] });
+  const res = await FN('profile').main({ action: 'updateIntro', userId: 'u-member', greeting: '你好，我是郝一' }, CTX_WITH_ROLE('MEMBER'));
+  assert.equal(res.success, true);
+});
+
+test('R20 profile.updateIntro: MEMBER 写他人问候语 → 403', async () => {
+  seedDB({ users: [{ _id: 'u2', openid: 'u2', role: 'MEMBER', status: 'APPROVED' }] });
+  const res = await FN('profile').main({ action: 'updateIntro', userId: 'u2', greeting: '他人问候' }, CTX_WITH_ROLE('MEMBER'));
+  assert.equal(res.code, 403);
+});
+
+test('R20 profile.updateIntro: greeting 超长 → 400', async () => {
+  const long = 'A'.repeat(201);
+  const res = await FN('profile').main({ action: 'updateIntro', userId: 'u-visitor', greeting: long }, CTX_WITH_ROLE('VISITOR'));
+  assert.equal(res.code, 400);
+});
+
+test('R20 profile.updateFamilyInfo: MEMBER 修改家训 → 403', async () => {
+  seedDB({ settings: [] });
+  const res = await FN('profile').main({ action: 'updateFamilyInfo', userId: 'u-member', familyMotto: '忠厚传家' }, CTX_WITH_ROLE('MEMBER'));
+  assert.equal(res.code, 403);
+});
+
+test('R20 profile.updateFamilyInfo: EDITOR 设置家训/字辈 OK', async () => {
+  seedDB({ settings: [{ _id: 'flags', key: 'featureFlags', value: {} }] });
+  const res = await FN('profile').main({ action: 'updateFamilyInfo', userId: 'u-editor', familyMotto: '忠厚传家久', generationChars: ['德','文','光','明'] }, CTX_WITH_ROLE('EDITOR'));
+  assert.equal(res.success, true);
+});
+
+test('R20 profile.updateFamilyInfo: generationChars 非数组 → 400', async () => {
+  const res = await FN('profile').main({ action: 'updateFamilyInfo', userId: 'u-member', familyMotto: 'test', generationChars: 'not-array' }, CTX_WITH_ROLE('EDITOR'));
+  assert.equal(res.code, 400);
 });

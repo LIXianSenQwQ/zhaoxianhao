@@ -39,6 +39,16 @@
       "enum": ["L1", "L2", "L3"],
       "default": "L2"
     },
+    "greeting": {
+      "type": ["string", "null"],
+      "maxLength": 200,
+      "description": "个人问候语（profile.updateIntro 写入，V1.1 8.3）"
+    },
+    "introVideoFileId": {
+      "type": ["string", "null"],
+      "maxLength": 256,
+      "description": "个人介绍视频云存储 fileID（V1.1 8.3）"
+    },
     "createdAt": { "type": "string", "format": "date-time" },
     "lastLoginAt": { "type": "string", "format": "date-time" }
   },

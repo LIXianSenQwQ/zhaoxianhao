@@ -76,6 +76,14 @@ module.exports = {
             if (row) applyUpdate(row, data);
             return { stats: { updated: row ? 1 : 0 } };
           },
+          set: async ({ data }) => {
+            // R20: upsert 语义——存在则覆盖，不存在则新建（保留显式 _id）
+            const col = getCol(name);
+            const i = col.findIndex(r => r._id === id);
+            if (i >= 0) { col[i] = { ...col[i], ...data, _id: id }; }
+            else col.push({ ...data, _id: id });
+            return { _id: id, stats: { updated: i >= 0 ? 1 : 0, created: i < 0 ? 1 : 0 } };
+          },
           remove: async () => {
             const col = getCol(name);
             const i = col.findIndex(r => r._id === id);

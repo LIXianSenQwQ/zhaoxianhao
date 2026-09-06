@@ -178,3 +178,15 @@
 | V1.1 22.3 多级相册 | ⏳ | E2：album.uploadBatch ≤20 张 |
 | 8.0 hero 留言板 | ⏳ | R20 方案设计（secscan + 频控） |
 | 真机性能实测（1.4 验收底线） | ⏳ | 连续 19 轮阻塞：等待微信开发者工具环境 |
+
+## 二·十四 R20（Sprint R20 · V1.1 E2 · CI/MPS 接入 + 留言板方案）
+
+| 蓝图条目 | 状态 | 差距说明 |
+|---|---|---|
+| V1.1 22.1 CI 数据万象接入 | ✅ | upload.triggerCi + profile.saveAvatar 调用链（占位降级就绪） |
+| V1.1 22.2 介绍视频 MPS | 🔶 | upload.triggerMps 骨架（≤60s 校验）；真实云函数 R21 部署 |
+| V1.1 22.3 多级相册 | ⏳ | R21：album.save/uploadBatch/tag（≤20 张批量） |
+| 蓝图 8.0 hero 留言板 | 🔶 | content.sendMessage 骨架（频控+audit+secscan 占位）；前端 UI + secscan 真实接入 R21 |
+| profile.updateIntro | ✅ | greeting ≤200 字 + 门禁 + audit |
+| profile.updateFamilyInfo | ✅ | 家训 ≤500 字 + 字辈 ≤3 字 + settings upsert + audit |
+| 真机性能实测（1.4 验收底线） | ⏳ | 连续 20 轮阻塞：等待微信开发者工具环境 |

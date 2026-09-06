@@ -1,0 +1,78 @@
+/**
+ * cloud/functions/content/index.js
+ * V2.0 本地内容管理模块（个人本地内容/新闻资讯/家族动态）
+ * Blueprint R20: 英雄留言方案（type=message, secscan+audit+频控）
+ */
+
+const wx = require('wx-server-sdk');
+const { OK, BAD_REQUEST, FORBIDDEN } = require('./common/response');
+const { hasRole } = require('./common/roles');
+const { writeAudit } = require('./common/audit');
+
+wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
+
+/** R20: hero/detail 留言板设计（蓝图 8.0） */
+async function sendMessage(ctx, userId, targetMemberId, content) {
+  const db = wx.getDatabase();
+  
+  // 门禁：认证族人可发；MEMBER/HISTORIAN/CHIEF
+  if (!hasRole(ctx.role, 'HISTORIAN')) {
+    if (ctx.role !== 'MEMBER') return FORBIDDEN('仅认证族人可发布留言');
+  }
+
+  // 频控：每人每动态 ≤5 条/分钟（基于 member + target）
+  const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+  const recentCount = await db.collection('content_messages').where({
+    authorOpenid: ctx.openid, targetMemberId, publishAt: { $gte: fiveMinAgo.toISOString() }
+  }).count();
+  if (recentCount > 5) return BAD_REQUEST('发言频率过高，请稍后再试');
+
+  // secscan 内容安全检测（R20 mock + R21 真实）
+  // 真实环境：wx.cloud.callFunction({ name: 'secscan', data: { text: content } })
+  // 测试环境直接通过
+  const cleanedContent = content.trim(); // 占位清理
+  if (cleanedContent.length < 1 || cleanedContent.length > 500) {
+    return BAD_REQUEST('留言内容长度须在 1-500 字之间');
+  }
+
+  const now = new Date();
+  const msgId = `msg-${now.getTime()}`;
+  
+  const res = await db.collection('content_messages').add({
+    _id: msgId,
+    targetMemberId,
+    authorOpenid: ctx.openid,
+    authorName: ctx.authorName || '', // 前端传入或用户表取
+    content: cleanedContent,
+    publishAt: now,
+    status: 'PENDING', // PENDING/APPROVED/REJECTED
+    likes: 0, replies: 0,
+    auditResult: 'pass' // mock secscan
+  });
+
+  // audit_logs ≥1 年
+  await writeAudit(db, {
+    userId: ctx.openid, action: 'content.message.send', target: targetMemberId,
+    detail: JSON.stringify({ msgId, cleanedContent }), time: now
+  });
+
+  return OK({ msgId, message: '留言已提交（待审核）' });
+}
+
+module.exports = { main: async (params, context) => {
+  const { action } = params || {};
+  const userId = params.userId || context.openid;
+  const roleCtx = {
+    OPENID: context.OPENID || context.openid,
+    openid: context.openid,
+    role: context.role || 'VISITOR',
+    authorName: context.authorName
+  };
+  
+  switch (action) {
+    case 'sendMessage':
+      return await sendMessage(roleCtx, userId, params.targetMemberId, params.content);
+    default:
+      return BAD_REQUEST(`unknown action: ${action}`);
+  }
+}};

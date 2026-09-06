@@ -1,12 +1,15 @@
 /**
  * cloud/db-schemas/avatars.schema.json
- * 用户头像文件元数据（云存储）
+ * 用户头像文件元数据（云存储）— 与 profile.saveAvatar 实际写入对齐
  *
  * 字段：
- *   _id, openid, fileId, size, mimeType, url(preview), createdAt, createdBy(可选)
+ *   _id, userId(属主 openid), fileId(云存储 fileID), format(WEBP 等),
+ *   cropMeta(裁剪元数据), visibility(PRIVATE|PUBLIC|GROUP),
+ *   isCurrent(当前头像标记，每用户唯一), thumbUrls(CI 生成缩略图),
+ *   createdAt, updatedAt
  *
- * 权限：仅云函数可读写。
- * 索引：fileId(unique), openid+createdAt desc.
+ * 权限：仅云函数可读写（profile.saveAvatar / CI 回调）。
+ * 索引：userId+isCurrent、createdAt desc。
  */
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -15,17 +18,23 @@
   "type": "object",
   "properties": {
     "_id": { "type": "string" },
-    "openid": { "type": "string" },
+    "userId": { "type": "string", "maxLength": 128 },
     "fileId": { "type": "string", "maxLength": 256 },
-    "size": { "type": "integer", "minimum": 0 },
-    "mimeType": { "type": "string" },
-    "url": { "type": ["string", "null"], "format": "uri" },
+    "format": { "type": "string", "maxLength": 16, "default": "WEBP" },
+    "cropMeta": { "type": "object" },
+    "visibility": {
+      "type": "string",
+      "enum": ["PRIVATE", "PUBLIC", "GROUP"],
+      "default": "PUBLIC"
+    },
+    "isCurrent": { "type": "boolean", "default": true },
+    "thumbUrls": { "type": "array", "items": { "type": "string" } },
     "createdAt": { "type": "string", "format": "date-time" },
-    "createdBy": { "type": ["string", "null"] }
+    "updatedAt": { "type": "string", "format": "date-time" }
   },
-  "required": ["_id", "openid", "fileId", "size", "mimeType", "createdAt"],
+  "required": ["_id", "userId", "fileId", "visibility", "isCurrent", "createdAt"],
   "indexes": [
-    { "keys": { "fileId": 1 }, "options": { "unique": true, "name": "fileId_unique" } },
-    { "keys": { "openid": 1, "createdAt": -1 }, "name": "openid_created_desc_idx" }
+    { "keys": { "userId": 1, "isCurrent": 1 }, "name": "user_current_idx" },
+    { "keys": { "createdAt": -1 }, "name": "created_desc_idx" }
   ]
 }

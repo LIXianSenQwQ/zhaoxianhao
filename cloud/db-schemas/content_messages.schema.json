@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "content_messages",
+  "description": "V2.0: 英雄留言/内容消息 (hero/message type)",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "targetMemberId": { "type": "string" },
+    "authorOpenid": { "type": "string" },
+    "authorName": { "type": "string" },
+    "content": { "type": "string", "maxLength": 500 },
+    "publishAt": { "type": "string" },
+    "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+    "likes": { "type": "number" },
+    "replies": { "type": "number" },
+    "auditResult": { "type": "string", "enum": ["pass", "fail"] }
+  },
+  "required": ["_id", "targetMemberId", "authorOpenid", "content", "publishAt"],
+  "indexes": [
+    { "key": { "targetMemberId": 1, "publishAt": -1 }, "name": "idx_target_time" },
+    { "key": { "authorOpenid": 1, "publishAt": -1 }, "name": "idx_author_time" }
+  ]
+}
