@@ -1602,3 +1602,158 @@ test('R22 greeting.list: 列出本人卡片', async () => {
 });
 
 // ─── Sprint R22: weather + greeting tests completed above ───
+
+// ─── Sprint R23: 私密委托 + 反向密码 + 百年设置 ───
+
+test('R23 auth.setDelegates: ≤3 名 ACTIVE 族人 + 验证码', async () => {
+  seedDB({
+    users: [
+      { _id: 'u-test', openid: 'u-test', status: 'ACTIVE' },
+      { _id: 'u-a', openid: 'u-a', status: 'ACTIVE' },
+      { _id: 'u-b', openid: 'u-b', status: 'ACTIVE' }
+    ]
+  });
+  const res = await FN('auth').main(
+    {
+      action: 'setDelegates',
+      delegates: [
+        { userId: 'u-a', scopes: ['ALBUM:a1'] },
+        { userId: 'u-b', scopes: ['VIDEO:v1', 'CAPSULE:c1'] }
+      ],
+      smsCode: '000000'
+    },
+    CTX
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.delegates.length, 2);
+});
+
+test('R23 auth.setDelegates: 超过 3 名 → 400', async () => {
+  const res = await FN('auth').main(
+    {
+      action: 'setDelegates',
+      delegates: [
+        { userId: 'u1', scopes: ['ALBUM:a1'] },
+        { userId: 'u2', scopes: ['ALBUM:a2'] },
+        { userId: 'u3', scopes: ['ALBUM:a3'] },
+        { userId: 'u4', scopes: ['ALBUM:a4'] }
+      ],
+      smsCode: '000000'
+    },
+    CTX
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R23 auth.setDelegates: 错误验证码 → 400', async () => {
+  const res = await FN('auth').main(
+    { action: 'setDelegates', delegates: [{ userId: 'u-a', scopes: ['ALBUM:a1'] }], smsCode: '999999' },
+    CTX
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R23 auth.setDelegates: 未认证代理人 → 400', async () => {
+  seedDB({ users: [{ _id: 'u-test', openid: 'u-test', status: 'ACTIVE' }] });
+  const res = await FN('auth').main(
+    { action: 'setDelegates', delegates: [{ userId: 'u-x', scopes: ['ALBUM:a1'] }], smsCode: '000000' },
+    CTX
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R23 auth.revokeDelegate: 撤销已存在代理', async () => {
+  seedDB({
+    users: [
+      { _id: 'u-test', openid: 'u-test', status: 'ACTIVE', delegates: [{ userId: 'u-a', scopes: ['ALBUM:a1'] }] }
+    ]
+  });
+  const res = await FN('auth').main({ action: 'revokeDelegate', delegateId: 'u-a' }, CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+});
+
+test('R23 auth.revokeDelegate: 撤销不存在代理 → 400', async () => {
+  seedDB({ users: [{ _id: 'u-test', openid: 'u-test', status: 'ACTIVE', delegates: [] }] });
+  const res = await FN('auth').main({ action: 'revokeDelegate', delegateId: 'u-zzz' }, CTX);
+  assert.equal(res.code, 400);
+});
+
+test('R23 auth.setReversePassword: 弱密码拒绝', async () => {
+  seedDB({ users: [{ _id: 'u-test', openid: 'u-test', status: 'ACTIVE' }] });
+  const res = await FN('auth').main({ action: 'setReversePassword', newReversePwd: '123456' }, CTX);
+  assert.equal(res.code, 400);
+});
+
+test('R23 auth.setReversePassword: 合规密码成功', async () => {
+  seedDB({ users: [{ _id: 'u-test', openid: 'u-test', status: 'ACTIVE' }] });
+  const res = await FN('auth').main({ action: 'setReversePassword', newReversePwd: 'Hao2026Secure' }, CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+});
+
+test('R23 auth.verifyReverse: 错误密码 → 403', async () => {
+  seedDB({ users: [{ _id: 'u-test', openid: 'u-test', status: 'ACTIVE' }] });
+  // 先设置反向密码
+  await FN('auth').main({ action: 'setReversePassword', newReversePwd: 'Hao2026Secure' }, CTX);
+  const res = await FN('auth').main({ action: 'verifyReverse', reversePwd: 'WrongPwd1' }, CTX);
+  assert.equal(res.code, 403);
+});
+
+test('R23 auth.verifyReverse: 正确密码 → 令牌', async () => {
+  seedDB({ users: [{ _id: 'u-test', openid: 'u-test', status: 'ACTIVE' }] });
+  await FN('auth').main({ action: 'setReversePassword', newReversePwd: 'Hao2026Secure' }, CTX);
+  const res = await FN('auth').main({ action: 'verifyReverse', reversePwd: 'Hao2026Secure' }, CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(res.data.token);
+});
+
+test('R23 profile.capsule.create: 合法创建', async () => {
+  seedDB({ timeCapsules: [] });
+  const future = '2099-12-31';
+  const res = await FN('profile').main(
+    { action: 'capsule.create', targetType: 'ALBUM', targetId: 'a1', unlockDate: future },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.status, 'SEALED');
+});
+
+test('R23 profile.capsule.create: 过去日期拒绝', async () => {
+  const res = await FN('profile').main(
+    { action: 'capsule.create', targetType: 'ALBUM', targetId: 'a1', unlockDate: '2020-01-01' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R23 profile.capsule.create: 格式错误 → 400', async () => {
+  const res = await FN('profile').main(
+    { action: 'capsule.create', targetType: 'ALBUM', targetId: 'a1', unlockDate: 'bad-date' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R23 profile.capsule.scan: 到期 SEALED → UNLOCKED', async () => {
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const future = new Date(Date.now() + 86400000 * 30).toISOString().slice(0, 10);
+  seedDB({
+    timeCapsules: [
+      { _id: 'c1', userId: 'u-member', targetType: 'ALBUM', targetId: 'a1', unlockDate: yesterday, status: 'SEALED', createdAt: '2026-01-01' },
+      { _id: 'c2', userId: 'u-member', targetType: 'ALBUM', targetId: 'a2', unlockDate: future, status: 'SEALED', createdAt: '2026-01-01' }
+    ]
+  });
+  const res = await FN('profile').main({ action: 'capsule.scan' }, CTX_WITH_ROLE('MEMBER'));
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(res.data.unlocked >= 1, '到期胶囊至少解锁 1 个');
+});
+
+test('R23 profile.capsule.list: 本人胶囊列表', async () => {
+  seedDB({
+    timeCapsules: [
+      { _id: 'c1', userId: 'u-member', targetType: 'ALBUM', targetId: 'a1', unlockDate: '2099-01-01', status: 'SEALED', createdAt: '2026-09-06T00:00:00Z' }
+    ]
+  });
+  const res = await FN('profile').main({ action: 'capsule.list' }, CTX_WITH_ROLE('MEMBER'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.capsules.length, 1);
+});

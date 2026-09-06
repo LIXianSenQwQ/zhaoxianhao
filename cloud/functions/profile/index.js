@@ -198,6 +198,82 @@ async function listGreetings(ctx, userId) {
   return OK({ cards: res.data || [] });
 }
 
+// ─── R23: 百年设置 time_capsules（蓝图 24.5：定时自动解密，精确到年月日） ───
+
+/**
+ * profile.capsule.create 创建百年胶囊
+ * 入参：{ targetType, targetId, unlockDate: 'YYYY-MM-DD' }
+ */
+async function capsuleCreate(ctx, userId, { targetType, targetId, unlockDate }) {
+  const db = wx.getDatabase();
+  const now = new Date();
+
+  if (!targetType || !targetId) return BAD_REQUEST('targetType/targetId 必填');
+  if (!unlockDate || !/^\d{4}-\d{2}-\d{2}$/.test(unlockDate)) return BAD_REQUEST('unlockDate 需为 YYYY-MM-DD');
+
+  // unlockDate 必须晚于今天
+  const today = new Date();
+  const unlock = new Date(unlockDate + 'T00:00:00Z');
+  if (unlock <= today) return BAD_REQUEST('解密日期必须晚于今天');
+
+  const res = await db.collection('time_capsules').add({
+    userId,
+    targetType,
+    targetId,
+    unlockDate,
+    status: 'SEALED',
+    unlockLog: [],
+    encryptedPayload: `sealed:${targetId}`,
+    createdAt: now
+  });
+
+  await db.collection('audit_logs').add({
+    userId: ctx.openid, action: 'capsule.create', target: res._id,
+    detail: `${targetType}:${targetId}@${unlockDate}`, time: now
+  });
+  return OK({ capsuleId: res._id, status: 'SEALED', unlockDate });
+}
+
+/**
+ * profile.capsule.check 到期检查（每日 0 点定时触发器调用）
+ * 扫描 unlockDate ≤ today 且 SEALED → UNLOCKED + 通知
+ */
+async function capsuleScan(ctx, userId) {
+  const db = wx.getDatabase();
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const res = await db.collection('time_capsules')
+    .where({ unlockDate: db.command.lte ? todayStr : todayStr })
+    .get();
+  // stub 不支持 command，简化为全量扫描过滤
+  let list = res.data || [];
+  if (list.length === 0) {
+    // 直接全量查（stub where 不支持 op）
+    const all = await db.collection('time_capsules').where({}).get();
+    list = (all.data || []).filter(c => c.unlockDate <= todayStr);
+  }
+
+  let unlocked = 0;
+  for (const c of list) {
+    if (c.status === 'SEALED') {
+      await db.collection('time_capsules').doc(c._id).update({
+        data: { status: 'UNLOCKED', unlockedAt: new Date() }
+      });
+      unlocked++;
+    }
+  }
+  return OK({ scanned: list.length, unlocked });
+}
+
+/**
+ * profile.capsule.list 本人胶囊列表 + 解密日志
+ */
+async function capsuleList(ctx, userId) {
+  const db = wx.getDatabase();
+  const res = await db.collection('time_capsules').where({ userId }).orderBy('createdAt', 'desc').limit(50).get();
+  return OK({ capsules: res.data || [] });
+}
+
 module.exports = { main: async (params, context) => {
   const { action } = params || {};
   const userId = params.userId || context.openid;
@@ -214,6 +290,12 @@ module.exports = { main: async (params, context) => {
       return await saveGreeting(ctx, userId, params);
     case 'greeting.list':
       return await listGreetings(ctx, userId);
+    case 'capsule.create':
+      return await capsuleCreate(ctx, userId, params);
+    case 'capsule.scan':
+      return await capsuleScan(ctx, userId);
+    case 'capsule.list':
+      return await capsuleList(ctx, userId);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }

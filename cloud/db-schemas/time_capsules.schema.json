@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "time_capsules",
+  "description": "V1.1: 百年设置·定时自动解密（精确到年月日，时间戳防篡改）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": "string" },
+    "targetType": { "type": "string", "enum": ["ALBUM", "VIDEO", "PHOTO", "NOTE", "LIFESTORY"] },
+    "targetId": { "type": "string" },
+    "unlockDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "encryptedPayload": { "type": "string" },
+    "status": { "type": "string", "enum": ["SEALED", "UNLOCKED"] },
+    "unlockLog": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "time": { "type": "string" },
+          "viewer": { "type": "string" },
+          "ip": { "type": "string" }
+        }
+      }
+    },
+    "unlockedAt": { "type": "string" },
+    "createdAt": { "type": "string" }
+  },
+  "required": ["_id", "userId", "targetType", "targetId", "unlockDate", "status", "createdAt"],
+  "indexes": [
+    { "keys": { "userId": 1, "createdAt": -1 }, "name": "user_time_idx" },
+    { "keys": { "unlockDate": 1, "status": 1 }, "name": "unlock_scan_idx" }
+  ]
+}

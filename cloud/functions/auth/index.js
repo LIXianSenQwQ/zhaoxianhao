@@ -9,7 +9,15 @@
  *   4. 访客仅可浏览英烈献花（L1）
  */
 const wx = require('wx-server-sdk');
+const crypto = require('crypto');
+const { OK, BAD_REQUEST, FORBIDDEN } = require('./common/response');
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
+
+// R23: 密码哈希占位（真实生产改 pbkdf2+独立盐；此处 sha256(salt:pwd) 保证可测确定性）
+function simpleHash(pwd, salt) {
+  return crypto.createHash('sha256').update(`${salt}:${pwd}`).digest('hex');
+}
+const PWD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 
 // 角色等级表（数值越大权限越高）
 const ROLE_LEVEL = {
@@ -32,6 +40,14 @@ async function main(params, context) {
       return await auditCertify(params, context);
     case 'grantAuth':
       return await grantAuth(params, context);
+    case 'setDelegates':
+      return await setDelegates(params, context);
+    case 'revokeDelegate':
+      return await revokeDelegate(params, context);
+    case 'setReversePassword':
+      return await setReversePassword(params, context);
+    case 'verifyReverse':
+      return await verifyReverse(params, context);
     default:
       return { success: false, error: 'Unknown action: ' + action };
   }
@@ -304,3 +320,114 @@ async function grantAuth(params, context) {
 }
 
 module.exports = { main, ROLE_LEVEL };
+
+// ─── R23: 私密委托（蓝图 24.2：每人最多 3 名代理人，细粒度授权） ───
+
+/**
+ * auth.setDelegates 设置代理人
+ * 入参：{ delegates: [{ userId, scopes: ['ALBUM:a1','VIDEO:v1',...] }], smsCode? }
+ * 限制：≤3 名；必须为认证族人（stub 内 users.status === 'ACTIVE'）
+ */
+async function setDelegates(params, context) {
+  const db = wx.getDatabase();
+  const openid = context.OPENID || context.openid;
+  const { delegates, smsCode } = params || {};
+
+  if (!Array.isArray(delegates) || delegates.length === 0) {
+    return BAD_REQUEST('delegates 必需为非空数组');
+  }
+  if (delegates.length > 3) return BAD_REQUEST('代理人最多 3 名');
+  if (smsCode !== '000000') return BAD_REQUEST('短信验证码错误'); // R23 占位：真实走腾讯云短信
+
+  // 校验每个代理人是认证族人
+  for (const d of delegates) {
+    if (!d.userId) return BAD_REQUEST('代理人缺少 userId');
+    const u = await db.collection('users').where({ openid: d.userId }).get();
+    const row = u.data && u.data[0];
+    if (!row || row.status !== 'ACTIVE') return BAD_REQUEST(`代理人 ${d.userId} 未认证`);
+    if (!Array.isArray(d.scopes) || d.scopes.length === 0) return BAD_REQUEST(`代理人 ${d.userId} 缺少授权范围`);
+  }
+
+  await db.collection('users').where({ openid }).update({
+    data: { delegates: delegates.map(d => ({ userId: d.userId, scopes: d.scopes })), updatedAt: new Date() }
+  });
+  await db.collection('audit_logs').add({
+    userId: openid, action: 'auth.setDelegates', target: JSON.stringify(delegates.map(d => d.userId)),
+    detail: 'R23 delegate set', time: new Date()
+  });
+
+  return OK({ delegates, message: '代理人已生效' });
+}
+
+/**
+ * auth.revokeDelegate 撤销代理
+ * 入参：{ delegateId }
+ */
+async function revokeDelegate(params, context) {
+  const db = wx.getDatabase();
+  const openid = context.OPENID || context.openid;
+  const { delegateId } = params || {};
+  if (!delegateId) return BAD_REQUEST('缺少 delegateId');
+
+  const me = await db.collection('users').where({ openid }).get();
+  const cur = (me.data && me.data[0] && me.data[0].delegates) || [];
+  const remaining = cur.filter(d => d.userId !== delegateId);
+  if (remaining.length === cur.length) return BAD_REQUEST('该代理人不存在');
+
+  await db.collection('users').where({ openid }).update({
+    data: { delegates: remaining, updatedAt: new Date() }
+  });
+  await db.collection('audit_logs').add({
+    userId: openid, action: 'auth.revokeDelegate', target: delegateId, detail: 'R23 revoke', time: new Date()
+  });
+  return OK({ message: '代理人已撤销' });
+}
+
+// ─── R23: 反向密码（蓝图 24.4：独立第二密码，仅敏感操作二次验证） ───
+
+/**
+ * auth.setReversePassword 设置反向密码
+ * 入参：{ newReversePwd }（≥8 位含大小写+数字；与主密码不同的校验由前端+服务端占位）
+ */
+async function setReversePassword(params, context) {
+  const db = wx.getDatabase();
+  const openid = context.OPENID || context.openid;
+  const { newReversePwd } = params || {};
+
+  if (!newReversePwd || !PWD_RE.test(newReversePwd)) {
+    return BAD_REQUEST('反向密码需 ≥8 位且含大小写字母与数字');
+  }
+
+  const hash = simpleHash(newReversePwd, openid);
+  await db.collection('users').where({ openid }).update({
+    data: { reversePasswordHash: hash, updatedAt: new Date() }
+  });
+  await db.collection('audit_logs').add({
+    userId: openid, action: 'auth.setReversePassword', target: openid, detail: 'reverse pwd set', time: new Date()
+  });
+  return OK({ message: '反向密码已设置' });
+}
+
+/**
+ * auth.verifyReverse 校验反向密码 → 短期放行令牌
+ * 入参：{ reversePwd }
+ */
+async function verifyReverse(params, context) {
+  const db = wx.getDatabase();
+  const openid = context.OPENID || context.openid;
+  const { reversePwd } = params || {};
+  if (!reversePwd) return BAD_REQUEST('缺少 reversePwd');
+
+  const me = await db.collection('users').where({ openid }).get();
+  const user = me.data && me.data[0];
+  if (!user || !user.reversePasswordHash) return BAD_REQUEST('尚未设置反向密码');
+
+  const expect = simpleHash(reversePwd, openid);
+  if (expect !== user.reversePasswordHash) {
+    return FORBIDDEN('反向密码错误');
+  }
+
+  // 短时效令牌占位（真实：JWT/签名 + 5 分钟过期）
+  const token = simpleHash(`${openid}:${Date.now()}`, 'relax-token');
+  return OK({ token, expiresIn: 300, message: '二次验证通过' });
+}
