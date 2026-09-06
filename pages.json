@@ -51,6 +51,10 @@
 				{
 					"path": "pages/members/members",
 					"style": {}
+				},
+				{
+					"path": "pages/kinship/kinship",
+					"style": {}
 				}
 			]
 		},

@@ -34,4 +34,22 @@ async function withRetry(fn, retries = 2, sleep = (ms) => new Promise(r => setTi
   }
 }
 
-module.exports = { retryDelayMs, isRetryable, withRetry, RETRYABLE_CODES };
+// ─── ES6 导出（供 TypeScript/ESM 使用）───────────────
+export {
+  retryDelayMs,
+  isRetryable,
+  withRetry,
+  RETRYABLE_CODES
+};
+
+// ─── 兼容性 CommonJS 导出（向后兼容） ────────────────
+// @ts-ignore
+if (typeof module !== 'undefined' && module.exports) {
+  // @ts-ignore
+  module.exports = {
+    retryDelayMs,
+    isRetryable,
+    withRetry,
+    RETRYABLE_CODES
+  };
+}

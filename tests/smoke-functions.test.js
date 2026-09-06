@@ -135,11 +135,11 @@ test('member.exportFile：VISITOR → 403（鉴权先行）', async () => {
 // ─── Sprint R9: stub 数据注入 + CHIEF 正向路径 + 幂等 upsert ───
 
 /** 预置 seed 数据（getDatabase 每次 main() 调用时读全局 seed，无需重新 require） */
-function seedDB({ users = [], members = [], authRequests = [], authorizations = [] } = {}) {
+function seedDB({ users = [], members = [], authRequests = [], authorizations = [], auditLogs = [], plazaPosts = [], notifications = [] } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
       users, members, auth_requests: authRequests, authorizations,
-      audit_log: []
+      audit_logs: auditLogs, notifications, plaza_posts: plazaPosts, settings: []
     },
     seq: 1000
   };
@@ -209,7 +209,7 @@ test('R9 reviewAuth approve：新授权正常写入 + 审计', async () => {
   const seed = globalThis.__HCS_STUB_SEED__;
   assert.equal(seed.collections.authorizations.length, 1, '新授权应写入');
   assert.equal(seed.collections.authorizations[0].grantee, 'u-b');
-  assert.ok(seed.collections.audit_log.length >= 1, '审计应记录 review_auth_approve');
+  assert.ok(seed.collections.audit_logs.length >= 1, '审计应记录 review_auth_approve');
 });
 
 // ─── Sprint R10: 授权闭环通知联动 + 我的申请列表 ───
@@ -271,6 +271,121 @@ test('R10 listMyAuth：MEMBER 正向 + 越权隔离（只看自己的）', async
   assert.equal(res.data.requests.length, 2, '只能看到自己的申请（越权隔离）');
   assert.ok(res.data.requests.every(r => r.grantee === 'u-me'));
   assert.equal(res.data.requests[0]._id, 'mine-1', '按 createdAt 倒序');
+});
+
+// ─── Sprint R11: admin 鉴权修复 / plaza 云函数 / relation 物化路径重写 ───
+
+test('R11 admin.auditList：越权修复——MEMBER 403（此前任何登录者可查审计）', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    auditLogs: [{ userId: 'u-x', action: 'member.export_csv', time: '2025-01-01T00:00:00Z' }]
+  });
+  const res = await FN('admin').main({ action: 'auditList' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, false);
+  assert.equal(res.code, 403);
+});
+
+test('R11 admin.auditList：HISTORIAN 正向 + userId 筛选 + 分页字段', async () => {
+  seedDB({
+    users: [{ openid: 'u-h', role: 'HISTORIAN' }],
+    auditLogs: [
+      { userId: 'u-a', action: 'member.export_csv', time: '2025-01-02T00:00:00Z' },
+      { userId: 'u-b', action: 'plaza.publish', time: '2025-01-01T00:00:00Z' }
+    ]
+  });
+  const ctx = { OPENID: 'u-h', openid: 'u-h' };
+  const all = await FN('admin').main({ action: 'auditList' }, ctx);
+  assert.equal(all.success, true);
+  assert.equal(all.data.logs.length, 2);
+  assert.equal(all.data.hasMore, false);
+
+  const filtered = await FN('admin').main({ action: 'auditList', userId: 'u-a' }, ctx);
+  assert.equal(filtered.data.logs.length, 1);
+  assert.equal(filtered.data.logs[0].userId, 'u-a');
+  assert.ok(filtered.data.logs.every(l => l.userId === 'u-a'));
+});
+
+test('R11 plaza.publish：VISITOR 403 / MEMBER 正向（审计留痕 plaza.publish）', async () => {
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }], plazaPosts: [] });
+
+  const denied = await FN('plaza').main({ action: 'publish', content: '大家好' }, {});
+  assert.equal(denied.success, false);
+  assert.equal(denied.code, 403, '未认证访客不能发布（蓝图 C.4 反骚扰）');
+
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  const ok = await FN('plaza').main({ action: 'publish', type: 'text', content: '家祭通知' }, ctx);
+  assert.equal(ok.success, true);
+  assert.ok(ok.data.postId);
+
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.equal(seed.collections.plaza_posts.length, 1);
+  assert.equal(seed.collections.plaza_posts[0].stats.like, 0);
+  assert.ok(seed.collections.audit_logs.some(l => l.action === 'plaza.publish'), '发布写审计');
+});
+
+test('R11 plaza.publish：文字超限 400 + 空内容 400', async () => {
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+
+  const tooLong = await FN('plaza').main({ action: 'publish', content: '哈'.repeat(5001) }, ctx);
+  assert.equal(tooLong.code, 400, '5000 字上限（蓝图 C.3）');
+
+  const empty = await FN('plaza').main({ action: 'publish' }, ctx);
+  assert.equal(empty.code, 400, '文字与媒体不可同时为空');
+});
+
+test('R11 plaza.like：原子 +1（db.command.inc + 点路径，stub 兼容）', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    plazaPosts: [{ _id: 'p-1', authorId: 'u-x', content: 'hi', stats: { like: 2, comment: 0 } }]
+  });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  const res = await FN('plaza').main({ action: 'like', postId: 'p-1' }, ctx);
+  assert.equal(res.success, true);
+  assert.equal(res.data.like, 3);
+  assert.equal(globalThis.__HCS_STUB_SEED__.collections.plaza_posts[0].stats.like, 3, '深层路径 +1 生效');
+});
+
+test('R11 relation.calc：VISITOR 403 / MEMBER 正向（物化路径共同祖先）', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    members: [
+      { _id: 'g1', path: '/001/', gender: 'MALE' },
+      { _id: 'a', path: '/001/003/', gender: 'MALE' },
+      { _id: 'b', path: '/001/003/007/', gender: 'MALE' },
+      { _id: 'other', path: '/002/005/', gender: 'MALE' }
+    ]
+  });
+  const denied = await FN('relation').main({ action: 'calc', aId: 'a', bId: 'b' }, {});
+  assert.equal(denied.code, 403, 'VISITOR 不可用称谓计算（蓝图 relation.calc 权限 L2）');
+
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  // a(父层 /001/003/) 与 b(子层 /001/003/007/)：n=0 m=1
+  const parent = await FN('relation').main({ action: 'calc', aId: 'a', bId: 'b' }, ctx);
+  assert.equal(parent.success, true);
+  assert.equal(parent.data.related, true);
+  assert.equal(parent.data.upSteps, 0);
+  assert.equal(parent.data.downSteps, 1);
+
+  // 同代兄弟：/001/003/007/ 与 /001/003/009/ → n=1 m=1；含跨系无共同祖先对（g1↔other）
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    members: [
+      { _id: 'x', path: '/001/003/007/', gender: 'MALE' },
+      { _id: 'y', path: '/001/003/009/', gender: 'MALE' },
+      { _id: 'g1', path: '/001/', gender: 'MALE' },
+      { _id: 'other', path: '/002/005/', gender: 'MALE' }
+    ]
+  });
+  const sib = await FN('relation').main({ action: 'calc', aId: 'x', bId: 'y' }, ctx);
+  assert.equal(sib.data.upSteps, 1);
+  assert.equal(sib.data.downSteps, 1);
+  assert.equal(sib.data.formalTitle, '哥哥', '矩阵 1-1 male elder（A 视角：对方为兄）');
+
+  // 无共同祖先 → fail-closed 同宗（与 R2 单测口径一致）
+  const oth = await FN('relation').main({ action: 'calc', aId: 'g1', bId: 'other' }, ctx);
+  assert.equal(oth.data.related, false);
+  assert.equal(oth.data.fiveFu, '同宗');
 });
 
 // ─── Sprint R3 冒烟：doc / entry / notify ───

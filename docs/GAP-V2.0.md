@@ -10,7 +10,7 @@
 |---|---|---|
 | auth | ✅ 已实现（登录/认证/角色） | V1.1 补：密码体系（passwordHash/reversePasswordHash/delegates/assistReset/短信验证码） |
 | member | ✅ tree/getDetail/search/export/exportFile/applyAuth/listMyAuth/reviewAuth | getDetail 已有 hiddenFields（对齐蓝图字段级过滤）；补 aliases/deeds/sourceTags 等字段投影 |
-| relation | ✅ 称谓/五服/挂接校验 | 蓝图 7.2 BFS+矩阵口径已实现；补方言称谓 settings 表 |
+| relation | ✅ 称谓/五服/挂接校验 | **R11 重写完成**：calc 用物化路径+kindship 纯函数（修复遗留桩 ReferenceError）；L2 门禁；方言称谓 settings 表待 E4 |
 | entry | ✅ 智能入谱双人审核 | 补 OCR/Excel 入口（photo_ai/EXCEL type 已留）；公示期 publicityDeadline 流转 |
 | doc | ✅ 上传/检索 | 补批注/ocrText 全文索引 |
 | event | ✅ 大事记/口述历史门禁 | ✅ 基本对齐 |
@@ -19,7 +19,13 @@
 | task | ✅ 成长任务/打卡 | ✅ 对齐 |
 | notify | ✅ list/read/digest/broadcast | ✅ R10 已打通 member→notifications 站内联动；补订阅消息/公众号兜底通道 |
 | upload | ✅ 场景化上传策略 | V1.1 补 CI 压缩/WEBP 转码/懒加载多档尺寸参数 |
-| admin | ✅ 审计/公示封存/featureFlag | ✅ 对齐 17.1–17.2（settings 开关已具备） |
+| admin | ✅ 审计/公示封存/featureFlag | **R11 加固完成**：auditList HISTORIAN+ 鉴权（越权漏洞封堵）/统一响应/db.command 日期/分页 50；对齐 17.1–17.2 |
+
+## 二·五、Sprint R11 新增（蓝图对齐增量）
+
+- **plaza 云函数 ✅（16/23）**：list/publish/like 基础版（蓝图集合 13 plaza_posts 消费方补齐）；V2.0 moment 迁移路径已按 C.1 规划
+- **称谓计算页 ✅**：pkg-family/pages/kinship/kinship.vue（蓝图页面 relation/calc）——成员搜索选择 + 称谓/五服结果卡 + 五服色带；页面 ~21/82
+- **审计口径统一 ✅**：audit_logs 集合名分裂修复（member 2 处）；writeAudit 字段统一 {userId,action,target,detail,ip,sensitive,time}
 | atmosphere | ✅ today 聚合（节气/氛围/卡流/白事素色） | 补四季渐变全量端点色表 |
 | profile/album/weather/calendar（V1.1） | ❌ 未建 | **E1–E4 范围**，前置依赖 CI/MPS/和风天气开通 |
 | content/news/moment/game/home/secscan（V2.0） | ❌ 未建 | **F1–F10 范围**；F1 先做 secscan 与 plaza→family_moments 迁移脚本 |

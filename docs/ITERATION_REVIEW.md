@@ -491,3 +491,53 @@
 4. **性能实测**（持续等待用户环境）
 
 <!-- 模板：下一轮评审复制此节 -->
+
+---
+
+## 第 R11 轮（Sprint R11 · MVP 收口轨：蓝图接口对齐 + 缺陷修复）
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R10 现状 | R11 现状 | 趋势 |
+|---|---|---|---|---|---|
+| 安全 | 审计查询越权漏洞 | 0 | ❌ auditList 无鉴权（任何登录者可查） | ✅ HISTORIAN+ 门禁（403 fail-closed） | ↑↑ |
+| 质量缺陷 | 遗留桩代码 | 0 | ❌ relation.calc 引用未定义函数（调用即 ReferenceError） | ✅ 物化路径重写 + 3 场景冒烟 | ↑↑ |
+| 一致性 | 审计集合/字段口径 | 唯一 | ❌ audit_log/audit_logs 分裂；writeExportAudit 缺 time/target | ✅ 统一 writeAudit 薄封装（蓝图 5.6 字段） | ↑ |
+| 蓝图对齐 | 云函数/页面 | — | 15 函数 · ~20 页 | **16/23 函数 · ~21/82 页**（plaza+kinship） | ↑ |
+| 质量 | 测试数 | ≥80% | 112 | **118**（+6：admin×2/plaza×3/relation×1） | ↑ |
+
+### 二、本轮交付清单
+
+**缺陷修复（三处，蓝图/安全口径）：**
+- `admin/index.js` 大修：①auditList 补 HISTORIAN+ 鉴权（**封堵越权漏洞**，蓝图集合表 19）②统一 OK/BAD_REQUEST/FORBIDDEN（替换裸 {error}）③`$gte/$lte` 字符串操作符 → `db.command`（云开发兼容）④auditList 分页 50/页 ⑤featureFlag 变更走统一审计
+- `relation/index.js` 重写：calc 改物化路径前缀交集求共同祖先（O(1)）+ `common/kindship` 纯函数；L2 门禁；同宗 fail-closed；edit 引导走入谱工作流
+- `member/index.js` 集合名统一：2 处 `audit_log`→`audit_logs`；writeExportAudit 改 writeAudit 薄封装（字段补齐 time/target/ip/sensitive）
+
+**新增功能：**
+- `plaza/index.js`（新云函数，16/23）：list（分页倒序）/publish（MEMBER+，≤5000 字/9 媒体，审计）/like（`db.command.inc` 原子 +1）；secscan 接入点预留（V2.0 F4）
+- `pkg-family/pages/kinship/kinship.vue`（蓝图页面 relation/calc）：双成员搜索选择（防抖 300ms）+ 称谓/五服结果卡 + 五服色带（蓝图 7.3 五色）；pages.json 注册
+
+**基建：**
+- `scripts/wx-server-sdk-stub.js` v3：`inc` 原子指令 + 点路径深层赋值 + `gte/lte/and` 日期比较（admin/plaza 测试依赖）
+- seedDB 扩展（auditLogs/plazaPosts/notifications 参数化）
+
+**测试 +6（112→118）**：admin 越权 403 + HISTORIAN 正向/userId 筛选；plaza VISITOR 403 + 正向审计 + 超限 400 + like 原子 +1；relation VISITOR 403 + 父子/兄弟/同宗三场景
+
+**门禁**：npm run verify 全绿（118 用例 · 0 fail · 1W · 云函数 15/15）。
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 真机 P95/首屏采集（连续 11 轮阻塞） | 高 | 沙箱侧全部就绪；**突破必须依赖微信开发者工具环境** |
+| plaza like 幂等（同人重复点赞可刷） | 低 | V2.0 moment_interactions 按用户去重（F5）；本期接受 |
+| stub 与真机 `db.command` 语义差异 | 低 | v3 已对齐 gte/lte/and/inc；真机联调时回归 |
+
+### 四、R12 承诺
+
+1. **广场动态页前端**（pkg-family/plaza：瀑布流列表 + 发布框，接 plaza.list/publish/like）
+2. **积分中心页**（points/index：四池余额 + 流水，蓝图页面）
+3. **admin.featureFlag 前端开关面板**（CHIEF 工作台增强，对接 17.2 开关表）
+4. **性能实测**（持续等待用户环境）
+
+<!-- 模板：下一轮评审复制此节 -->

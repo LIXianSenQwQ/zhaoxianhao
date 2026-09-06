@@ -20,11 +20,32 @@ module.exports = {
       if (!seed.collections[name]) seed.collections[name] = [];
       return seed.collections[name];
     };
-    // where 条件全等匹配（RegExp 标记对象走 test）
-    const matches = (row, where) => Object.entries(where || {}).every(([k, v]) => {
-      if (v && typeof v === 'object' && typeof v.test === 'function') return v.test(row[k]);
-      return row[k] === v;
-    });
+    // where 条件匹配（Sprint R11：支持 RegExp 标记 / db.command gte|lte|and / inc 指令）
+    const norm = (x) => { const d = new Date(x); return isNaN(d.getTime()) ? x : d.getTime(); };
+    const matchVal = (rv, cond) => {
+      if (cond && typeof cond === 'object') {
+        if (cond.__op === 'gte') return norm(rv) >= norm(cond.v);
+        if (cond.__op === 'lte') return norm(rv) <= norm(cond.v);
+        if (cond.__and) return cond.__and.every(c => matchVal(rv, c));
+        if (typeof cond.test === 'function') return cond.test(rv);
+      }
+      return rv === cond;
+    };
+    const matches = (row, where) => Object.entries(where || {}).every(([k, v]) => matchVal(row[k], v));
+    // 更新数据应用：点路径深层赋值 + {__inc} 原子递增
+    const applyUpdate = (row, data) => {
+      for (const [k, v] of Object.entries(data)) {
+        const parts = k.split('.');
+        let cur = row;
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (typeof cur[parts[i]] !== 'object' || cur[parts[i]] === null) cur[parts[i]] = {};
+          cur = cur[parts[i]];
+        }
+        const leaf = parts[parts.length - 1];
+        if (v && typeof v === 'object' && '__inc' in v) cur[leaf] = (cur[leaf] || 0) + v.__inc;
+        else cur[leaf] = v;
+      }
+    };
 
     const chain = (name) => {
       const state = { where: null, skip: 0, limit: Infinity, order: null, orderDir: 'asc' };
@@ -52,7 +73,7 @@ module.exports = {
           },
           update: async ({ data }) => {
             const row = getCol(name).find(r => r._id === id);
-            if (row) Object.assign(row, data);
+            if (row) applyUpdate(row, data);
             return { stats: { updated: row ? 1 : 0 } };
           },
           remove: async () => {
@@ -74,7 +95,7 @@ module.exports = {
           const col = getCol(name);
           let n = 0;
           for (const r of col) {
-            if (!state.where || matches(r, state.where)) { Object.assign(r, data); n++; }
+            if (!state.where || matches(r, state.where)) { applyUpdate(r, data); n++; }
           }
           return { stats: { updated: n } };
         },
@@ -91,7 +112,11 @@ module.exports = {
     return {
       collection: chain,
       RegExp: (opts) => new RegExp(opts.regexp, opts.options),
-      command: { eq: (v) => v, in: (arr) => arr, inc: (n) => n }
+      command: {
+        eq: (v) => v, in: (arr) => arr, inc: (n) => ({ __inc: n }),
+        gte: (v) => ({ __op: 'gte', v }), lte: (v) => ({ __op: 'lte', v }),
+        and: (other) => ({ __and: [other] })
+      }
     };
   },
   getOpenData: async () => ({}),

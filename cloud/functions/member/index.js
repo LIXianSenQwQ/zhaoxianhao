@@ -10,6 +10,7 @@ const wx = require('wx-server-sdk');
 const { OK, BAD_REQUEST, FORBIDDEN, NOT_FOUND } = require('./common/response');
 const { hasRole } = require('./common/roles');
 const { privacyCheck } = require('./common/privacy');
+const { writeAudit } = require('./common/audit');
 const { rowsToCsv, buildExportPath } = require('./common/csv');
 const {
   generationOf, relationSteps, paginateTree, subtreeRegex, TREE_PAGE_BUDGET
@@ -61,13 +62,11 @@ function toExportRow(m) {
   };
 }
 
-/** 导出审计落 audit_log（失败不阻塞业务） */
+/** 审计薄封装（Sprint R11：统一走 common writeAudit，字段 {userId,action,target,detail,time}，集合 audit_logs） */
 async function writeExportAudit(db, openid, action, detail) {
   try {
-    await db.collection('audit_log').add({
-      data: { userId: openid, action, detail }
-    });
-  } catch (e) { /* 忽略 */ }
+    await writeAudit(db, { userId: openid, action, detail });
+  } catch (e) { /* 审计失败不阻塞主流程 */ }
 }
 
 /**
@@ -311,12 +310,8 @@ async function exportCsv(db, openid, { branchId, page = 1 }) {
   }));
 
   const csv = rowsToCsv(rows);
-  // Audit trail (Sprint R6 closure)
-  try {
-    const auditRes = await db.collection('audit_log').add({
-      data: { userId: openid, action: 'member.export_csv', target: `${branchId || 'all'}:${p}`, detail: `total=${rows.length}` }
-    }).catch(() => null);
-  } catch (e) { /* 审计失败不阻塞导出 */ }
+  // Audit trail（Sprint R11：统一 writeAudit 字段口径）
+  await writeExportAudit(db, openid, 'member.export_csv', `branch=${branchId || 'all'} page=${p} total=${rows.length}`);
 
   return OK({
     csv,

@@ -10,7 +10,7 @@
  *   3. 性能埋点：每次调用记录耗时，超 200ms 记 slowCall
  *   4. 幂等键透传：写操作自动生成 bizType:bizId:userId
  */
-const { withRetry } = require('../utils/retry');
+import { withRetry } from '@/utils/retry';
 
 // ─── 类型 ───
 interface CallOptions {

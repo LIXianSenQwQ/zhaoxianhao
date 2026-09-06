@@ -261,3 +261,65 @@
 
 - `limit=20`（成员列表）或 `limit=50`（文档列表）
 - 前端 `page` 自增，后端无需 cursor（简单场景）
+
+---
+
+## 8. Sprint R11 新增/修复（V2.0 蓝图对齐）
+
+### 8.1 admin.auditList（审计流水查询 · R11 鉴权修复）
+
+**请求**：`{ action: 'auditList', userId?, action?, startDate?, endDate?, filterPage? }`
+
+- **权限**：HISTORIAN 及以上（R11 修复：此前任何登录者可查——越权漏洞已封堵）
+- `startDate/endDate`: ISO 日期字符串；服务端转 `db.command.gte/lte`（R11 修复：`$gte` 字符串操作符在云开发不生效）
+- `filterPage`: 分页序号，默认 1，页大小 50
+
+**响应**：
+```json
+{
+  "success": true,
+  "data": { "logs": [{ userId, action, target, detail, ip, sensitive, time }], "page": 1, "hasMore": false }
+}
+```
+
+### 8.2 plaza（家族广场 · R11 新建云函数）
+
+| action | 入参 | 权限 | 说明 |
+|---|---|---|---|
+| `list` | `filterPage?`, `type?` | MEMBER+ | 分页 20/页，publishAt 倒序 |
+| `publish` | `type?`(text/image/video/mixed), `content`, `mediaIds?`(≤9) | MEMBER+ | 文字 ≤5000（蓝图 C.3）；审计 `plaza.publish` |
+| `like` | `postId` | MEMBER+ | 原子 +1（`db.command.inc`），返回真实值 |
+
+- 内容安全检测接入点预留（V2.0 secscan，F4 交付）
+- V2.0 moment 迁移路径：plaza_posts → family_moments（幂等脚本，蓝图 C.1）
+
+### 8.3 relation.calc（称谓计算 · R11 重写）
+
+**修复**：旧版 calc 引用未定义函数（`findShortestPath` 等）→ 调用即 ReferenceError；本版改用**物化路径前缀交集**（O(1)，R2 方案）+ `common/kindship` 纯函数（与单测同源）。
+
+**请求**：`{ action: 'calc', aId, bId }` · **权限**：MEMBER+（蓝图 9.1 L2）
+
+**响应**：
+```json
+{
+  "success": true,
+  "data": {
+    "related": true,
+    "formalTitle": "哥哥",
+    "fiveFu": "斩衰",
+    "upSteps": 1, "downSteps": 1,
+    "path": "/001/003/"
+  }
+}
+```
+
+- 无共同祖先 → `{ related: false, formalTitle: '同宗', fiveFu: '同宗' }`（fail-closed）
+- `relation.edit` 引导走入谱工作流 `entry.submit(type=CHANGE)`（双人审核链）
+
+### 8.4 审计字段口径统一（R11）
+
+- 全部审计写入统一走 `common/audit.js writeAudit`：集合 **audit_logs**（蓝图 5.6 定案），字段 `{userId, action, target, detail, ip, sensitive, time}`
+- R11 修复集合名分裂：member 内联 `audit_log`（单数）→ `audit_logs`；member.writeExportAudit 改为 writeAudit 薄封装（补 time/target 字段）
+- admin.featureFlag 变更写审计 `admin.featureFlag`（此前裸写 audit_logs 无统一字段）
+
+---

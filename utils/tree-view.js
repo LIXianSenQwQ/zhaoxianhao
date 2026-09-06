@@ -71,8 +71,11 @@ function getNextPageParam(rootPath, p, pages) {
   return current ? null : p; // 若当前页无数据则返回页码请求
 }
 
-module.exports = {
-  CACHE_KEY_ROOT, CACHE_KEY_CHILDREN, PAGE_KEY,
+// ─── ES6 导出（供 TypeScript/ESM 使用）───────────────
+export {
+  CACHE_KEY_ROOT,
+  CACHE_KEY_CHILDREN,
+  PAGE_KEY,
   toggleCollapse,
   isExpanded,
   setCollapse,
@@ -84,3 +87,24 @@ module.exports = {
   hasNextPage,
   getNextPageParam
 };
+
+// ─── 兼容性 CommonJS 导出（向后兼容） ────────────────
+// @ts-ignore
+if (typeof module !== 'undefined' && module.exports) {
+  // @ts-ignore
+  module.exports = {
+    CACHE_KEY_ROOT,
+    CACHE_KEY_CHILDREN,
+    PAGE_KEY,
+    toggleCollapse,
+    isExpanded,
+    setCollapse,
+    resetCollapsed,
+    getPage,
+    hasCache,
+    cacheSet,
+    cacheClear,
+    hasNextPage,
+    getNextPageParam
+  };
+}
