@@ -1,0 +1,39 @@
+/**
+ * cloud/db-schemas/chat_groups.schema.json
+ * 聊天群组合集（预留：IM 外置到腾讯云）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   name: string (群名)
+ *   ownerOpenid: string (群主 openid)
+ *   members: array<string> (成员 openid 列表)
+ *   createdAt: Date
+ *   updatedAt: Date
+ *   status: enum [ACTIVE, DISBANDED]
+ *
+ * 权限：仅云函数读写。
+ * 索引：ownerOpenid、members 数组索引。
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "chat_groups",
+  "description": "聊天群组合集（预留：IM 外置到腾讯云）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "name": { "type": ["string", "null"], "maxLength": 64 },
+    "ownerOpenid": { "type": "string" },
+    "members": { "type": "array", "items": { "type": "string" } },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "status": {
+      "type": "string",
+      "enum": ["ACTIVE", "DISBANDED"],
+      "default": "ACTIVE"
+    }
+  },
+  "required": ["_id", "ownerOpenid", "members", "createdAt", "updatedAt"],
+  "indexes": [
+    { "keys": { "ownerOpenid": 1 }, "name": "owner_idx" }
+  ]
+}

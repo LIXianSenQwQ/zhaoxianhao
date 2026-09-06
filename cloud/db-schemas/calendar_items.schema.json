@@ -1,0 +1,43 @@
+/**
+ * cloud/db-schemas/calendar_items.schema.json
+ * 日历项集合（老皇历/日程提醒）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   userId: string (个人专属 ID，可选)
+ *   type: enum [reminder, event, holiday, almanac]
+ *   title: string (标题)
+ *   desc: string (描述)
+ *   date: Date (日期)
+ *   notified: boolean (是否已通知 homecards，默认 false)
+ *   createdAt: Date, createdBy: string
+ *
+ * 权限：仅云函数读写。
+ * 索引：userId+date 复合、notified(布尔)、date.
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "calendar_items",
+  "description": "日历项集合（老皇历/日程提醒）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": ["string", "null"] },
+    "type": {
+      "type": "string",
+      "enum": ["reminder", "event", "holiday", "almanac"]
+    },
+    "title": { "type": "string", "maxLength": 128 },
+    "desc": { "type": ["string", "null"], "maxLength": 500 },
+    "date": { "type": "string", "format": "date-time" },
+    "notified": { "type": "boolean", "default": false },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "createdBy": { "type": "string" }
+  },
+  "required": ["_id", "type", "title", "date", "notified", "createdAt", "createdBy"],
+  "indexes": [
+    { "keys": { "userId": 1, "date": 1 }, "name": "user_date_idx" },
+    { "keys": { "notified": 1 }, "name": "notified_idx" },
+    { "keys": { "date": 1 }, "name": "date_idx" }
+  ]
+}

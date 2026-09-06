@@ -4,11 +4,11 @@
     <scroll-view scroll-y class="scan-list" @scrolltolower="loadMore">
       <!-- 状态筛选 -->
       <view class="tabs">
-        <view 
-          v-for="tab in tabs" 
-          :key="tab.key" 
-          :class="['tab', { active: curTab === tab.key }]" 
-          @tap="curTab = tab.key"
+        <view
+          v-for="tab in tabs"
+          :key="tab.key"
+          :class="['tab', { active: curTab === tab.key }]"
+          @tap="switchTab(tab.key)"
         >
           {{ tab.label }}
         </view>
@@ -36,16 +36,16 @@
             </view>
           </view>
 
-          <!-- 操作按钮 -->
-          <view class="actions" v-if="curTab !== 'APPROVED' && curTab !== 'REJECTED'">
-            <button class="mini-btn btn-primary" size="mini" @click="doAudit(r, 'FIRST_PASS')">初审</button>
-            <button 
-              class="mini-btn btn-default" 
-              size="mini" 
-              v-if="r.status === 'FIRST_PASS'" 
+          <!-- 操作按钮（R18：按 canFirstPass/canSecondPass 渲染，与后端门禁一致） -->
+          <view class="actions" v-if="curTab === '待审'">
+            <button class="mini-btn btn-primary" size="mini" v-if="r.canFirstPass" @click="doAudit(r, 'FIRST_PASS')">初审</button>
+            <button
+              class="mini-btn btn-default"
+              size="mini"
+              v-if="r.canSecondPass"
               @click="doAudit(r, 'SECOND_PASS')"
             >复审</button>
-            <button class="mini-btn btn-warn" size="mini" @click="doAudit(r, 'REJECT')">驳回</button>
+            <button class="mini-btn btn-warn" size="mini" v-if="r.canFirstPass || r.canSecondPass" @click="doAudit(r, 'REJECT')">驳回</button>
           </view>
 
           <!-- 已通过 / 已驳回 -->
@@ -91,16 +91,15 @@ const user = useUserStore();
 const loading = ref(true);
 const error = ref('');
 const records = ref<any[]>([]);
-const curTab = ref<'SUBMITTED' | 'FIRST_PASS' | 'APPROVED' | 'REJECTED'>('SUBMITTED');
+const curTab = ref<'待审' | '已通过' | '已驳回'>('待审');
 const hasMore = ref(false);
 const loadingMore = ref(false);
 
-// 标签配置
+// 标签配置（R18：简化为待审/已通过/已驳回）
 const tabs = [
-  { key: 'SUBMITTED', label: '待审核' },
-  { key: 'FIRST_PASS', label: '初审通过' },
-  { key: 'APPROVED', label: '已通过' },
-  { key: 'REJECTED', label: '已驳回' }
+  { key: '待审', label: '待审核' },
+  { key: '已通过', label: '已通过' },
+  { key: '已驳回', label: '已驳回' }
 ];
 
 async function loadList() {
@@ -109,13 +108,21 @@ async function loadList() {
   try {
     const res = await read(
       'entry',
-      { action: 'list', page: 1, status: curTab.value },
-      `audit:${curTab.value}:1`,
+      { action: 'pendingList' }, // R18：改接 pendingList
+      `audit:pending:1`,
       30000
     );
-    if (res.data?.records) {
-      records.value = res.data.records;
-      hasMore.value = res.data.hasMore ?? false;
+    if (res.data?.pending) {
+      // 前端按 tab 过滤
+      if (curTab.value === '待审') {
+        records.value = res.data.pending.filter((r: any) => r.status === 'SUBMITTED' || r.status === 'FIRST_PASS');
+      } else if (curTab.value === '已通过') {
+        // mySubmissions 可拉 APPROVED/FIRST_PASS 后续再补
+        records.value = [];
+      } else {
+        records.value = [];
+      }
+      hasMore.value = false;
     } else {
       error.value = res.error?.message || '获取失败';
     }
@@ -134,16 +141,32 @@ async function loadMore() {
 }
 
 async function doAudit(record: any, action: 'FIRST_PASS' | 'SECOND_PASS' | 'REJECT') {
-  const confirmed = await confirmDialog(`确认${statusActionLabel(action)}？`);
-  if (!confirmed) return;
+  let comment = '';
+  if (action === 'REJECT') {
+    // 蓝图 11：驳回必填意见（uni.showModal editable 基础库 2.17.1+）
+    comment = await new Promise<string>((resolve) => {
+      uni.showModal({
+        title: '驳回理由（必填）',
+        editable: true,
+        placeholderText: '说明材料不全或存在错误之处',
+        success: (r: any) => resolve(r.confirm ? String(r.content || '').trim() : ''),
+        fail: () => resolve('')
+      });
+    });
+    if (!comment) return uni.showToast({ title: '驳回必须填写意见（蓝图 11）', icon: 'none' });
+  } else {
+    const confirmed = await confirmDialog(`确认${statusActionLabel(action)}？`);
+    if (!confirmed) return;
+  }
 
   try {
-    // entry audit
-    const res = await read('entry', { action: 'audit', recordId: record._id, auditAction: action }, null, 5000);
+    // entry.audit（R17：初审 BRANCH_HEAD+ / 复审 HISTORIAN+，auditChain 留痕）
+    const res = await read('entry', { action: 'audit', recordId: record._id, auditAction: action, comment }, null, 5000);
     if (!res.success && res.code) throw new Error(res.message || '审核失败');
 
     // 刷新列表
     loadList();
+    uni.showToast({ title: '审核完成', icon: 'success' });
   } catch (e: any) {
     uni.showToast({ title: e.message || '操作失败', icon: 'none' });
   }
@@ -184,6 +207,13 @@ function formatTime(iso?: string): string {
 
 function confirmDialog(msg: string): Promise<boolean> {
   return new Promise(res => uni.showConfirmDialog({ title: '确认', content: msg, success: ({confirm}) => res(confirm) }));
+}
+
+/** R18：切 tab 重新拉取 */
+function switchTab(key: '待审' | '已通过' | '已驳回') {
+  if (curTab.value === key) return;
+  curTab.value = key;
+  loadList();
 }
 
 onMounted(loadList);

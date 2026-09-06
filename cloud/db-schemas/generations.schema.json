@@ -1,0 +1,34 @@
+/**
+ * cloud/db-schemas/generations.schema.json
+ * 世代字辈表（每代一个字符）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   generation: number (世代序数，唯一)
+ *   character: string (字辈字)
+ *   branchId: string (可选，房支特有字缀)
+ *   note: string (备注)
+ *   createdAt: Date
+ *
+ * 权限：仅云函数读写（族议会配置）。
+ * 索引：generation (unique), branchId+generation 复合唯一。
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "generations",
+  "description": "世代字辈表（每代一个字符）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "generation": { "type": "integer", "minimum": 1 },
+    "character": { "type": "string", "maxLength": 4 },
+    "branchId": { "type": ["string", "null"] },
+    "note": { "type": "string", "maxLength": 256 },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["_id", "generation", "character", "createdAt"],
+  "indexes": [
+    { "keys": { "generation": 1 }, "options": { "unique": true, "name": "generation_unique" } },
+    { "keys": { "branchId": 1, "generation": 1 }, "options": { "unique": true }, "name": "branch_gen_unique" }
+  ]
+}

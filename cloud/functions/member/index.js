@@ -47,6 +47,8 @@ async function main(event, context) {
       return await familyStats(db, openid);
     case 'heroList':
       return await heroList(db, event.page);
+    case 'search':
+      return await searchMembers(db, openid, event.keyword, event.page);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }
@@ -489,6 +491,37 @@ async function heroList(db, page = 1) {
     })),
     page: p,
     hasMore: res.data.length === size
+  });
+}
+
+/**
+ * R18 成员搜索（蓝图 9.1 member.search L2 MEMBER+）：
+ * keyword → members.genealogyName/name 模糊匹配；LIMIT 500 再过滤；返回白名单 [{id,genealogyName,generation,status}] 分页 20
+ */
+async function searchMembers(db, openid, keyword, page = 1) {
+  const ctx = await requesterCtx(db, openid);
+  if (!hasRole(ctx.role, 'MEMBER')) return FORBIDDEN('认证族人方可搜索族内人物');
+  if (!keyword || !String(keyword).trim()) return BAD_REQUEST('缺少关键词');
+
+  const size = 20;
+  const p = Math.max(1, Number(page) || 1);
+
+  // 拉取 LIMIT 500 + 内存过滤（家族千级可接受；万级再上 db.RegExp/索引——GAP 登记 V2.0）
+  const res = await db.collection('members').limit(500).get();
+  const k = String(keyword).trim().toLowerCase();
+  const filtered = (res.data || []).filter(m => 
+    (m.genealogyName && m.genealogyName.toLowerCase().includes(k)) ||
+    (m.name && m.name.toLowerCase().includes(k))
+  );
+
+  const total = filtered.length;
+  const slice = filtered.slice((p - 1) * size, p * size);
+
+  return OK({
+    hits: slice.map(m => ({ id: m._id, genealogyName: m.genealogyName || m.name, generation: m.generation ?? null, status: m.status })),
+    page: p,
+    hasMore: total > p * size,
+    total
   });
 }
 

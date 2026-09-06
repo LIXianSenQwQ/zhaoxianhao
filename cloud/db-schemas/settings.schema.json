@@ -1,0 +1,40 @@
+/**
+ * cloud/db-schemas/settings.schema.json
+ * 系统配置集合（KV 存储）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   key: string (配置键，唯一)
+ *     已知 key：
+ *     - daily_motto       祖训今日（首页兜底卡文案）
+ *     - almanacExt        老皇历郝氏定制宜忌
+ *     - kinship_matrix    称谓矩阵 (n,m,性别,长幼,姻亲)
+ *     - feature_flags     功能开关（admin.featureFlag 写入）
+ *     - solar_terms       节气校准表（可选覆盖内置表）
+ *   value: any (值，JSON 兼容)
+ *   description: string (说明，可选)
+ *   updatedAt: Date, updatedBy: string
+ *   createdAt: Date
+ *
+ * 权限：仅云函数读写（CHIEF/HISTORIAN 配置）。
+ * 索引：key (unique)。
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "settings",
+  "description": "系统配置集合（KV 存储）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "key": { "type": "string", "maxLength": 64 },
+    "value": {},
+    "description": { "type": ["string", "null"], "maxLength": 256 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "updatedBy": { "type": ["string", "null"] }
+  },
+  "required": ["_id", "key", "value", "createdAt"],
+  "indexes": [
+    { "keys": { "key": 1 }, "options": { "unique": true, "name": "key_unique" } }
+  ]
+}

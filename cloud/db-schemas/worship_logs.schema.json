@@ -1,0 +1,39 @@
+/**
+ * cloud/db-schemas/worship_logs.schema.json
+ * 祭祀记录集合
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   type: enum [incense, candle, flower, fruit, bow, letter] (祭拜动作)
+ *   typeLabel: string (动作中文名)
+ *   targetMemberId: string (受祭先人 member_id)
+ *   userId: string (祭祀人 openid)
+ *   message: string (留言，可选)
+ *   date: Date (祭祀时间)
+ *
+ * 权限：仅云函数读写。
+ * 索引：targetMemberId+date 复合（先人主页倒序）、userId+date 复合（我的祭祀）。
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "worship_logs",
+  "description": "祭祀记录集合",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": ["incense", "candle", "flower", "fruit", "bow", "letter"]
+    },
+    "typeLabel": { "type": "string", "maxLength": 16 },
+    "targetMemberId": { "type": "string" },
+    "userId": { "type": "string" },
+    "message": { "type": ["string", "null"], "maxLength": 200 },
+    "date": { "type": "string", "format": "date-time" }
+  },
+  "required": ["_id", "type", "typeLabel", "targetMemberId", "userId", "date"],
+  "indexes": [
+    { "keys": { "targetMemberId": 1, "date": -1 }, "name": "member_date_desc_idx" },
+    { "keys": { "userId": 1, "date": -1 }, "name": "user_date_desc_idx" }
+  ]
+}

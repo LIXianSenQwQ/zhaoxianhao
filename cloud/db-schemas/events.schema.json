@@ -1,0 +1,47 @@
+/**
+ * cloud/db-schemas/events.schema.json
+ * 大事记集合（含讣告/白事静默源）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   type: enum [funeral, wedding, birthday, anniversary, notice, milestone]
+ *   title: string (标题)
+ *   content: string (正文)
+ *   year: number (大事年份)
+ *   images: array<string> (图片 URL 列表)
+ *   status: enum [ACTIVE, ENDED, PUBLISHED]
+ *   createdBy: string
+ *   createdAt: Date
+ *
+ * 权限：仅云函数读写。
+ * 索引：status+type (白事静默查询 status=ACTIVE & type=funeral), year, createdAt.
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "events",
+  "description": "大事记集合（含讣告/白事静默源）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": ["funeral", "wedding", "birthday", "anniversary", "notice", "milestone"]
+    },
+    "title": { "type": "string", "maxLength": 128 },
+    "content": { "type": "string", "maxLength": 5000 },
+    "year": { "type": "integer" },
+    "images": { "type": "array", "items": { "type": "string" } },
+    "status": {
+      "type": "string",
+      "enum": ["ACTIVE", "ENDED", "PUBLISHED"]
+    },
+    "createdBy": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["_id", "title", "content", "year", "createdBy", "status", "createdAt"],
+  "indexes": [
+    { "keys": { "status": 1, "type": 1 }, "name": "status_type_idx" },
+    { "keys": { "year": -1 }, "name": "year_desc_idx" },
+    { "keys": { "createdAt": -1 }, "name": "createdAt_desc_idx" }
+  ]
+}

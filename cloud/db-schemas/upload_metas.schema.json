@@ -1,0 +1,48 @@
+/**
+ * cloud/db-schemas/upload_metas.schema.json
+ * 上传元数据集合（云存储文件的落库索引）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   scene: string (上传场景：avatar / document / evidence / media 等)
+ *   fileId: string (云存储 fileID)
+ *   size: number (文件字节数)
+ *   mimeType: string (MIME 类型)
+ *   ownerOpenid: string (上传者 openid)
+ *   visibility: enum [PRIVATE, GROUP, PUBLIC] (三级可见性 V1.1)
+ *   groupId: string (可见分组，可选)
+ *   createdAt: Date
+ *
+ * 权限：仅云函数读写。
+ * 索引：fileId(unique)、ownerOpenid+createdAt(desc)、scene.
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "upload_metas",
+  "description": "上传元数据集合（云存储文件的落库索引）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "scene": {
+      "type": "string",
+      "enum": ["avatar", "document", "evidence", "media"]
+    },
+    "fileId": { "type": "string", "maxLength": 256 },
+    "size": { "type": "integer", "minimum": 0 },
+    "mimeType": { "type": "string", "maxLength": 64 },
+    "ownerOpenid": { "type": "string" },
+    "visibility": {
+      "type": "string",
+      "enum": ["PRIVATE", "GROUP", "PUBLIC"],
+      "default": "PRIVATE"
+    },
+    "groupId": { "type": ["string", "null"] },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["_id", "scene", "fileId", "size", "mimeType", "ownerOpenid", "createdAt"],
+  "indexes": [
+    { "keys": { "fileId": 1 }, "options": { "unique": true, "name": "fileId_unique" } },
+    { "keys": { "ownerOpenid": 1, "createdAt": -1 }, "name": "owner_created_desc_idx" },
+    { "keys": { "scene": 1 }, "name": "scene_idx" }
+  ]
+}

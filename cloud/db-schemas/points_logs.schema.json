@@ -1,0 +1,47 @@
+/**
+ * cloud/db-schemas/points_logs.schema.json
+ * 积分流水集合（幂等：bizType:bizId:userId）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   userId: string (openid)
+ *   pool: enum [xiaoqin, gongde, fuyun, normal] (积分池)
+ *   amount: number (± 变动量)
+ *   bizType: string (业务类型 task.checkin / worship / admin.manual / ...)
+ *   bizId: string (业务对象 ID)
+ *   idemKey: string (幂等键 bizType:bizId:userId)
+ *   operatorId: string (操作人，代发场景与 userId 不同)
+ *   note: string (备注)
+ *   time: Date (发生时间，倒序排序字段)
+ *
+ * 权限：仅云函数读写。
+ * 索引：idemKey(unique), userId+time(desc 分页), bizType+bizId.
+ * 事务约定：流水先插 → 事务更新账户（蓝图 7.5）
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "points_logs",
+  "description": "积分流水集合",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": "string" },
+    "pool": {
+      "type": "string",
+      "enum": ["xiaoqin", "gongde", "fuyun", "normal"]
+    },
+    "amount": { "type": "integer" },
+    "bizType": { "type": "string", "maxLength": 64 },
+    "bizId": { "type": "string", "maxLength": 128 },
+    "idemKey": { "type": "string", "maxLength": 256 },
+    "operatorId": { "type": ["string", "null"] },
+    "note": { "type": ["string", "null"], "maxLength": 256 },
+    "time": { "type": "string", "format": "date-time" }
+  },
+  "required": ["_id", "userId", "pool", "amount", "bizType", "bizId", "idemKey", "time"],
+  "indexes": [
+    { "keys": { "idemKey": 1 }, "options": { "unique": true, "name": "idem_unique" } },
+    { "keys": { "userId": 1, "time": -1 }, "name": "user_time_desc_idx" },
+    { "keys": { "bizType": 1, "bizId": 1 }, "name": "biz_type_id_idx" }
+  ]
+}

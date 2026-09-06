@@ -1,0 +1,47 @@
+/**
+ * cloud/db-schemas/auth_requests.schema.json
+ * 授权申请集合（审批工作流）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   grantee: string (申请人 openid)
+ *   target: string (目标 member_id)
+ *   targetName: string (目标谱名快照，展示用)
+ *   reason: string (申请理由)
+ *   status: enum [PENDING, APPROVED, REJECTED]
+ *   reviewer: string (审批人 openid，可选)
+ *   reviewedAt: Date (审批时间，可选)
+ *   comment: string (审批意见 ≤200，可选)
+ *   createdAt: Date
+ *
+ * 权限：仅云函数读写（族长/房支长审批）。
+ * 索引：grantee+target+status（防重复申请 PENDING 幂等查重）、status、grantee、target.
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "auth_requests",
+  "description": "授权申请集合（审批工作流）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "grantee": { "type": "string" },
+    "target": { "type": "string" },
+    "targetName": { "type": ["string", "null"], "maxLength": 64 },
+    "reason": { "type": ["string", "null"], "maxLength": 500 },
+    "status": {
+      "type": "string",
+      "enum": ["PENDING", "APPROVED", "REJECTED"],
+      "default": "PENDING"
+    },
+    "reviewer": { "type": ["string", "null"] },
+    "reviewedAt": { "type": ["string", "null"], "format": "date-time" },
+    "comment": { "type": ["string", "null"], "maxLength": 200 },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["_id", "grantee", "target", "status", "createdAt"],
+  "indexes": [
+    { "keys": { "grantee": 1, "target": 1, "status": 1 }, "name": "grant_target_status_idx" },
+    { "keys": { "status": 1, "createdAt": -1 }, "name": "status_created_desc_idx" },
+    { "keys": { "target": 1 }, "name": "target_idx" }
+  ]
+}

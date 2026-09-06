@@ -1,0 +1,40 @@
+/**
+ * cloud/db-schemas/audit_logs.schema.json
+ * 审计日志集合（append-only，禁改禁删）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   userId: string (操作人 openid)
+ *   action: string (动作标识 member.apply_auth / entry.submit / ...)
+ *   target: string (目标对象 ID 或描述)
+ *   detail: string (详情，可选)
+ *   time: Date (发生时间；登录链路写 time，其余写 createdAt——读侧做兼容)
+ *   createdAt: Date (与 time 二选一或并存)
+ *   ip: string (客户端 IP，可选)
+ *
+ * 权限：仅云函数写入；任何客户端禁读（HISTORIAN+ 经 admin.auditList 查询）。
+ * 索引：userId+time(desc)、action+time(desc)、target.
+ * 纪律：append-only——代码层禁止 update/delete，schema 层 update/delete 权限永久关闭。
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "audit_logs",
+  "description": "审计日志集合（append-only）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": "string" },
+    "action": { "type": "string", "maxLength": 64 },
+    "target": { "type": ["string", "null"], "maxLength": 128 },
+    "detail": { "type": ["string", "null"], "maxLength": 512 },
+    "time": { "type": ["string", "null"], "format": "date-time" },
+    "createdAt": { "type": ["string", "null"], "format": "date-time" },
+    "ip": { "type": ["string", "null"], "maxLength": 64 }
+  },
+  "required": ["_id", "userId", "action"],
+  "indexes": [
+    { "keys": { "userId": 1, "time": -1 }, "name": "user_time_desc_idx" },
+    { "keys": { "action": 1, "time": -1 }, "name": "action_time_desc_idx" },
+    { "keys": { "target": 1 }, "name": "target_idx" }
+  ]
+}

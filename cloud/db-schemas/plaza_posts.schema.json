@@ -1,0 +1,64 @@
+/**
+ * cloud/db-schemas/plaza_posts.schema.json
+ * 家族广场动态集合
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   authorId: string (作者 openid)
+ *   authorName: string (作者谱名快照)
+ *   type: enum [text, moment, notice, alert]
+ *   content: string (正文 ≤5000)
+ *   mediaIds: array<string> (媒体 ID ≤9)
+ *   stats: object { like: number, comment: number, share: number }
+ *   visibility: enum [PUBLIC, GROUP, PRIVATE] (三级可见性 V1.1)
+ *   publishAt: Date
+ *   status: enum [PUBLISHED, DELETED, HIDDEN]
+ *   createdAt: Date
+ *
+ * 权限：仅云函数读写。
+ * 索引：publishAt(desc), status+publishAt 复合, authorId+publishAt.
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "plaza_posts",
+  "description": "家族广场动态集合",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "authorId": { "type": "string" },
+    "authorName": { "type": "string", "maxLength": 64 },
+    "type": {
+      "type": "string",
+      "enum": ["text", "moment", "notice", "alert"],
+      "default": "text"
+    },
+    "content": { "type": "string", "maxLength": 5000 },
+    "mediaIds": { "type": "array", "maxItems": 9, "items": { "type": "string" } },
+    "stats": {
+      "type": "object",
+      "properties": {
+        "like": { "type": "integer", "minimum": 0 },
+        "comment": { "type": "integer", "minimum": 0 },
+        "share": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "visibility": {
+      "type": "string",
+      "enum": ["PUBLIC", "GROUP", "PRIVATE"],
+      "default": "PUBLIC"
+    },
+    "publishAt": { "type": "string", "format": "date-time" },
+    "status": {
+      "type": "string",
+      "enum": ["PUBLISHED", "DELETED", "HIDDEN"],
+      "default": "PUBLISHED"
+    },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["_id", "authorId", "type", "content", "publishAt", "status", "createdAt"],
+  "indexes": [
+    { "keys": { "publishAt": -1 }, "name": "publishAt_desc_idx" },
+    { "keys": { "status": 1, "publishAt": -1 }, "name": "status_publishAt_idx" },
+    { "keys": { "authorId": 1, "publishAt": -1 }, "name": "author_publishAt_idx" }
+  ]
+}

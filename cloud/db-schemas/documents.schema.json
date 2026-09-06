@@ -1,0 +1,58 @@
+/**
+ * cloud/db-schemas/documents.schema.json
+ * 谱库文档集合
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   title: string (标题)
+ *   type: enum [genealogy_book, family_photo, manuscript, other]
+ *   era: string (时代/朝代，可选)
+ *   fileId: string (云存储文件 ID)
+ *   thumbUrl: string (缩略图 URL，可选)
+ *   ocrText: string (OCR 全文，可选)
+ *   contributorId: string (上传人 member_id)
+ *   level: enum [公开/限制/私密]
+ *   size: number (文件大小 bytes)
+ *   status: enum [PENDING, PUBLISHED, REJECTED]
+ *   createdAt: Date, updatedAt: Date
+ *   createdBy: string, updatedBy: string
+ *
+ * 权限：仅云函数读写。
+ * 索引：status, creator, type, era, createdAt.
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "documents",
+  "description": "谱库文档集合",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "title": { "type": "string", "maxLength": 128 },
+    "type": {
+      "type": "string",
+      "enum": ["genealogy_book", "family_photo", "manuscript", "other"]
+    },
+    "era": { "type": ["string", "null"], "maxLength": 32 },
+    "fileId": { "type": "string" },
+    "thumbUrl": { "type": "string", "format": "uri" },
+    "ocrText": { "type": "string", "maxLength": 65535 },
+    "contributorId": { "type": "string" },
+    "level": { "type": "string", "enum": ["公开", "限制", "私密"] },
+    "size": { "type": "integer", "minimum": 0 },
+    "status": {
+      "type": "string",
+      "enum": ["PENDING", "PUBLISHED", "REJECTED"]
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "createdBy": { "type": "string" },
+    "updatedBy": { "type": "string" }
+  },
+  "required": ["_id", "title", "type", "fileId", "contributorId", "level", "size", "status", "createdAt", "createdBy"],
+  "indexes": [
+    { "keys": { "status": 1 }, "name": "status_idx" },
+    { "keys": { "contributorId": 1, "createdAt": -1 }, "name": "creator_created_desc_idx" },
+    { "keys": { "type": 1 }, "name": "type_idx" },
+    { "keys": { "era": 1 }, "name": "era_idx" }
+  ]
+}

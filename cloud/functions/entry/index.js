@@ -34,6 +34,8 @@ async function main(event, context) {
       return await importRows(db, openid, event.payload);
     case 'mySubmissions':
       return await mySubmissions(db, openid);
+    case 'pendingList':
+      return await pendingList(db, openid);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }
@@ -318,6 +320,34 @@ async function mySubmissions(db, openid) {
     .limit(LIST_LIMIT)
     .get();
   return OK({ records: res.data });
+}
+
+/**
+ * R18 审核工作台待办列表（蓝图 7.6）：BRANCH_HEAD+ 可见 SUBMITTED/FIRST_PASS 工单；
+ * 附 canFirstPass/canSecondPass 供前端按角色渲染操作按钮（初审支系 BRANCH_HEAD+，复审族史委 HISTORIAN+）。
+ */
+async function pendingList(db, openid) {
+  const role = await roleOf(db, openid);
+  if (!hasRole(role, 'BRANCH_HEAD')) return FORBIDDEN('仅房长及以上可查看审核待办');
+
+  const [subRes, fpRes] = await Promise.all([
+    db.collection('entry_records').where({ status: 'SUBMITTED' }).orderBy('createdAt', 'desc').limit(LIST_LIMIT).get(),
+    db.collection('entry_records').where({ status: 'FIRST_PASS' }).orderBy('createdAt', 'desc').limit(LIST_LIMIT).get()
+  ]);
+
+  const isHistorian = hasRole(role, 'HISTORIAN');
+  const decorate = (r) => ({
+    ...r,
+    canFirstPass: r.status === 'SUBMITTED' && r.createdBy !== openid && r.submittedBy !== openid,
+    canSecondPass: isHistorian && r.status === 'FIRST_PASS' &&
+      !(r.auditChain || []).some(s => s.step === 'FIRST_PASS' && s.userId === openid) &&
+      r.createdBy !== openid && r.submittedBy !== openid
+  });
+
+  return OK({
+    pending: [...(subRes.data || []).map(decorate), ...(fpRes.data || []).map(decorate)],
+    total: (subRes.data || []).length + (fpRes.data || []).length
+  });
 }
 
 module.exports = { main };

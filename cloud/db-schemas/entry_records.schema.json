@@ -1,0 +1,51 @@
+/**
+ * cloud/db-schemas/entry_records.schema.json
+ * 智能入谱申请表（OCR + 人工审核）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   idemKey: string (幂等键：branchId:generation:name)
+ *   type: enum [birth, death, marriage]
+ *   ocrConfidence: number (0~1)
+ *   payload: object { branchId, generation, name, parentIds?, notes? }
+ *   auditChain: array[{ step, userId, time }]
+ *   status: enum [SUBMITTED, AUDITING, APPROVED, REJECTED]
+ *   createdAt: Date
+ *   createdBy: string
+ *   reviewedBy: string (可选)
+ *   reviewComment: string (可选)
+ *
+ * 权限：仅云函数读写。
+ * 索引：idemKey(unique), status, createdBy.
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "entry_records",
+  "description": "智能入谱申请表",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "idemKey": { "type": "string", "maxLength": 256 },
+    "type": {
+      "type": "string",
+      "enum": ["birth", "death", "marriage"]
+    },
+    "ocrConfidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "payload": { "type": "object" },
+    "auditChain": { "type": "array", "items": { "type": "object" } },
+    "status": {
+      "type": "string",
+      "enum": ["SUBMITTED", "AUDITING", "APPROVED", "REJECTED"]
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "createdBy": { "type": "string" },
+    "reviewedBy": { "type": "string" },
+    "reviewComment": { "type": "string", "maxLength": 512 }
+  },
+  "required": ["_id", "idemKey", "type", "ocrConfidence", "payload", "auditChain", "status", "createdAt", "createdBy"],
+  "indexes": [
+    { "keys": { "idemKey": 1 }, "options": { "unique": true, "name": "idem_unique" } },
+    { "keys": { "status": 1 }, "name": "status_idx" },
+    { "keys": { "createdBy": 1, "createdAt": -1 }, "name": "creator_created_desc_idx" }
+  ]
+}

@@ -28,7 +28,18 @@
 
     <!-- 结果列表 -->
     <scroll-view scroll-y v-else class="results-scroll">
-      <BaseCard v-for="d in hits" :key="d._id + '_k'" hover-class="card-hover">
+      <!-- R18：成员结果（人物在前） -->
+      <BaseCard v-for="h in memberHits" :key="'m_' + h.id" hover-class="card-hover" @tap="goMember(h.id)">
+        <view class="row">
+          <image class="type-icon" src="/static/male.png" mode="aspectFit" />
+          <view class="info">
+            <text class="title">{{ h.title }}</text>
+            <text class="meta">{{ h.meta }}</text>
+          </view>
+        </view>
+      </BaseCard>
+      <!-- 文档结果 -->
+      <BaseCard v-for="d in docHits" :key="d._id + '_k'" hover-class="card-hover">
         <view class="row">
           <image class="type-icon" :src="getTypeIcon(d.type)" mode="aspectFit" />
           <view class="info">
@@ -75,6 +86,15 @@ const hasSearched = ref(false); // Sprint R8：区分"未搜索/无结果"空态
 let timer: number | null = null;
 const DEBOUNCE_MS = 300;
 
+/** R18：分离成员/文档列表（模板聚合显示） */
+const memberHits = computed(() => hits.value.filter((h: any) => h.source === 'member'));
+const docHits = computed(() => hits.value.filter((h: any) => h.source === 'doc'));
+
+/** 跳 memberDetail */
+function goMember(id: string) {
+  uni.navigateTo({ url: `/pkg-family/pages/memberDetail/detail?id=${id}` });
+}
+
 function onInput() {
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => { doSearch(); }, DEBOUNCE_MS);
@@ -102,18 +122,32 @@ async function doSearch(keyword?: string) {
   loading.value = true;
   error.value = '';
   try {
-    const res = await read(
-      'doc',
-      { action: 'search', keyword: kw.trim(), page: page.value },
-      `search:${kw}:${page.value}`,
-      30000
-    );
-    if (res.data?.docs) {
-      hits.value = res.data.docs.slice(0, 50); // 前端截断，避免过长列表
-      hasMore.value = res.data.hasMore ?? false;
-    } else {
-      error.value = res.error?.message || '检索失败';
-    }
+    // R18：聚合搜索（成员 + 文档）
+    const [memRes, docRes] = await Promise.all([
+      read('member', { action: 'search', keyword: kw.trim(), page: 1 }, `search:m:${kw}:1`, 30000).catch(() => ({ data: {} })),
+      read('doc', { action: 'search', keyword: kw.trim(), page: 1 }, `search:d:${kw}:1`, 30000)
+    ]);
+
+    const memHits = (memRes.data?.hits || []).map((h: any) => ({
+      source: 'member',
+      id: h.id,
+      title: `${h.genealogyName || h.name}${h.generation ? `·第${h.generation}世` : ''}`,
+      meta: `${h.status || ''}`,
+      preview: null
+    }));
+
+    const docHits = (docRes.data?.docs || []).slice(0, 30).map((d: any) => ({
+      source: 'doc',
+      _id: d._id,
+      title: d.title,
+      meta: `${formatType(d.type)} · ${formatDate(d.createdAt)}`,
+      preview: d.preview
+    }));
+
+    // 人物在前、文档在后
+    hits.value = [...memHits, ...docHits];
+    hasMore.value = !!memRes.data?.hasMore || (docRes.data?.hasMore ?? false);
+    error.value = '';
   } catch (e: any) {
     error.value = e.message || '网络异常';
   } finally {

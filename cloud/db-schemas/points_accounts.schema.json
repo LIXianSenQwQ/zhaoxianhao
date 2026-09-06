@@ -1,0 +1,38 @@
+/**
+ * cloud/db-schemas/points_accounts.schema.json
+ * 积分账户集合（四人池：孝亲/功德/福运/通用）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   userId: string (openid，唯一)
+ *   xiaoqin: number (孝亲积分)
+ *   gongde: number (功德积分)
+ *   fuyun: number (福运积分)
+ *   normal: number (通用积分)
+ *   createdAt: Date
+ *   updatedAt: Date
+ *
+ * 权限：仅云函数读写。
+ * 索引：userId (unique)。
+ * 更新方式：全部走 db.command.inc 原子操作，禁止读改写。
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "points_accounts",
+  "description": "积分账户集合（四人池：孝亲/功德/福运/通用）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": "string" },
+    "xiaoqin": { "type": "integer", "minimum": 0, "default": 0 },
+    "gongde": { "type": "integer", "minimum": 0, "default": 0 },
+    "fuyun": { "type": "integer", "minimum": 0, "default": 0 },
+    "normal": { "type": "integer", "minimum": 0, "default": 0 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["_id", "userId", "xiaoqin", "gongde", "fuyun", "normal", "createdAt"],
+  "indexes": [
+    { "keys": { "userId": 1 }, "options": { "unique": true, "name": "userId_unique" } }
+  ]
+}

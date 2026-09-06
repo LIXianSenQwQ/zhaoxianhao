@@ -1,0 +1,35 @@
+/**
+ * cloud/db-schemas/relations.schema.json
+ * 关系集合（血缘连接表）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   fromId: string (成员 ID，子节点)
+ *   toId: string (成员 ID，父节点)
+ *   type: enum [parent, sibling] (关系类型)
+ *   createdAt: Date
+ *
+ * 权限：仅云函数读写。
+ * 索引：fromId+toId 复合唯一；fromId 倒序（子树查询）。
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "relations",
+  "description": "关系集合（血缘连接表）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "fromId": { "type": "string" },
+    "toId": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": ["parent", "sibling"]
+    },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["_id", "fromId", "toId", "type", "createdAt"],
+  "indexes": [
+    { "keys": { "fromId": -1, "toId": 1 }, "options": { "unique": true, "name": "relation_unique_idx" } },
+    { "keys": { "fromId": -1 }, "name": "fromId_desc_idx" }
+  ]
+}

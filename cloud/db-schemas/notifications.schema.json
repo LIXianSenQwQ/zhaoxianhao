@@ -1,0 +1,55 @@
+/**
+ * cloud/db-schemas/notifications.schema.json
+ * 站内通知集合
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   userId: string (接收人 openid；广播场景为 'ALL' 占位)
+ *   type: enum [EMERGENCY, AUDIT, SYSTEM, REMINDER, AUTH] (通知类型)
+ *   level: enum [HIGH, MEDIUM, LOW]
+ *   title: string (标题)
+ *   body: string (正文)
+ *   scope: enum [ALL, USER, BRANCH, ROLE] (作用域)
+ *   targetRoute: string (跳转路由，可选)
+ *   read: boolean (已读状态，默认 false)
+ *   readAt: Date (已读时间，可选)
+ *   createdAt: Date
+ *   createdBy: string
+ *
+ * 权限：仅云函数读写。
+ * 索引：userId+read+createdAt (个人未读查询)、createdAt desc.
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "notifications",
+  "description": "站内通知集合",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": "string", "maxLength": 128 },
+    "type": {
+      "type": "string",
+      "enum": ["EMERGENCY", "AUDIT", "SYSTEM", "REMINDER", "AUTH"]
+    },
+    "level": {
+      "type": "string",
+      "enum": ["HIGH", "MEDIUM", "LOW"]
+    },
+    "title": { "type": "string", "maxLength": 128 },
+    "body": { "type": ["string", "null"], "maxLength": 1000 },
+    "scope": {
+      "type": "string",
+      "enum": ["ALL", "USER", "BRANCH", "ROLE"]
+    },
+    "targetRoute": { "type": ["string", "null"], "maxLength": 256 },
+    "read": { "type": "boolean", "default": false },
+    "readAt": { "type": ["string", "null"], "format": "date-time" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "createdBy": { "type": "string" }
+  },
+  "required": ["_id", "userId", "type", "level", "title", "scope", "read", "createdAt", "createdBy"],
+  "indexes": [
+    { "keys": { "userId": 1, "read": 1, "createdAt": -1 }, "name": "user_read_created_idx" },
+    { "keys": { "createdAt": -1 }, "name": "createdAt_desc_idx" }
+  ]
+}

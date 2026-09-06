@@ -1,0 +1,77 @@
+/**
+ * cloud/db-schemas/members.schema.json
+ * 成员集合（族谱实体）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   path: string (物化路径 '/001/003/'，子树查询索引)
+ *   genealogyName: string (谱名：郝 X 本名)
+ *   name: string (本名)
+ *   generation: number (世代序数，>=1)
+ *   branchId: string (房支标识，可 null)
+ *   gender: enum [MALE, FEMALE, UNKNOWN]
+ *   lifespan: object { birth: Date, death: Date } (生卒年)
+ *   status: enum [ALIVE, DECEASED]
+ *   linkedOpenid: string (关联 openid，可选)
+ *   memberNo: string (序号 001~999，父节点下唯一)
+ *   worshipCount: number (祭祀次数，默认 0)
+ *   deeds: array<string> (事迹)
+ *   motto: string (家训，选填)
+ *   heroNote: string (英模笔记)
+ *   privacy: object {
+ *     visible: '公开'|'限制'|'私密',
+ *     fieldPrivacy?: { name?, gender?, lifespan?, address? }
+ *   }
+ *   createdAt: Date, createdBy: string, updatedAt: Date, updatedBy: string
+ *
+ * 权限：仅云函数读写。
+ * 索引：path(前缀), branchId, generation, status, linkedOpenid(path+generation 复合)
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "members",
+  "description": "成员集合（族谱实体）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "path": { "type": "string", "pattern": "^/([0-9]{3}/)*$" },
+    "genealogyName": { "type": "string", "maxLength": 64 },
+    "name": { "type": "string", "maxLength": 20 },
+    "generation": { "type": "integer", "minimum": 1 },
+    "branchId": { "type": ["string", "null"] },
+    "gender": {
+      "type": "string",
+      "enum": ["MALE", "FEMALE", "UNKNOWN"]
+    },
+    "lifespan": {
+      "type": "object",
+      "properties": {
+        "birth": { "type": "string", "format": "date" },
+        "death": { "type": "string", "format": "date" }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ALIVE", "DECEASED"],
+      "default": "ALIVE"
+    },
+    "linkedOpenid": { "type": "string", "maxLength": 128 },
+    "memberNo": { "type": "string", "pattern": "^[0-9]{3}$" },
+    "worshipCount": { "type": "integer", "minimum": 0, "default": 0 },
+    "deeds": { "type": "array", "items": { "type": "string" } },
+    "motto": { "type": "string", "maxLength": 500 },
+    "heroNote": { "type": "string", "maxLength": 2000 },
+    "privacy": { "type": "object" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "createdBy": { "type": "string" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "updatedBy": { "type": "string" }
+  },
+  "required": ["_id", "path", "genealogyName", "name", "generation", "branchId", "gender", "status", "createdAt", "createdBy"],
+  "indexes": [
+    { "keys": { "path": 1 }, "options": { "partialFilterExpression": { "path": { "$exists": true } } }, "name": "path_prefix_idx" },
+    { "keys": { "branchId": 1, "generation": 1 }, "name": "branch_gen_idx" },
+    { "keys": { "status": 1 }, "name": "status_idx" },
+    { "keys": { "linkedOpenid": 1 }, "name": "openid_link_idx" }
+  ]
+}

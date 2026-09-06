@@ -115,6 +115,12 @@
 				{
 					"path": "pages/hero/hero",
 					"style": {}
+				},
+				{
+					"path": "pages/hero/detail",
+					"style": {
+						"navigationBarTitleText": "英烈事迹详情"
+					}
 				}
 			]
 		},

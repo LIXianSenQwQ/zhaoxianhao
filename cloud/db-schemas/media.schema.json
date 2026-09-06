@@ -1,0 +1,48 @@
+/**
+ * cloud/db-schemas/media.schema.json
+ * 媒体集合（V1.1/2.0：相册/视频索引，预留）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   ownerType: enum [member, user]
+ *   ownerId: string (owner openid/member_id)
+ *   fileId: string (云存储 fileID)
+ *   type: enum [image, video]
+ *   mimeType: string (MIME 类型)
+ *   size: number (文件大小 bytes)
+ *   url: string (下载 URL，预签名临时地址)
+ *   duration: number (视频时长秒，仅 video)
+ *   createdAt: Date
+ *
+ * 权限：仅云函数读写。
+ * 索引：fileId(unique)、ownerType+ownerId+createdAt(desc).
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "media",
+  "description": "媒体集合（V1.1/2.0：相册/视频索引，预留）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "ownerType": {
+      "type": "string",
+      "enum": ["member", "user"]
+    },
+    "ownerId": { "type": "string" },
+    "fileId": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": ["image", "video"]
+    },
+    "mimeType": { "type": "string" },
+    "size": { "type": "integer", "minimum": 0 },
+    "url": { "type": "string" },
+    "duration": { "type": ["number", "null"] },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["_id", "ownerType", "ownerId", "fileId", "type", "mimeType", "size", "createdAt"],
+  "indexes": [
+    { "keys": { "fileId": 1 }, "options": { "unique": true, "name": "fileId_unique" } },
+    { "keys": { "ownerType": 1, "ownerId": 1, "createdAt": -1 }, "name": "owner_created_desc_idx" }
+  ]
+}

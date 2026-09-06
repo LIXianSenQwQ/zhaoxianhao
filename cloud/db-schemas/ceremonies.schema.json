@@ -1,0 +1,46 @@
+/**
+ * cloud/db-schemas/ceremonies.schema.json
+ * 仪式/红白事集合（首页卡流优先级最高）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   type: enum [wedding, funeral, memorial, reunion, ceremony]
+ *   title: string (标题)
+ *   desc: string (描述)
+ *   date: Date (活动日期)
+ *   status: enum [SCHEDULED, ACTIVE, COMPLETED, CANCELLED]
+ *   location: string (地点，可选)
+ *   createdAt: Date, createdBy: string
+ *
+ * 权限：仅云函数读写。
+ * 索引：status+date 复合 (ACTIVE 查询)、type、date.
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ceremonies",
+  "description": "仪式/红白事集合（首页卡流优先级最高）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": ["wedding", "funeral", "memorial", "reunion", "ceremony"]
+    },
+    "title": { "type": "string", "maxLength": 128 },
+    "desc": { "type": ["string", "null"], "maxLength": 500 },
+    "date": { "type": "string", "format": "date-time" },
+    "status": {
+      "type": "string",
+      "enum": ["SCHEDULED", "ACTIVE", "COMPLETED", "CANCELLED"]
+    },
+    "location": { "type": ["string", "null"], "maxLength": 256 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "createdBy": { "type": "string" }
+  },
+  "required": ["_id", "type", "title", "date", "status", "createdAt", "createdBy"],
+  "indexes": [
+    { "keys": { "status": 1, "date": 1 }, "name": "status_date_idx" },
+    { "keys": { "type": 1 }, "name": "type_idx" },
+    { "keys": { "date": -1 }, "name": "date_desc_idx" }
+  ]
+}

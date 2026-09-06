@@ -1,0 +1,49 @@
+/**
+ * cloud/db-schemas/tasks.schema.json
+ * 成长任务定义集合（族议会配置）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   title: string (任务名)
+ *   desc: string (说明)
+ *   points: number (奖励积分池 key 对应 points TYPE_AMOUNTS)
+ *   pool: enum [xiaoqin, gongde, fuyun, normal]
+ *   category: enum [daily, weekly, monthly, special]
+ *   status: enum [ACTIVE, PAUSED]
+ *   createdAt: Date, createdBy: string
+ *
+ * 权限：仅云函数读写（EDITOR+ 配置）。
+ * 索引：status（ACTIVE 过滤）、category.
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "tasks",
+  "description": "成长任务定义集合",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "title": { "type": "string", "maxLength": 64 },
+    "desc": { "type": ["string", "null"], "maxLength": 256 },
+    "points": { "type": "integer", "minimum": 0 },
+    "pool": {
+      "type": "string",
+      "enum": ["xiaoqin", "gongde", "fuyun", "normal"]
+    },
+    "category": {
+      "type": "string",
+      "enum": ["daily", "weekly", "monthly", "special"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ACTIVE", "PAUSED"],
+      "default": "ACTIVE"
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "createdBy": { "type": "string" }
+  },
+  "required": ["_id", "title", "points", "pool", "category", "status", "createdAt", "createdBy"],
+  "indexes": [
+    { "keys": { "status": 1 }, "name": "status_idx" },
+    { "keys": { "category": 1 }, "name": "category_idx" }
+  ]
+}

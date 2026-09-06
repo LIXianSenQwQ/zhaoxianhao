@@ -1,0 +1,43 @@
+/**
+ * cloud/db-schemas/branches.schema.json
+ * 房支集合
+ *
+ * 字段：
+ *   _id: ObjectId (房支 ID)
+ *   name: string (房支名称)
+ *   ancestorId: string (始祖 member_id)
+ *   branchNo: string (房支序数，可选)
+ *   description: string (描述)
+ *   status: enum [ACTIVE, INACTIVE]
+ *   createdAt: Date
+ *   createdBy: string
+ *
+ * 权限：仅云函数读写（族议会配置）。
+ * 索引：name(唯一), ancestorId, status.
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "branches",
+  "description": "房支集合",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "name": { "type": "string", "maxLength": 32 },
+    "ancestorId": { "type": "string" },
+    "branchNo": { "type": ["string", "null"] },
+    "description": { "type": "string", "maxLength": 512 },
+    "status": {
+      "type": "string",
+      "enum": ["ACTIVE", "INACTIVE"],
+      "default": "ACTIVE"
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "createdBy": { "type": "string" }
+  },
+  "required": ["_id", "name", "ancestorId", "status", "createdAt", "createdBy"],
+  "indexes": [
+    { "keys": { "name": 1 }, "options": { "unique": true, "name": "name_unique" } },
+    { "keys": { "ancestorId": 1 }, "name": "ancestor_idx" },
+    { "keys": { "status": 1 }, "name": "status_idx" }
+  ]
+}

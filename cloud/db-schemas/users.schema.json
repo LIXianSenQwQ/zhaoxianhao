@@ -1,0 +1,52 @@
+/**
+ * cloud/db-schemas/users.schema.json
+ * 用户集合（云开发认证 + 角色体系）
+ *
+ * 字段：
+ *   _id: ObjectId (唯一标识)
+ *   openid: string (微信openid，全局唯一登录标识)
+ *   nickName: string (昵称，可选)
+ *   avatarUrl: string (头像 URL，可选)
+ *   role: enum [VISITOR, MEMBER, BRANCH_HEAD, EDITOR, HISTORIAN, CHIEF] (角色等级，默认为 VISITOR)
+ *   status: enum [PENDING, APPROVED, REJECTED] (认证状态，默认 PENDING)
+ *   privacyDefault: string (缺省隐私级别 L1/L2/L3，对应公开/限制/私密)
+ *   createdAt: Date (创建时间)
+ *   lastLoginAt: Date (最后登录时间)
+ *
+ * 权限：仅云函数可读写；禁止客户端直写。
+ * 索引：openid (unique), role, status, createdAt
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "users",
+  "description": "用户集合（云开发认证 + 角色体系）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string", "description": "ObjectId" },
+    "openid": { "type": "string", "maxLength": 128 },
+    "nickName": { "type": "string", "maxLength": 64 },
+    "avatarUrl": { "type": "string", "format": "uri", "maxLength": 512 },
+    "role": {
+      "type": "string",
+      "enum": ["VISITOR", "MEMBER", "BRANCH_HEAD", "EDITOR", "HISTORIAN", "CHIEF"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["PENDING", "APPROVED", "REJECTED"]
+    },
+    "privacyDefault": {
+      "type": "string",
+      "enum": ["L1", "L2", "L3"],
+      "default": "L2"
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "lastLoginAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["_id", "openid", "role", "status", "privacyDefault", "createdAt"],
+  "indexes": [
+    { "keys": { "openid": 1 }, "options": { "unique": true, "name": "openid_unique" } },
+    { "keys": { "role": 1 }, "name": "role_idx" },
+    { "keys": { "status": 1 }, "name": "status_idx" },
+    { "keys": { "createdAt": -1 }, "name": "createdAt_desc_idx" }
+  ]
+}

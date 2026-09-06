@@ -1,0 +1,33 @@
+/**
+ * cloud/db-schemas/authorizations.schema.json
+ * 授权关系集合（解锁成员私密权限）
+ *
+ * 字段：
+ *   _id: ObjectId
+ *   grantee: string (被授权人 openid)
+ *   target: string (目标 member_id)
+ *   grantedBy: string (授予者 openid，审批人)
+ *   createdAt: Date
+ *
+ * 索引：grantee+target 唯一（同一对 openid-member 仅一份授权）；grantee, target.
+ * 纪律：写入即读——app.getDetail(memberId) 需读取本集合生成 authedMemberIds:Set。
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "authorizations",
+  "description": "授权关系集合（解锁成员私密权限）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "grantee": { "type": "string" },
+    "target": { "type": "string" },
+    "grantedBy": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["_id", "grantee", "target", "grantedBy", "createdAt"],
+  "indexes": [
+    { "keys": { "grantee": 1, "target": 1 }, "options": { "unique": true, "name": "grant_target_unique" } },
+    { "keys": { "grantee": 1 }, "name": "grantee_idx" },
+    { "keys": { "target": 1 }, "name": "target_idx" }
+  ]
+}
