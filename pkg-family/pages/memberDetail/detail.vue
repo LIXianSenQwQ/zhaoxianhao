@@ -44,6 +44,17 @@
         <view class="row"><text class="label">世系路径：</text><text class="path-value">{{ member.path || '-' }}</text></view>
       </BaseCard>
 
+      <!-- R19：英烈事迹入口（蓝图 8.0：DECEASED+isHero，公开 L1 可见） -->
+      <BaseCard v-if="isHeroMember" class="hero-entry" @tap="goHeroDetail">
+        <view class="hero-entry-row">
+          <view class="hero-entry-left">
+            <text class="hero-entry-title">🎖 英烈事迹</text>
+            <text class="hero-entry-sub">{{ heroNoteBrief }}</text>
+          </view>
+          <text class="hero-entry-arrow">›</text>
+        </view>
+      </BaseCard>
+
       <!-- R17：快捷入口 → 申请关系变更/人生书（蓝图 8.0/9.1） -->
       <BaseCard v-if="user.isAdmin" title="管理操作">
         <view class="btn-row">
@@ -144,6 +155,18 @@ async function loadMember(id: string) {
 const privacyLevel = computed(() => (needAuthCard.value ? '限制' : '公开'));
 const authDesc = computed(() => needAuthCard.value ? '该资料包含私密字段，需授权查看' : '');
 
+/** R19：英烈事迹入口（DECEASED+isHero，蓝图 6.3 L1 公开） */
+const isHeroMember = computed(() => member.value.status === 'DECEASED' && !!member.value.isHero);
+const heroNoteBrief = computed(() => {
+  const note = member.value.heroNote || '';
+  return note.length > 20 ? `${note.slice(0, 20)}…` : (note || '为国捐躯，永载家乘');
+});
+
+/** R19：跳英烈事迹详情 */
+function goHeroDetail() {
+  uni.navigateTo({ url: `/pkg-shrine/pages/hero/detail?memberId=${member.value._id}` });
+}
+
 const showMarriage = computed(() => !!member.value.marriage);
 const showSpecialNotes = computed(() => !!member.value.specialNotes);
 const isSelf = computed(() => user.isLoggedIn && user.userInfo?.openid && member.value.openid === user.userInfo.openid);
@@ -213,4 +236,12 @@ function goEdit() {
 /* R17：管理操作按钮行 */
 .btn-row { display: flex; gap: 8px; justify-content: space-between; margin-top: 12px; }
 .btn-primary { flex: 1; height: 36px; font-size: 13px; background: linear-gradient(135deg,#D4B06A 0%,#C9A063 50%,#B8924F 100%); color: #FFF; border-radius: 6px; border: none; }
+
+/* R19：英烈事迹入口（朱砂左边条，蓝图 8.0） */
+.hero-entry { border-left: 4px solid #B03A2E; }
+.hero-entry-row { display: flex; align-items: center; justify-content: space-between; }
+.hero-entry-left { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.hero-entry-title { font-size: 15px; font-weight: 700; color: #B03A2E; }
+.hero-entry-sub { font-size: 12px; color: #6E6659; }
+.hero-entry-arrow { font-size: 20px; color: #B0A99A; margin-left: 8px; }
 </style>

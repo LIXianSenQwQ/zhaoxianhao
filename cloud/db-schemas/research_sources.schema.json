@@ -1,0 +1,67 @@
+/**
+ * cloud/db-schemas/research_sources.schema.json
+ * 史料引证体系（研究文档数据库）
+ *
+ * 对应：docs/research/01 §1.2 文献考证法、05 要素四
+ * 纪律：A/B/C 级条目必须携带 location（可检索位置）或 fileId（原始载体）
+ *      方可置 verified；禁止编造条目。
+ *
+ * 字段：
+ *   _id, sourceType(谱牒|碑刻|契约|家书|地契|账簿|方志|档案|文集|其他),
+ *   title, evidenceLevel(A|B|C|D), location(书名+卷页/档号/碑刻编号),
+ *   repository(馆藏/家藏单位), catalogNo, fileId(影像载体),
+ *   transcriptionText(原文转录), interpretation(释文),
+ *   datingEvidence(断代依据), periodLabel(断代标签),
+ *   reliabilityScore(1-5), academicValueNote, relatedElement(八大要素枚举),
+ *   status(draft|verified|disputed), createdBy/createdAt, reviewedBy/reviewedAt
+ *
+ * 索引：sourceType+periodLabel、evidenceLevel、status、relatedElement
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "research_sources",
+  "description": "史料引证体系（研究文档数据库）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "sourceType": {
+      "type": "string",
+      "enum": ["谱牒", "碑刻", "契约", "家书", "地契", "账簿", "方志", "档案", "文集", "其他"]
+    },
+    "title": { "type": "string", "maxLength": 200 },
+    "evidenceLevel": {
+      "type": "string",
+      "enum": ["A", "B", "C", "D"]
+    },
+    "location": { "type": ["string", "null"], "maxLength": 512 },
+    "repository": { "type": ["string", "null"], "maxLength": 128 },
+    "catalogNo": { "type": ["string", "null"], "maxLength": 128 },
+    "fileId": { "type": ["string", "null"], "maxLength": 256 },
+    "transcriptionText": { "type": ["string", "null"], "maxLength": 65535 },
+    "interpretation": { "type": ["string", "null"], "maxLength": 65535 },
+    "datingEvidence": { "type": ["string", "null"], "maxLength": 512 },
+    "periodLabel": { "type": ["string", "null"], "maxLength": 64 },
+    "reliabilityScore": { "type": "integer", "minimum": 1, "maximum": 5 },
+    "academicValueNote": { "type": ["string", "null"], "maxLength": 2000 },
+    "relatedElement": {
+      "type": "string",
+      "enum": ["origin", "migration", "figures", "documents", "customs", "family_rules", "architecture", "local_events"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "verified", "disputed"],
+      "default": "draft"
+    },
+    "createdBy": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "reviewedBy": { "type": ["string", "null"] },
+    "reviewedAt": { "type": ["string", "null"], "format": "date-time" }
+  },
+  "required": ["_id", "sourceType", "title", "evidenceLevel", "reliabilityScore", "relatedElement", "status", "createdBy", "createdAt"],
+  "indexes": [
+    { "keys": { "sourceType": 1, "periodLabel": 1 }, "name": "type_period_idx" },
+    { "keys": { "evidenceLevel": 1 }, "name": "evidence_level_idx" },
+    { "keys": { "status": 1 }, "name": "status_idx" },
+    { "keys": { "relatedElement": 1 }, "name": "element_idx" }
+  ]
+}

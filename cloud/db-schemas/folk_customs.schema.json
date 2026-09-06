@@ -1,0 +1,78 @@
+/**
+ * cloud/db-schemas/folk_customs.schema.json
+ * 民俗活动田野记录
+ *
+ * 对应：docs/research/02 §二.6 五大民俗活动提纲、05 要素五
+ * 纪律：每个活动记录 ≥2 独立信源方可 verified；影像清单挂原始载体。
+ *
+ * 字段：
+ *   _id, activityType(婚礼|丧礼|祭祖|节庆|命名礼|其他),
+ *   name(活动名称), villageLocation, flowStages[](流程图谱节点：
+ *   { stage, actors[], items[], taboos[], duration }),
+ *   changeTrack[](变迁轨迹：{ era, description, evidenceIds[] }),
+ *   culturalAnalysis(文化内涵分析), oralRefs[](口述档案编号),
+ *   imageUrls[](影像), audioRefs[](音频), videoRefs[](视频),
+ *   sourceCount(独立信源数), status(draft|verified),
+ *   createdBy/createdAt, reviewedBy/reviewedAt
+ *
+ * 索引：activityType+status、villageLocation
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "folk_customs",
+  "description": "民俗活动田野记录",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "activityType": {
+      "type": "string",
+      "enum": ["婚礼", "丧礼", "祭祖", "节庆", "命名礼", "其他"]
+    },
+    "name": { "type": "string", "maxLength": 128 },
+    "villageLocation": { "type": ["string", "null"], "maxLength": 128 },
+    "flowStages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "stage": { "type": "string", "maxLength": 64 },
+          "actors": { "type": "array", "items": { "type": "string" } },
+          "items": { "type": "array", "items": { "type": "string" } },
+          "taboos": { "type": "array", "items": { "type": "string" } },
+          "duration": { "type": ["string", "null"], "maxLength": 64 }
+        }
+      }
+    },
+    "changeTrack": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "era": { "type": "string", "maxLength": 32 },
+          "description": { "type": "string", "maxLength": 5000 },
+          "evidenceIds": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "culturalAnalysis": { "type": ["string", "null"], "maxLength": 20000 },
+    "oralRefs": { "type": "array", "items": { "type": "string" } },
+    "imageUrls": { "type": "array", "items": { "type": "string" } },
+    "audioRefs": { "type": "array", "items": { "type": "string" } },
+    "videoRefs": { "type": "array", "items": { "type": "string" } },
+    "sourceCount": { "type": "integer", "minimum": 0 },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "verified"],
+      "default": "draft"
+    },
+    "createdBy": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "reviewedBy": { "type": ["string", "null"] },
+    "reviewedAt": { "type": ["string", "null"], "format": "date-time" }
+  },
+  "required": ["_id", "activityType", "name", "status", "createdBy", "createdAt"],
+  "indexes": [
+    { "keys": { "activityType": 1, "status": 1 }, "name": "type_status_idx" },
+    { "keys": { "villageLocation": 1 }, "name": "village_idx" }
+  ]
+}

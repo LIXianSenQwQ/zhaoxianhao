@@ -1,0 +1,87 @@
+/**
+ * cloud/db-schemas/research_profiles.schema.json
+ * 人物学术档案（传记研究）
+ *
+ * 对应：docs/research/05 要素三、06 成果三 ≥3000 字
+ * 纪律：每位人物必须挂至少两条独立证据；传记文本分"工作稿"/"已审核"双轨。
+ *
+ * 字段：
+ *   _id, memberId(关联成员), name, lifeSpan{ birthYear?, deathYear?, },
+ *   generation, branchId, identityTags(科举|职官|匠人|教习|从军|工商|其他),
+ *   biographySummary(生平概述 ≈500 字),
+ *   chronologyItems[{ year, text, evidenceIds[] }],
+ *   keyEvents[{ title, description, dateRange?, evidenceIds[], analysis }],
+ *   impactAnalysis(历史影响分析 ≈300 字), bibliographyReferences(参考文献清单),
+ *   dissonanceNotes(歧说并陈说明), wordCount, status(draft|reviewed|published),
+ *   createdBy/createdAt, reviewedBy/reviewedAt
+ *
+ * 索引：memberId、status+generatedBy、lifeSpan.deathYear desc
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "research_profiles",
+  "description": "人物学术档案（传记研究）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "memberId": { "type": ["string", "null"], "maxLength": 128 },
+    "name": { "type": "string", "maxLength": 64 },
+    "lifeSpan": {
+      "type": "object",
+      "properties": {
+        "birthYear": { "type": ["integer", "null"] },
+        "deathYear": { "type": ["integer", "null"] }
+      }
+    },
+    "generation": { "type": ["integer", "null"] },
+    "branchId": { "type": ["string", "null"] },
+    "identityTags": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["科举", "职官", "匠人", "教习", "从军", "工商", "其他"] }
+    },
+    "biographySummary": { "type": ["string", "null"], "maxLength": 1000 },
+    "chronologyItems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "year": { "type": ["integer", "null"] },
+          "text": { "type": "string", "maxLength": 1000 },
+          "evidenceIds": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "keyEvents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "maxLength": 128 },
+          "description": { "type": "string", "maxLength": 5000 },
+          "dateRange": { "type": ["string", "null"] },
+          "evidenceIds": { "type": "array", "items": { "type": "string" } },
+          "analysis": { "type": ["string", "null"], "maxLength": 5000 }
+        }
+      }
+    },
+    "impactAnalysis": { "type": ["string", "null"], "maxLength": 1000 },
+    "bibliographyReferences": { "type": "array", "items": { "type": "string" } },
+    "dissonanceNotes": { "type": ["string", "null"], "maxLength": 5000 },
+    "wordCount": { "type": "integer", "minimum": 0 },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "reviewed", "published"],
+      "default": "draft"
+    },
+    "createdBy": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "reviewedBy": { "type": ["string", "null"] },
+    "reviewedAt": { "type": ["string", "null"], "format": "date-time" }
+  },
+  "required": ["_id", "memberId", "name", "identityTags", "status", "createdBy", "createdAt"],
+  "indexes": [
+    { "keys": { "memberId": 1 }, "name": "member_idx" },
+    { "keys": { "status": 1 }, "name": "status_idx" },
+    { "keys": { "lifeSpan.deathYear": -1 }, "name": "death_year_desc_idx" }
+  ]
+}

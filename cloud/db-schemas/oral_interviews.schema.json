@@ -1,0 +1,68 @@
+/**
+ * cloud/db-schemas/oral_interviews.schema.json
+ * 口述史访谈档案
+ *
+ * 对应：docs/research/02 §四 口述史技术规范
+ * 纪律：录音/录像为必须项；verified 状态必须挂原始载体 fileId；
+ *      转录不得与录音不符（逐字稿+可读稿双轨保留）。
+ *
+ * 字段：
+ *   _id, interviewNo(OR-YYYYMMDD-受访者编号-场次), interviewee{ refMemberId, name,
+ *   generation, birthYear, roleTag(礼仪主持|技艺|旧职|外嫁|外迁) },
+ *   interviewers[], interviewDate, location,
+ *   outlineSection(提纲章节引用), audioFileId, videoFileId,
+ *   verbatimText(逐字稿), readableText(可读稿), dialectNotes(方言标注),
+ *   crossCheckNotes(与文献对照注释), status(recorded|transcribed|crossChecked|verified),
+ *   consentWritten(bool), createdBy/createdAt
+ *
+ * 索引：interviewNo(unique)、interviewee.refMemberId、interviewDate desc、status
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "oral_interviews",
+  "description": "口述史访谈档案",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "interviewNo": { "type": "string", "maxLength": 64 },
+    "interviewee": {
+      "type": "object",
+      "properties": {
+        "refMemberId": { "type": ["string", "null"] },
+        "name": { "type": "string", "maxLength": 64 },
+        "generation": { "type": ["integer", "null"] },
+        "birthYear": { "type": ["integer", "null"] },
+        "roleTag": {
+          "type": "string",
+          "enum": ["礼仪主持", "技艺", "旧职", "外嫁", "外迁", "其他"],
+          "default": "其他"
+        }
+      }
+    },
+    "interviewers": { "type": "array", "items": { "type": "string" } },
+    "interviewDate": { "type": "string", "format": "date-time" },
+    "location": { "type": ["string", "null"], "maxLength": 256 },
+    "outlineSection": { "type": ["string", "null"], "maxLength": 64 },
+    "audioFileId": { "type": ["string", "null"], "maxLength": 256 },
+    "videoFileId": { "type": ["string", "null"], "maxLength": 256 },
+    "verbatimText": { "type": ["string", "null"], "maxLength": 1000000 },
+    "readableText": { "type": ["string", "null"], "maxLength": 500000 },
+    "dialectNotes": { "type": ["string", "null"], "maxLength": 10000 },
+    "crossCheckNotes": { "type": ["string", "null"], "maxLength": 20000 },
+    "consentWritten": { "type": "boolean", "default": false },
+    "status": {
+      "type": "string",
+      "enum": ["recorded", "transcribed", "crossChecked", "verified"],
+      "default": "recorded"
+    },
+    "createdBy": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["_id", "interviewNo", "interviewee", "interviewDate", "interviewers", "status", "createdBy", "createdAt"],
+  "indexes": [
+    { "keys": { "interviewNo": 1 }, "options": { "unique": true, "name": "interview_no_unique" } },
+    { "keys": { "interviewee.refMemberId": 1 }, "name": "interviewee_member_idx" },
+    { "keys": { "interviewDate": -1 }, "name": "date_desc_idx" },
+    { "keys": { "status": 1 }, "name": "status_idx" }
+  ]
+}

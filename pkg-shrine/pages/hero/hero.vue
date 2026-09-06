@@ -10,7 +10,7 @@
       <text>暂无英烈名录，待族史委录入</text>
     </view>
 
-    <view v-for="h in heroes" :key="h.id" class="hero-card">
+    <view v-for="h in heroes" :key="h.id" class="hero-card" @tap="goDetail(h.id)">
       <view class="hero-left">
         <view class="hero-name-row">
           <text class="hero-name">{{ h.name }}</text>
@@ -72,6 +72,11 @@ async function fetchHeroes(p = 1) {
 function loadMore() {
   if (loading.value || !hasMore.value) return;
   fetchHeroes(page.value + 1);
+}
+
+/** R19：跳英烈事迹详情（蓝图 8.0 hero/detail 贯通） */
+function goDetail(id: string) {
+  uni.navigateTo({ url: `/pkg-shrine/pages/hero/detail?memberId=${id}` });
 }
 
 /** 献花：ceremony.worship type=flower（MEMBER+；功德分按日幂等） */

@@ -1,0 +1,31 @@
+/**
+ * cloud/db-schemas/avatars.schema.json
+ * 用户头像文件元数据（云存储）
+ *
+ * 字段：
+ *   _id, openid, fileId, size, mimeType, url(preview), createdAt, createdBy(可选)
+ *
+ * 权限：仅云函数可读写。
+ * 索引：fileId(unique), openid+createdAt desc.
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "avatars",
+  "description": "用户头像文件元数据（云存储）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "openid": { "type": "string" },
+    "fileId": { "type": "string", "maxLength": 256 },
+    "size": { "type": "integer", "minimum": 0 },
+    "mimeType": { "type": "string" },
+    "url": { "type": ["string", "null"], "format": "uri" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "createdBy": { "type": ["string", "null"] }
+  },
+  "required": ["_id", "openid", "fileId", "size", "mimeType", "createdAt"],
+  "indexes": [
+    { "keys": { "fileId": 1 }, "options": { "unique": true, "name": "fileId_unique" } },
+    { "keys": { "openid": 1, "createdAt": -1 }, "name": "openid_created_desc_idx" }
+  ]
+}

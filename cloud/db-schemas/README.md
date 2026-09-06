@@ -52,6 +52,12 @@ node schema-consistency-test.js
 | 22 | upload_metas | 上传元数据 | ✅ |
 | 23 | media | 媒体索引 (预留) | V1.1 |
 | 24 | chat_groups | 聊天群 (预留) | V2.0 |
+| 25 | research_sources | 史料引证体系 (研究) | ✅ |
+| 26 | oral_interviews | 口述史访谈档案 (研究) | ✅ |
+| 27 | folk_customs | 民俗活动田野记录 (研究) | ✅ |
+| 28 | research_profiles | 人物学术档案 (研究) | ✅ |
+
+> 研究类集合（25–28）的录入纪律见 `docs/research/01-研究方法与学术规范.md`：A/B 级史料必须有可检索位置或原始载体方可置 verified；禁止虚构条目。
 
 ---
 
