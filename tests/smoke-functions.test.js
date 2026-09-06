@@ -1150,3 +1150,73 @@ test('R17 entry.audit SECOND_PASS：CHANGE 工单与 ACTIVE 边重复 → 400（
   assert.equal(res.code, 400);
   assert.ok(String(res.message).includes('已存在'), '重复 ACTIVE 边拦截');
 });
+
+// ─── Sprint R18：member.search 聚合搜索 + entry.pendingList 审核待办列表 ───
+
+test('R18 member.search：MEMBER 正向命中（谱名模糊）+ 白名单字段（无私密）', async () => {
+  seedDB({
+    users: [{ openid: 'u-test', role: 'MEMBER' }],
+    members: [
+      { _id: 'm-1', genealogyName: '郝守业', generation: 18, status: 'DECEASED', tomb: '赵州西', marriage: '配王氏' },
+      { _id: 'm-2', genealogyName: '郝守田', generation: 18, status: 'LIVING' },
+      { _id: 'm-3', genealogyName: '郝建业', generation: 20, status: 'LIVING' }
+    ]
+  });
+  const res = await FN('member').main({ action: 'search', keyword: '守' }, CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.total, 2, '守业+守田 命中');
+  assert.equal(res.data.hits[0].id, 'm-1');
+  assert.ok(res.data.hits[0].genealogyName.includes('守'));
+  assert.equal(res.data.hits[0].tomb, undefined, '白名单不含 tomb');
+  assert.equal(res.data.hits[0].marriage, undefined, '白名单不含 marriage');
+});
+
+test('R18 member.search：VISITOR 403 + 空 keyword 400', async () => {
+  seedDB({ users: [] });
+  const r1 = await FN('member').main({ action: 'search', keyword: '郝' }, CTX);
+  assert.equal(r1.code, 403, 'VISITOR 不可搜索');
+  seedDB({ users: [{ openid: 'u-test', role: 'MEMBER' }] });
+  const r2 = await FN('member').main({ action: 'search', keyword: '  ' }, CTX);
+  assert.equal(r2.code, 400, '空 keyword 400');
+});
+
+test('R18 member.search：分页（total>20 → hasMore）', async () => {
+  const many = Array.from({ length: 25 }, (_, i) => ({ _id: `m-${i}`, genealogyName: `郝守${i}`, generation: 10 + (i % 5), status: 'LIVING' }));
+  seedDB({ users: [{ openid: 'u-test', role: 'MEMBER' }], members: many });
+  const p1 = await FN('member').main({ action: 'search', keyword: '守' }, CTX);
+  assert.equal(p1.data.hits.length, 20, 'size=20');
+  assert.equal(p1.data.hasMore, true, 'total 25 > 20');
+  const p2 = await FN('member').main({ action: 'search', keyword: '守', page: 2 }, CTX);
+  assert.equal(p2.data.hits.length, 5);
+  assert.equal(p2.data.hasMore, false);
+});
+
+test('R18 entry.pendingList：BRANCH_HEAD 正向（SUBMITTED+FIRST_PASS + canFirstPass/canSecondPass 标记）', async () => {
+  seedDB({
+    users: [{ openid: 'u-bh', role: 'BRANCH_HEAD' }, { openid: 'u-his', role: 'HISTORIAN' }],
+    entryRecords: [
+      { _id: 'r-s', status: 'SUBMITTED', createdBy: 'u-sub', payload: { name: '郝一' }, auditChain: [] },
+      { _id: 'r-fp', status: 'FIRST_PASS', createdBy: 'u-sub', payload: { name: '郝二' }, auditChain: [{ step: 'FIRST_PASS', userId: 'u-bh', action: 'FIRST_PASS', time: new Date() }] }
+    ]
+  });
+  // BRANCH_HEAD 视角：初审可用，复审不可（细门禁 HISTORIAN）
+  const r1 = await FN('entry').main({ action: 'pendingList' }, { OPENID: 'u-bh', openid: 'u-bh' });
+  assert.equal(r1.success, true, JSON.stringify(r1));
+  assert.equal(r1.data.total, 2);
+  const s = r1.data.pending.find(r => r._id === 'r-s');
+  const fp = r1.data.pending.find(r => r._id === 'r-fp');
+  assert.equal(s.canFirstPass, true);
+  assert.equal(s.canSecondPass, false, 'BRANCH_HEAD 不可复审');
+  assert.equal(fp.canFirstPass, false, '已初审单不可再初审');
+  assert.equal(fp.canSecondPass, false, 'u-bh 是初审人 → 不可复审');
+  // HISTORIAN 视角：fp.canSecondPass = true
+  const r2 = await FN('entry').main({ action: 'pendingList' }, { OPENID: 'u-his', openid: 'u-his' });
+  const fp2 = r2.data.pending.find(r => r._id === 'r-fp');
+  assert.equal(fp2.canSecondPass, true, 'HISTORIAN 可复审');
+});
+
+test('R18 entry.pendingList：MEMBER 403（鉴权先行）', async () => {
+  seedDB({ users: [{ openid: 'u-test', role: 'MEMBER' }] });
+  const res = await FN('entry').main({ action: 'pendingList' }, CTX);
+  assert.equal(res.code, 403);
+});

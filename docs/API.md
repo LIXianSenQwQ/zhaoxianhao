@@ -476,3 +476,18 @@
 
 - memberDetail「管理操作」卡（EDITOR+ 可见）：申请关系变更 / 查看人生书
 - relationeditor onLoad 预填 memberId
+
+### 8.11 entry.pendingList 审核待办（R18 · 蓝图 7.6 工作台数据源）
+
+- 门禁：BRANCH_HEAD+（鉴权先行）
+- 返回 SUBMITTED + FIRST_PASS 工单（各 LIST_LIMIT 50，createdAt desc）
+- 装饰字段：`canFirstPass`（SUBMITTED 且非提交人）/ `canSecondPass`（HISTORIAN+ 且非初审人非提交人）——与 audit 后端门禁同口径，前端按钮按此渲染
+- 前端：pkg-growth/pages/audit 接入；REJECT 走 uni.showModal editable 必填意见（蓝图 11）
+
+### 9.3 member.search 成员搜索（R18 · 蓝图 9.1）
+
+- 门禁：MEMBER+（蓝图 L2）
+- 入参：`keyword`（必填，trim 后空 → 400）+ `page`（默认 1）
+- 匹配：genealogyName / name 大小写不敏感模糊（LIMIT 500 内存过滤；万级再上 db.RegExp/拼音索引）
+- 出参：`hits: [{id, genealogyName, generation, status}]`（白名单，无私密字段）+ `page/hasMore/total`（size=20）
+- 前端：search 页聚合（人物在前 + 文档在后）；成员卡跳 memberDetail；403 静默降级

@@ -150,3 +150,15 @@
 | 审核工作台前端 UI | ⏳ | R18：pkg-growth/audit 接 mySubmissions + 初审/复审/驳回操作 |
 | 8.0 hero/detail 英烈事迹页 | ⏳ | R18 |
 | 真机性能实测（1.4 验收底线） | ⏳ | 连续 17 轮阻塞：等待微信开发者工具环境 |
+
+## 二·十二 R18（Sprint R18 · 审核工作台前端 + 聚合搜索 + 英烈事迹详情）
+
+| 蓝图条目 | 状态 | 差距说明 |
+|---|---|---|
+| 7.6 审核工作台前端 | ✅ | audit 页接 pendingList；canFirstPass/canSecondPass 角色化按钮；REJECT 必填弹窗（蓝图 11） |
+| 9.1 member.search | ✅ | MEMBER+；谱名/本名模糊；白名单分页 20 |
+| 8.0 hero/detail | ✅ | 牌位卡+献花（ceremony.worship 复用）+事迹时间线+家训金匾；留言板占位 |
+| 8.0 hero 留言板 | ⏳ | R19 方案设计（内容审核接入点 + 频控，安全合规前置） |
+| member.search 万级扩展 | ⏳ | LIMIT 500 内存过滤；万级需 db.RegExp/拼音索引——V2.0 |
+| 8.0 hero/index → detail 贯通 | ⏳ | R19：heroList 卡片跳详情 |
+| 真机性能实测（1.4 验收底线） | ⏳ | 连续 18 轮阻塞：等待微信开发者工具环境 |
