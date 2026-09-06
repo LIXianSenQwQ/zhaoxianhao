@@ -46,6 +46,12 @@
 }
 
 .home-header {
+  /* 蓝图 0.3.2 ①：问候区 120px 晨光渐变，纵向居中稳定首屏高度 */
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
   background: linear-gradient(165deg, var(--header-top) 0%, var(--header-mid) 45%, var(--header-bottom) 100%);
   padding: var(--home-grid) var(--home-margin);
   border-radius: 0 0 var(--radius-card) var(--radius-card);
@@ -67,6 +73,30 @@
   color: var(--home-text-2);
 }
 
+/* 快捷键图标：index.vue 模板实际使用独立类名 .qb-icon（40px 圆形底座）。
+   点灯键 .gild 使用琉璃金渐变底座——首页三大彩色点缀之一（≤3 纪律）：
+   ① 朱砂仪式卡边条 ② 琉璃金速览数字 ③ 琉璃金点灯底座 */
+.qb-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 50%;
+  background: var(--home-card-2);
+  transition: transform 120ms ease-out;
+
+  &.gild {
+    background: var(--home-gold);
+  }
+}
+
+.home-quickbar-item:active .qb-icon {
+  transform: scale(0.92); /* 按压反馈（≤200ms，文档交互纪律） */
+}
+
 .home-quickbar {
   display: flex;
   justify-content: space-around;
@@ -85,11 +115,6 @@
     min-height: var(--min-touch);
     justify-content: center;
     cursor: pointer;
-  }
-  
-  &-icon {
-    width: 40px;
-    height: 40px;
   }
   
   &-label {
@@ -154,6 +179,7 @@
 .home-overview-num {
   font-size: var(--font-md);
   font-weight: var(--weight-bold);
+  letter-spacing: 0.5px; /* 数字呼吸感 */
   background: var(--home-gold);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;

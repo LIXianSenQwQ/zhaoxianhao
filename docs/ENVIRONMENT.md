@@ -50,8 +50,10 @@ cd cloud/functions/login && npm install   # 按需逐个安装
 | `npm run dev:mp-wechat` | 微信小程序开发构建（watch） | `unpackage/dist/dev/mp-weixin/` |
 | `npm run build:mp-wechat` | 微信小程序生产构建 | `unpackage/dist/build/mp-weixin/`（约 105 文件） |
 | `npm run env:check` | 环境自检 | 终端报告 |
-| `npm run lint:check` | 代码静态检查 | 终端报告 |
-| `npm test` | 单元测试（Jest） | 终端报告 |
+| `npm run lint` | 代码静态检查 | 终端报告 |
+| `npm test` | 单元测试（node --test） | 终端报告 |
+| `npm run check:functions` | 云函数静态校验 | 终端报告 |
+| `npm run verify` | 以上全部一键门禁 | 终端报告 |
 
 > 注意：H5 构建产物在 `dist/build/h5`（uni CLI 对 H5 的默认输出位），
 > 小程序产物在 `unpackage/dist/build/mp-weixin`（小程序端惯例输出位），两者路径不同属正常现象。
@@ -64,7 +66,7 @@ cd cloud/functions/login && npm install   # 按需逐个安装
 2. `npm run build:h5` → 输出 `DONE  Build complete.`，`dist/build/h5/index.html` 存在
 3. `npm run build:mp-wechat` → 输出 `DONE  Build complete.`，`unpackage/dist/build/mp-weixin/app.json` 存在，且 `pages` 数 = 5、`subPackages` 数 = 4
 4. `npm run dev:h5` → 控制台 `ready in <10s`，浏览器打开 `http://localhost:5173` 返回 HTTP 200 且含 `<div id="app">`
-5. `npm run lint:check` 与 `npm test` → 无报错
+5. `npm run lint` 与 `npm test` → 无报错（或用 `npm run verify` 一键跑完 2–5）
 
 ## 6. 常见问题（FAQ，均为实战踩坑实录）
 

@@ -14,7 +14,7 @@
         class="home-quickbar-item"
         @click="handleQuickClick(item)"
       >
-        <text class="qb-icon">{{ item.glyph }}</text>
+        <text class="qb-icon" :class="{ gild: item.id === 'lamp' }">{{ item.glyph }}</text>
         <text class="home-quickbar-label">{{ item.label }}</text>
       </view>
     </view>
@@ -35,11 +35,12 @@
       <!-- 空态降级：祖训今日卡（不空屏，文档 0.3.3） -->
       <EmptyState v-else-if="!cards.length" />
 
-      <!-- 正常卡流 -->
+      <!-- 正常卡流（仪式卡置顶：蓝图 0.3.2 ③；入场 fade-in ≤200ms） -->
       <template v-else>
         <BaseCard
-          v-for="card in cards"
+          v-for="card in sortedCards"
           :key="card.id"
+          class="fade-in"
           :title="card.title"
           :desc="card.desc"
           :type="card.type === 'ceremony' ? 'ceremony' : card.type === 'motto' ? 'motto' : 'normal'"
@@ -60,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useUserStore } from '@/stores/user';
 import { call } from '@/services/request';
 import BaseCard from '@/components/common/BaseCard.vue';
@@ -79,6 +80,12 @@ const loaded = ref(false);
 const loading = ref(true);
 const loadError = ref<{ message: string } | null>(null);
 const cards = ref<{ id: string; title: string; desc: string; type: string }[]>([]);
+
+/** 仪式卡置顶（蓝图 0.3.2 ③：红白事最要紧，先于普卡呈现；其余保持服务端序） */
+const sortedCards = computed(() => {
+  const rank = (t: string) => (t === 'ceremony' ? 0 : t === 'motto' ? 1 : 2);
+  return [...cards.value].sort((a, b) => rank(a.type) - rank(b.type));
+});
 
 const overviewStats = ref([
   { value: '—', label: '族谱代数' },
