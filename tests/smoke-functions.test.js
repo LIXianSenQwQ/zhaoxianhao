@@ -212,6 +212,67 @@ test('R9 reviewAuth approve：新授权正常写入 + 审计', async () => {
   assert.ok(seed.collections.audit_log.length >= 1, '审计应记录 review_auth_approve');
 });
 
+// ─── Sprint R10: 授权闭环通知联动 + 我的申请列表 ───
+
+test('R10 reviewAuth approve → notifications 站内通知（蓝图 7.9）', async () => {
+  seedDB({
+    users: [{ openid: 'u-chief', role: 'CHIEF' }],
+    authRequests: [{ _id: 'r-1', grantee: 'u-a', target: 'm-1', targetName: '郝一', status: 'PENDING' }],
+    authorizations: [],
+    notifications: []
+  });
+  const res = await FN('member').main({ action: 'reviewAuth', op: 'approve', requestId: 'r-1' }, CHIEF_CTX);
+  assert.equal(res.success, true);
+  const seed = globalThis.__HCS_STUB_SEED__;
+  const notes = seed.collections.notifications;
+  assert.equal(notes.length, 1, '批准应写 1 条站内通知');
+  assert.equal(notes[0].userId, 'u-a', '通知发给申请人 grantee');
+  assert.ok(notes[0].title.includes('通过'), '标题含通过');
+  assert.ok(notes[0].targetRoute.includes('m-1'), 'targetRoute 指向成员详情');
+  assert.equal(notes[0].read, false);
+});
+
+test('R10 reviewAuth reject → notifications 站内通知', async () => {
+  seedDB({
+    users: [{ openid: 'u-chief', role: 'CHIEF' }],
+    authRequests: [{ _id: 'r-3', grantee: 'u-c', target: 'm-3', targetName: '郝三', status: 'PENDING' }],
+    notifications: []
+  });
+  const res = await FN('member').main(
+    { action: 'reviewAuth', op: 'reject', requestId: 'r-3', comment: '理由不充分' }, CHIEF_CTX);
+  assert.equal(res.success, true);
+  assert.equal(res.data.status, 'REJECTED');
+  const seed = globalThis.__HCS_STUB_SEED__;
+  const notes = seed.collections.notifications;
+  assert.equal(notes.length, 1, '驳回也应通知申请人');
+  assert.ok(notes[0].title.includes('驳回'), '标题含驳回');
+  assert.ok(notes[0].body.includes('理由不充分'), '审批意见透传给申请人');
+  assert.equal(notes[0].targetRoute, '', '驳回不跳详情');
+});
+
+test('R10 listMyAuth：缺 openid → 403', async () => {
+  const denied = await FN('member').main({ action: 'listMyAuth' }, {});
+  assert.equal(denied.success, false);
+  assert.equal(denied.code, 403);
+});
+
+test('R10 listMyAuth：MEMBER 正向 + 越权隔离（只看自己的）', async () => {
+  seedDB({
+    users: [{ openid: 'u-me', role: 'MEMBER' }],
+    authRequests: [
+      { _id: 'mine-1', grantee: 'u-me', target: 'm-1', status: 'PENDING', createdAt: '2025-01-02T00:00:00Z' },
+      { _id: 'mine-2', grantee: 'u-me', target: 'm-2', status: 'APPROVED', createdAt: '2025-01-01T00:00:00Z' },
+      { _id: 'other', grantee: 'u-someone-else', target: 'm-3', status: 'PENDING', createdAt: '2025-01-03T00:00:00Z' }
+    ]
+  });
+  const ctx = { OPENID: 'u-me', openid: 'u-me' };
+  const res = await FN('member').main({ action: 'listMyAuth' }, ctx);
+  assert.equal(res.success, true);
+  assert.equal(res.data.requests.length, 2, '只能看到自己的申请（越权隔离）');
+  assert.ok(res.data.requests.every(r => r.grantee === 'u-me'));
+  assert.equal(res.data.requests[0]._id, 'mine-1', '按 createdAt 倒序');
+});
+
 // ─── Sprint R3 冒烟：doc / entry / notify ───
 
 test('doc.list：类型筛选 + 未知类型拒绝', async () => {

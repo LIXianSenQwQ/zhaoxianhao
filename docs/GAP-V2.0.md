@@ -1,0 +1,67 @@
+# V2.0 蓝图差距盘点（GAP-V2.0.md）
+
+> 对照《开发框架最终细节 V2.0 五大模块版》与当前代码库（Sprint R10 止）的差距清单。
+> 用途：决定后续 Sprint 范围与优先级；每期收口时更新。
+> 命名说明：蓝图规划包名（pkg-genealogy/pkg-archive/…）与当前库（pkg-family/pkg-growth）存在结构差异——**功能对齐优先，包重组在 MVP 收口期统一执行**。
+
+## 一、云函数层（蓝图 23 vs 当前 15）
+
+| 蓝图函数 | 当前状态 | 差距与动作 |
+|---|---|---|
+| auth | ✅ 已实现（登录/认证/角色） | V1.1 补：密码体系（passwordHash/reversePasswordHash/delegates/assistReset/短信验证码） |
+| member | ✅ tree/getDetail/search/export/exportFile/applyAuth/listMyAuth/reviewAuth | getDetail 已有 hiddenFields（对齐蓝图字段级过滤）；补 aliases/deeds/sourceTags 等字段投影 |
+| relation | ✅ 称谓/五服/挂接校验 | 蓝图 7.2 BFS+矩阵口径已实现；补方言称谓 settings 表 |
+| entry | ✅ 智能入谱双人审核 | 补 OCR/Excel 入口（photo_ai/EXCEL type 已留）；公示期 publicityDeadline 流转 |
+| doc | ✅ 上传/检索 | 补批注/ocrText 全文索引 |
+| event | ✅ 大事记/口述历史门禁 | ✅ 基本对齐 |
+| ceremony | ✅ 祭祀/献花 | 补忌日定时扫描（remindScan 定时触发器） |
+| points | ✅ 四池积分+幂等 | ✅ 对齐 7.5 |
+| task | ✅ 成长任务/打卡 | ✅ 对齐 |
+| notify | ✅ list/read/digest/broadcast | ✅ R10 已打通 member→notifications 站内联动；补订阅消息/公众号兜底通道 |
+| upload | ✅ 场景化上传策略 | V1.1 补 CI 压缩/WEBP 转码/懒加载多档尺寸参数 |
+| admin | ✅ 审计/公示封存/featureFlag | ✅ 对齐 17.1–17.2（settings 开关已具备） |
+| atmosphere | ✅ today 聚合（节气/氛围/卡流/白事素色） | 补四季渐变全量端点色表 |
+| profile/album/weather/calendar（V1.1） | ❌ 未建 | **E1–E4 范围**，前置依赖 CI/MPS/和风天气开通 |
+| content/news/moment/game/home/secscan（V2.0） | ❌ 未建 | **F1–F10 范围**；F1 先做 secscan 与 plaza→family_moments 迁移脚本 |
+
+## 二、数据库层（蓝图 42 vs 当前已用 ~20）
+
+- 已建：users/members/relations/entry_records/documents/media/events/worship_logs/ceremonies/notifications/points_*/tasks/task_records/audit_logs/authorizations/settings/auth_requests(扩展)/plaza_posts/calendar_items/chat_groups
+- V1.1 缺 9：avatars / intro_videos / albums / album_photos / photo_tags / greeting_cards / family_mottos / generation_poems / time_capsules（+weather_cities/almanac_ext）
+- V2.0 缺 12：见蓝图 9.1（local_contents…home_worlds）
+- 动作：users 补 schemaVersion=2 与 V1.1 字段（passwordHash 等留空默认值），迁移脚本 migrations/v1_to_v2.js 随 E1 交付
+
+## 三、页面层（蓝图 82 vs 当前 ~20）
+
+- 主包：index（✅ 按第〇部分：晨光渐变/要事卡流/速览已有基础）/ mine（✅）/ login（✅）/ search（✅ 两态空态）/ privacy（✅ R7/R10 申请+列表）——蓝图 xuemap/clanaffairs/familypark 三 Tab ❌
+- 族谱/谱库：tree/members/detail（✅ 含受限遮罩）/称谓计算 ❌ / relationeditor ❌ / lifebook ❌ / smartentry ❌ / audit/detail（pkg-growth/audit ✅）
+- 互动/日历/祭祀/积分包：聊天 ❌ / 广场 ❌ / 日历 ❌ / 老皇历 ❌ / shrine ❌ / hero ❌ / history ❌ / points ❌ / growth ❌
+- V1.1 个人包 8 页 ❌；V2.0 内容/资讯/动态/娱乐/家园 29 页 ❌
+
+## 四、已对齐的蓝图关键机制（可直接标注达标）
+
+| 蓝图条款 | 现状 |
+|---|---|
+| 6.2 隐私中间件（4 步：取角色→分级判定→403+授权路由→审计） | ✅ 全函数走 privacyCheck + writeAudit；needAuthCard 路由 R7 闭环 |
+| 7.4 privacyCheck 纯函数 | ✅ R1 实现并单测 |
+| 7.5 积分幂等（流水先插+幂等键） | ✅ R3/R5 实现 |
+| 7.8 节气氛围（moodTheme/白事素色/homeCards） | ✅ atmosphere.today 已接首页 |
+| 7.9 通知编排（站内=写 notifications） | ✅ R10 授权审批联动打通 |
+| 17.2 功能开关 | ✅ admin.featureFlag + settings 已具备 |
+| 24.1 三级可见性（PRIVATE/PUBLIC/GROUP） | 🔶 L 级体系已并行，V1.1 visibilityCheck 扩展待 E1 |
+| 26.3 审计 ≥1 年 | ✅ audit_logs 已全量写入 |
+
+## 五、风险与依赖（开发前需用户侧拍板/开通）
+
+| 依赖 | 影响范围 | 建议 |
+|---|---|---|
+| 微信小程序 appid + 云环境号 | 全部真机联调（连续 10 轮阻塞） | 尽快提供开发者工具环境 |
+| 腾讯云 IM / OCR / CI / MPS / 短信 / 和风天气 开通 | W8 互动、E1–E4 | MVP W7 前完成 IM/OCR；E1 前完成其余 |
+| 新闻数据源签约（聚合/天行/拓尔思/RSS） | V2.0 模块二 F3 | F1 前选定 2 家主力源 |
+| 版号/资质结论（附录 C） | V2.0 模块四 | 已按 9.0.2 替代路径规避，无阻塞 |
+
+## 六、建议路线（后续 Sprint 对齐蓝图排期）
+
+1. **R11–R12（MVP 收口轨）**：称谓计算页 / 广场+聊天（IM 前端壳）/ 日历页 / points/growth 页 / 谱库页——补齐 MVP 页面清单；包名重组对齐蓝图 3.2
+2. **E1–E6（V1.1 轨，按蓝图 26.6）**：需 CI/MPS/短信/天气开通后启动；E1 先交付三级可见性中间件 + users schemaVersion 迁移
+3. **F1–F10（V2.0 轨）**：F1 secscan + plaza 迁移先行（无外部依赖，可提前）；模块二/四严格按 9.0 合规边界

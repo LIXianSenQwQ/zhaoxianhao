@@ -38,6 +38,8 @@ async function main(event, context) {
       return await exportToFile(db, openid, event);
     case 'applyAuth':
       return await applyAuth(db, openid, event);
+    case 'listMyAuth':
+      return await listMyAuthRequests(db, openid, event);
     case 'reviewAuth':
       return await reviewAuth(db, openid, event);
     default:
@@ -168,8 +170,21 @@ async function applyAuth(db, openid, { memberId, reason }) {
       createdAt: new Date().toISOString()
     }
   });
-  await writeExportAudit(db, openid, 'member.apply_auth', `target=${memberId}`);
+  await writeAudit(db, openid, 'member.apply_auth', `target=${memberId}`);
   return OK({ submitted: true });
+}
+
+/** 我的授权申请历史（申请人视角；蓝图 Sprint R10） */
+async function listMyAuthRequests(db, openid, { filterPage = 1 }) {
+  if (!openid) return FORBIDDEN('请先登录');
+  const page = Math.max(1, Number(filterPage) || 1);
+  const res = await db.collection('auth_requests')
+    .where({ grantee: openid })
+    .orderBy('createdAt', 'desc')
+    .skip((page - 1) * LIST_LIMIT).limit(LIST_LIMIT)
+    .get();
+  const items = (res && res.data) || [];
+  return OK({ requests: items, page, hasMore: items.length === LIST_LIMIT });
 }
 
 /**
@@ -240,8 +255,31 @@ async function reviewAuth(db, openid, { op = 'list', requestId, comment, status,
     }
   }
 
+  // Sprint R10: 站内通知联动（蓝图 7.9：站内=写 notifications 集合）
+  await pushNotification(db, req.grantee, {
+    title: op === 'approve' ? '您的授权申请已通过' : '您的授权申请被驳回',
+    body: op === 'approve'
+      ? `您对「${req.targetName || req.target}」的授权申请已由族长批准，现在可查看全部字段。`
+      : `您对「${req.targetName || req.target}」的授权申请被驳回${comment ? '（' + String(comment).slice(0, 50) + '）' : ''}。`,
+    targetRoute: op === 'approve' ? `/pkg-family/pages/memberDetail/detail?id=${req.target}` : ''
+  });
+
   await writeExportAudit(db, openid, `member.review_auth_${op}`, `request=${requestId} target=${req.target}`);
   return OK({ status: newStatus });
+}
+
+/** 站内通知推送（蓝图 7.9 站内=写 notifications；Sprint R10 授权闭环联动；失败不阻塞主流程） */
+async function pushNotification(db, userId, { title, body, type = 'AUTH', targetRoute }) {
+  try {
+    await db.collection('notifications').add({
+      data: {
+        userId, type, title, body: body || '',
+        targetRoute: targetRoute || '',
+        read: false,
+        createdAt: new Date().toISOString()
+      }
+    });
+  } catch (e) { /* 忽略通知写入异常 */ }
 }
 
 /**

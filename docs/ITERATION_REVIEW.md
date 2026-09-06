@@ -441,3 +441,53 @@
 4. **审计日志查询接口**：CHIEF 查看最近导出/审批操作流水（audit_log list API）
 
 <!-- 模板：下一轮评审复制此节 -->
+
+---
+
+## 第 R10 轮（Sprint R10 · V2.0 蓝图基线对齐/授权通知联动/我的申请列表）
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R9 现状 | R10 现状 | 趋势 |
+|---|---|---|---|---|---|
+| 功能完整性 | 授权生效站内通知 | approve/reject→notifications | ❌ 静默生效 | ✅ pushNotification（结果+意见+targetRoute 跳详情） | ↑↑ |
+| 功能完整性 | 我的申请列表 | 申请人历史+状态 | ❌ 提交后黑盒 | ✅ listMyAuth（分页/倒序/越权隔离）+ privacy.vue 列表区 | ↑↑ |
+| 机制 | V2.0 蓝图基线 | 单一事实源入仓 | ❌ 蓝图在会话外 | ✅ BLUEPRINT-V2.0-INDEX + GAP-V2.0 差距盘点 | ↑↑ |
+| 质量 | 测试数 | ≥80% (R9:108) | 108 | **112** (+4 通知断言/listMy) | ↑ |
+| 蓝图对齐 | 云函数 23/页面 82 | — | — | 15/82 函数 · ~20/82 页（详见 GAP） | 📋 路线已定 |
+
+### 二、本轮交付清单
+
+**功能模块：**
+- `member/index.js` +pushNotification（蓝图 7.9：站内=写 notifications，失败不阻塞主流程）；reviewAuth approve/reject 成功后通知 grantee（标题/审批意见透传/targetRoute→detail，驳回不跳转）
+- `member/index.js` +listMyAuth action：申请人历史申请（where grantee=openid / createdAt 倒序 / 分页 hasMore），越权隔离（只看自己的）
+- `pages/privacy/privacy.vue` +"我的申请"BaseCard（状态徽章三色/审批意见/时间；失败静默不阻塞表单）
+
+**机制文档（V2.0 蓝图收口）：**
+- `docs/BLUEPRINT-V2.0-INDEX.md`：蓝图结构化索引（42 集合/23 云函数/82 页/合规红线/排期/迭代架构）
+- `docs/GAP-V2.0.md`：差距盘点（函数 15/23、集合 ~20/42、页 ~20/82）+ 已对齐机制清单（隐私中间件/积分幂等/氛围/开关均达标）+ 外部依赖清单（IM/OCR/CI/MPS/短信/天气/新闻源）+ 后续路线（R11–R12 MVP 收口 → E1–E6 → F1–F10）
+
+**测试 +4（108→112）：**
+1. approve → notifications 1 条（userId=grantee/title 含通过/targetRoute 指向成员详情/read=false）
+2. reject → 通知申请人（标题含驳回/审批意见透传 body/targetRoute 为空）
+3. listMyAuth 缺 openid → 403
+4. listMyAuth MEMBER 正向：只返回自己的申请（越权隔离）+ createdAt 倒序
+
+**门禁：** npm run verify 全绿（112 用例 · 0 fail · 1W · 云函数 14/14）。
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 真机 P95/首屏采集（连续 10 轮阻塞） | 高 | 沙箱侧全部就绪；**突破必须依赖微信开发者工具环境** |
+| V1.1/V2.0 依赖未开通（CI/MPS/短信/天气/IM/新闻源） | 中 | GAP-V2.0 已列清单与触发时点；E1/F3 前需用户侧拍板 |
+| 包名结构与蓝图 3.2 不一致 | 低 | 功能对齐优先；包重组在 MVP 收口期统一执行（已记录 GAP） |
+
+### 四、R11 承诺
+
+1. **称谓计算页**（relation/calc：两人称谓+五服着色，复用 kindship 矩阵）
+2. **审计流水查询 API**（audit_log list，CHIEF 专属，按人/时间/类型检索——蓝图 admin.auditList）
+3. **广场动态页基础版**（plaza_posts 列表+发布，为 V2.0 moment 迁移铺路）
+4. **性能实测**（持续等待用户环境）
+
+<!-- 模板：下一轮评审复制此节 -->

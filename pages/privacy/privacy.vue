@@ -1,4 +1,4 @@
-<!-- pages/privacy/privacy.vue – 隐私授权申请（Sprint R7：needAuthCard 授权卡闭环） -->
+<!-- pages/privacy/privacy.vue – 隐私授权申请 + 我的申请列表（Sprint R7/R10） -->
 <template>
   <view class="privacy-apply-page">
     <BaseCard>
@@ -28,6 +28,19 @@
         <text class="tip">提交后由族长（CHIEF）审批，审批通过即可查看该族人全部字段。</text>
       </template>
     </BaseCard>
+
+    <!-- 我的申请历史（Sprint R10：申请人视角闭环） -->
+    <BaseCard title="我的申请" v-if="myRequests.length">
+      <view v-for="r in myRequests" :key="r._id" class="my-req">
+        <view class="my-req-head">
+          <text class="my-req-title">{{ r.targetName || r.target }}</text>
+          <text class="my-req-status" :class="statusClass(r.status)">{{ statusLabel(r.status) }}</text>
+        </view>
+        <text class="my-req-reason">"{{ r.reason }}"</text>
+        <text class="my-req-meta" v-if="r.comment">审批意见：{{ r.comment }}</text>
+        <text class="my-req-meta">{{ formatTime(r.createdAt) }}</text>
+      </view>
+    </BaseCard>
   </view>
 </template>
 
@@ -42,10 +55,36 @@ const memberId = ref('');
 const targetName = ref('');
 const reason = ref('');
 const submitting = ref(false);
+const myRequests = ref<any[]>([]);
+
+const STATUS_LABEL: Record<string, string> = { PENDING: '待审', APPROVED: '已通过', REJECTED: '已驳回' };
+
+function statusLabel(s?: string): string {
+  return STATUS_LABEL[s || 'PENDING'] || '待审';
+}
+function statusClass(s?: string): string {
+  return s === 'APPROVED' ? 'st-approved' : s === 'REJECTED' ? 'st-rejected' : 'st-pending';
+}
+function formatTime(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+/** 拉取我的申请历史（Sprint R10；失败静默，不阻塞申请表单） */
+async function loadMyRequests() {
+  try {
+    const res = await read('member', { action: 'listMyAuth' }, null, 0);
+    if (res.success && res.data) {
+      myRequests.value = res.data.requests || [];
+    }
+  } catch (e) { /* 静默 */ }
+}
 
 onLoad((q: any = {}) => {
   memberId.value = String(q.memberId || '');
   targetName.value = decodeURIComponent(String(q.name || ''));
+  loadMyRequests(); // Sprint R10：我的申请列表
 });
 
 async function submit() {
@@ -87,4 +126,16 @@ async function submit() {
 
 .actions { margin-top: 16px; display: flex; justify-content: center; }
 .tip { font-size: 12px; color: #8A8378; margin-top: 12px; display: block; text-align: center; }
+
+/* 我的申请列表（Sprint R10） */
+.my-req { padding: 10px 0; border-bottom: 1px solid #EAE4D6; }
+.my-req:last-child { border-bottom: none; }
+.my-req-head { display: flex; align-items: center; gap: 8px; }
+.my-req-title { font-size: 14px; font-weight: 600; color: #2B2320; flex: 1; }
+.my-req-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; }
+.st-pending { background: #FFF3D6; color: #B07B24; }
+.st-approved { background: #E2F3E4; color: #2E7D32; }
+.st-rejected { background: #FDE8E8; color: #C0392B; }
+.my-req-reason { font-size: 12px; color: #6B6459; margin-top: 6px; display: block; font-style: italic; }
+.my-req-meta { font-size: 11px; color: #B0A99A; margin-top: 4px; display: block; }
 </style>

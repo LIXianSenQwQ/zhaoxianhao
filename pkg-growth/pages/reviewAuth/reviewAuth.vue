@@ -35,8 +35,8 @@
         <text class="req-grantee">申请人：{{ r.grantee }}</text>
 
         <view class="req-actions" v-if="r.status === 'PENDING'">
-          <Button class="act-btn" type="error" size="mini" :disabled="acting" @click="review(r, 'reject')">驳回</Button>
-          <Button class="act-btn" type="primary" size="mini" :disabled="acting" @click="review(r, 'approve')">批准</Button>
+          <button class="act-btn btn-error" size="mini" :disabled="acting" @click="review(r, 'reject')">驳回</button>
+          <button class="act-btn btn-primary" size="mini" :disabled="acting" @click="review(r, 'approve')">批准</button>
         </view>
         <view class="reviewed-line" v-else>
           <text class="reviewed-text">{{ r.reviewedAt ? formatTime(r.reviewedAt) + ' 已处理' : '' }}</text>
@@ -61,7 +61,6 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import ErrorPage from '@/components/common/ErrorPage.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
-import Button from '@/uni_modules/uview-ui/components/u-button/u-button.vue';
 
 const TABS = [
   { value: 'PENDING', label: '待审' },
