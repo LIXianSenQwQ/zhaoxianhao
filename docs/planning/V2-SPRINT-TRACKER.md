@@ -50,6 +50,8 @@
 | **模块三 内容安全 secscan 加固** | detectText（词库+msgSecCheck 降级）+ detectImage + 审计 | ✅ E14 |
 | **模块二 新闻推荐引擎** | news.recommend.get（三路召回：兴趣/热度/家族；牛顿冷却时效；冷启动包）+ interest.init/list/click/negative + hot.bump | ✅ F4 |
 | **模块二 收藏分组+离线包** | favorite.group.create/list/rename/remove/move + offline.pack/list/remove/cleanup（合规仅快照）+ 10min 定时触发器 | ✅ F4 |
+| **模块三 自动备份队列** | backup 云函数 backupStatus 状态机（PENDING/DONE/FAIL）+ 重试上限 3 + 配额 10GB + export/restore；album.uploadBatch 写 fileSize/attempts | ✅ F3b |
+| **模块三 2GB 分片上传** | upload 云函数 chunk.init/put/progress/complete/status：断点续传会话 + video 转码骨架 + upload_sessions schema | ✅ F3c |
 | 模块三 家族动态 | plaza 既有；family_moments 迁移脚本既有 | ⏳ |
 | 模块四 合规游戏 | 待 F6-F8 | ⏳ |
 | 模块五 虚拟家园 | 待 F9-F10 | ⏳ |
@@ -57,12 +59,12 @@
 ### 测试覆盖（开发框架二十三 23.5：覆盖率≥90%）
 | 指标 | 数值 | 状态 |
 | --- | --- | --- |
-| 测试总数 | 286（F4 累计 +17）| ✅ F4 |
+| 测试总数 | 298（F3b +7 / F3c +5）| ✅ F3c |
 | 失败 | 0 | ✅ |
 | Lint error | 0 | ✅ |
-| 云函数结构校验 | 24/24（新增 news）| ✅ |
-| **新增测试项** | interest.init（正常/非法/幂等）、recommend.get（冷启动/热度排序/点击回流/负反馈过滤）、favorite.group 全生命周期、offline.pack/list/cleanup、cron.refresh | ✅ F4 |
-| 本次修复 | test where 排除 isGroup 元数据行；note 子串断言 | ✅ F4 |
+| 云函数结构校验 | 25/25（新增 backup）| ✅ |
+| **新增测试项** | F3b: uploadBatch PENDING/fileSize、process DONE/FAIL/重试/封存、retry/stats、quota、export、restore；F3c: policy video、chunk.init 校验+会话、put+progress 续传、complete 缺片拒绝/合并/转码、断点续传复用 | ✅ F3b+F3c |
+| 本次修复 | upload_sessions scene enum 补全（T3 schema 门禁）| ✅ F3c |
 
 ---
 
