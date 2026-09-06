@@ -7,8 +7,8 @@
     "build:mp-wechat": "node scripts/uni-run.js build:mp-wechat",
     "dev:h5": "node scripts/uni-run.js dev:h5",
     "build:h5": "node scripts/uni-run.js build:h5",
-    "test": "node --test --test-isolation=none tests/roles.test.js tests/privacy.test.js tests/kindship.test.js tests/core.test.js tests/tree.test.js tests/lineage.test.js tests/linkage.test.js tests/tree-view.test.js tests/tree-flow.test.js tests/smoke-functions.test.js tests/schema.test.js",
-    "test:watch": "node --test --test-isolation=none --watch tests/roles.test.js tests/privacy.test.js tests/kindship.test.js tests/core.test.js tests/tree.test.js tests/lineage.test.js tests/linkage.test.js tests/tree-view.test.js tests/tree-flow.test.js tests/smoke-functions.test.js tests/schema.test.js",
+    "test": "node --test --test-isolation=none tests/roles.test.js tests/privacy.test.js tests/kindship.test.js tests/core.test.js tests/tree.test.js tests/lineage.test.js tests/linkage.test.js tests/tree-view.test.js tests/tree-flow.test.js tests/family-tree-layout.test.js tests/smoke-functions.test.js tests/schema.test.js",
+    "test:watch": "node --test --test-isolation=none --watch tests/roles.test.js tests/privacy.test.js tests/kindship.test.js tests/core.test.js tests/tree.test.js tests/lineage.test.js tests/linkage.test.js tests/tree-view.test.js tests/tree-flow.test.js tests/family-tree-layout.test.js tests/smoke-functions.test.js tests/schema.test.js",
     "lint": "node scripts/lint-check.js",
     "check:functions": "node scripts/check-functions.js",
     "check:env": "node scripts/check-env.js",
@@ -34,6 +34,7 @@
     "@dcloudio/uni-components": "3.0.0-4020920240930001",
     "@dcloudio/uni-h5": "3.0.0-4020920240930001",
     "@dcloudio/uni-mp-weixin": "3.0.0-4020920240930001",
+    "lunar-javascript": "^1.6.12",
     "pinia": "^2.1.7",
     "vue": "3.4.21",
     "vue-i18n": "^9.1.9"

@@ -41,6 +41,21 @@ function pickDoc(res) {
  * 输入 A/B → 物化路径前缀交集求共同祖先 → n(A 上溯)/m(祖先下溯 B) → 矩阵查称谓 + 五服
  * 无共同祖先 → related:false + 同宗（fail-closed 口径与单测一致）
  */
+/**
+ * 解析成员出生序次：优先 birthOrder（整数，小者长），次之 birthDate（YYYY-MM-DD 转为 int），否则 null。
+ */
+function birthKeyOf(member) {
+  if (member && member.birthOrder != null) return Number(member.birthOrder);
+  const bd = member && typeof member.birthDate === 'string' ? member.birthDate : null;
+  if (!bd) return null;
+  // YYYYMMDD int for comparison
+  const y = parseInt(bd.slice(0,4), 10);
+  const m = parseInt(bd.slice(5,7), 10);
+  const d = parseInt(bd.slice(8,10), 10);
+  if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)) return y * 10000 + m * 100 + d;
+  return null;
+}
+
 async function calcRelation(db, openid, aId, bId) {
   if (!aId || !bId) return BAD_REQUEST('缺少 aId 或 bId');
 
@@ -73,7 +88,16 @@ async function calcRelation(db, openid, aId, bId) {
 
   const upSteps = as.length - common;    // A 上溯至共同祖先 n
   const downSteps = bs.length - common;  // 共同祖先下溯至 B m
-  const title = kinshipTitle(upSteps, downSteps, b.gender === 'FEMALE' ? 'FEMALE' : 'MALE', upSteps >= downSteps ? 'elder' : 'younger');
+  /** 同代（up===down）且需 seniority：按实际出生信息决定；无数据则保持确定性默认值 elder（向后兼容） */
+  let seniority = 'elder'; // deterministic default
+  if (upSteps === downSteps && upSteps > 0) {
+    const ka = birthKeyOf(a);
+    const kb = birthKeyOf(b);
+    if (ka !== null && kb !== null && ka !== kb) {
+      seniority = ka < kb ? 'younger' : 'elder'; // A 年长 → B 为 younger sibling
+    }
+  }
+  const title = kinshipTitle(upSteps, downSteps, b.gender === 'FEMALE' ? 'FEMALE' : 'MALE', seniority);
 
   await writeAudit(db, { userId: openid, action: 'relation.calc', target: `${aId}->${bId}`, detail: `n=${upSteps} m=${downSteps}` }).catch(() => {});
 

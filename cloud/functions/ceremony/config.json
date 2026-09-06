@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "openapi": []
+  },
+  "triggers": [
+    {
+      "name": "remindScanTimer",
+      "type": "timer",
+      "config": "0 0 6 * * * *",
+      "description": "V2.0 P3: 每日 6:00 扫描 calendar_items 忌日/生辰提醒（蓝图 7.9）→ notifications 站内通知；notified:false + remindAt <= 当日"
+    }
+  ],
+  "envVariables": {}
+}
