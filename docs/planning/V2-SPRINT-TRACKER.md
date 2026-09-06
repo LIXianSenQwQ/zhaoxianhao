@@ -59,7 +59,7 @@
 ### 测试覆盖（开发框架二十三 23.5：覆盖率≥90%）
 | 指标 | 数值 | 状态 |
 | --- | --- | --- |
-| 测试总数 | 298（F3b +7 / F3c +5）| ✅ F3c |
+| 测试总数 | 315（F3b +7 / F3c +5 / P3 +17：family-tree-layout 16 用例 + entry 谱名冲突 1）| ✅ F3c + P3 |
 | 失败 | 0 | ✅ |
 | Lint error | 0 | ✅ |
 | 云函数结构校验 | 25/25（新增 backup）| ✅ |
@@ -122,5 +122,34 @@
 1. 每项交付必过门禁：`npm run verify`（test + lint + functions）全绿方可 commit；
 2. 新集合必配 db-schema + 进 seedDB；新云函数 action 必配冒烟测试；
 3. 关键操作（权限/密码/解密/公告/奖励）必写 audit_logs（保留 ≥1 年）；
+
+---
+
+## 四、P3 冲刺：核心算法增强收口（蓝图第三部分 §7.1–§7.11）
+
+> 本轮为**开发框架第三部分「核心算法与隐私」的增强收口冲刺**，非 V2.0 五模块新功能。
+> 审计底稿：`docs/planning/P3-audit-consolidated.md`；迁移预案：`docs/planning/MIGRATION-CLOUD-TO-SELF.md`。
+> 基线：npm run verify 全绿（test=298 → 315、lint error=0、functions 25/25、lunar-javascript 已装）。
+
+### P3 交付清单（git：2656912 / 0d84333）
+| 蓝图条款 | 交付物 | 状态 |
+| --- | --- | --- |
+| §7.1 族谱树布局 | `utils/family-tree-layout.js` 纯函数：世代行 Y/兄弟 birthOrder 排序/父节点居中/家庭单元/直系过滤/时间轴/五服色板 → 16 用例 `tests/family-tree-layout.test.js` | ✅ 算法层交付（Canvas 页接入为 P1） |
+| §7.2 称谓长幼 | `relation.calc` 同代称谓 seniority 改按**实际出生信息**解析（birthOrder/birthDate），无数据保持 elder 默认向后兼容（修复兄呼弟恒得「哥哥」缺陷） | ✅ |
+| §7.7 谱名冲突检测 | `entry.submit` 与在库 `members.genealogyName` 查重，命中不阻断、随单返回 `conflict/conflictCount/conflictHint`（F5 冒烟用例） | ✅ |
+| §7.9 忌日提醒定时器 | `cloud/functions/ceremony/config.json`：每日 6:00 timer → `remindScan`（原函数已在，R13 补触发器） | ✅ |
+| §7.10 云迁移预案 | `docs/planning/MIGRATION-CLOUD-TO-SELF.md`（触发条件/双写/灰度/回滚/验收）+ `cloud/functions/common/gateway.js` 转发层预留骨架（`npm run sync:common` 同步） | ✅ 预案与骨架交付（实际迁移待量级触发） |
+| §7.11 老皇历引擎 | `lunar-javascript@^1.6.12` 加入 dependencies（1900–2100 离线历法）；`lib/lunar-data.js` detect 三档回退已有 | ✅ 依赖接入（npm 缓存 EPERM 绕行：`npm install --cache .npm-cache-lunar`） |
+
+### P3 遗留 P1 项（后续冲刺）
+| 蓝图条款 | 待办 | 优先级 |
+| --- | --- | --- |
+| §7.1 Canvas 图视图 | family-tree-layout 接入 tree.vue 图视图切换 + TreeGraph.vue 双指缩放/视口裁剪/直系/时间轴/五服着色 | P1 |
+| §7.2 姻亲规则 | `relation.calc` 无共同祖先时经 SPOUSE 边走姻亲称谓表（姐夫/婶婶等） | P1 |
+| §7.2 方言覆盖 | settings.kindshipDialect 称谓覆盖表 | P1 |
+| §7.6 公示期 | entry APPROVED 前 publicityDeadline 流转 + 通知 | P1 |
+| §7.8 24 节气渐变 | 全量端点色板（含节日 festival 字段） | P1 |
+| §7.9 订阅消息/公众号 | notify 站内外的订阅/IM 通道适配 | P1 |
+| 隐私全覆盖扫描 | 敏感 action 逐一点检 privacyCheck/visibilityCheck 遗漏（§7.4 复查） | P1 |
 4. 新闻正文只外链不缓存（时政）；游戏无联机/无内购/无虚拟货币；
 5. 每期结束把增量回写本文档（基线收口），保证「文档即事实」。

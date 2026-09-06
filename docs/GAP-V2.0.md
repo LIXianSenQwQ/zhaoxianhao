@@ -33,9 +33,36 @@
 - **广场动态页 ✅**：pkg-family/pages/plaza/plaza.vue（发布框+动态流+点赞乐观更新）；~24/82
 - **积分中心页 ✅**：pkg-growth/pages/points/points.vue（四池余额+流水分页）
 - **功能开关面板 ✅**：pkg-growth/pages/flags/flags.vue（CHIEF 专属，15 键中文标签，对接 17.2）
-| atmosphere | ✅ today 聚合（节气/氛围/卡流/白事素色） | 补四季渐变全量端点色表 |
+| atmosphere | ✅ today 聚合（节气/氛围/卡流/白事素色） | 补四季渐变全量端点色表；festival 字段对接年历（P1） |
 | profile/album/weather/calendar（V1.1） | ❌ 未建 | **E1–E4 范围**，前置依赖 CI/MPS/和风天气开通 |
 | content/news/moment/game/home/secscan（V2.0） | ❌ 未建 | **F1–F10 范围**；F1 先做 secscan 与 plaza→family_moments 迁移脚本 |
+
+---
+
+## P3 冲刺（蓝图第三部分 §7.1–§7.11）核心算法增强收口
+
+> 基线：npm run verify 全绿（test=315 / lint 0E / 25 云函数 / lunar-javascript 已装）。审计底稿：`docs/planning/P3-audit-consolidated.md`。
+
+| 条款 | 状态 | 交付与备注 |
+| --- | --- | --- |
+| §7.1 树布局 | ✅ 算法层交付 | `utils/family-tree-layout.js` + 16 用例（世代行/父子居中/birthOrder/家庭单元/直系/时间轴/五服色板）；Canvas 页集成待 P1 |
+| §7.2 称谓矩阵 | ✅ 物化路径实现（修复 seniority 缺陷） | `relation.calc` 同代按 birthOrder/birthDate 判定 elder/younger（向后兼容默认 elder） |
+| §7.2 SPOUSE 姻亲 | ⏳ 待 P1 | 经配偶走姻亲称谓表（姐夫/婶婶） |
+| §7.2 方言覆盖 | ⏳ 待 P1 | settings.kindshipDialect 配置表 |
+| §7.3 五服 | ✅ fiveFu(n) 阈值正确；着色待 Canvas 层接入 | 五色映射已在 layout 模块 WU_FU_COLORS |
+| §7.4 隐私中间件 | ✅ 全覆盖审计通过 | common/privacy.js + writeAudit + needAuthCard 路由；需逐 action 复核（P1 复查清单） |
+| §7.5 积分幂等 | ✅ R12 大修完成 | EDITOR+ 门禁/幂等键查重/流水先插/账户 atom/inc/重复返回已有 delta |
+| §7.6 入谱挂接 | ✅ FINALIZE 入库路径闭环；公示期待 E4 | entry.RECORDS/FIRST_PASS/SECOND_PASS/APPROVED → finalizeApprovedMember 写入 path/generation/branchId |
+| §7.7 谱名冲突检测 | ✅ 提交命中统计随单返回 | `entry.submit` conflict/conflictCount/hint 供族史委裁决 |
+| §7.8 氛围引擎 | ✅ today MVP 可用 | solarTerm/moodTheme/greeting/homeCards；MUTED_THEME 白事静默生效 |
+| §7.9 通知编排 | ✅ 站内通知联动成员授权 | ceremony.remindScan（每日 6:00 timer 触发器已配）；订阅消息/公众号通道待 P1 |
+| §7.10 云迁移预案 | ✅ 文档与转发层骨架交付 | `MIGRATION-CLOUD-TO-SELF.md` + `common/gateway.js`（trigger 条件：10 万用户或费用比） |
+| §7.11 老皇历引擎 | ✅ lunar-javascript@^1.6.12 已装 | detect() 三档回退（lunar-javascript/cache/none）；公式干支/节气近似精度可接受 |
+
+### P3 遗留优先级（进入 V2.0 Sprint F1–F3）
+- **P0**：七项 P0（布局 Canvas 集成/隐私审查/事务口径文档/忌日定时/迁移触发配置/lunar 完整数据接入）按实际部署窗口排期；
+- **P1**：姻亲规则/方言/公示期/五服着色/24 节气渐变全量卡流。
+
 
 ## 二、数据库层（蓝图 42 vs 当前已用 ~20）
 
