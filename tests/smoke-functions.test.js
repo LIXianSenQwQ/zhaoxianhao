@@ -142,7 +142,7 @@ function seedDB({
   worshipLogs = [], tasks = [], taskRecords = [], calendarItems = [], events = [],
   ceremonies = [], entryRecords = [], relations = [],
   settings = [], avatars = [],
-  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = [], complianceSigns = [], localContents = []
+  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = [], complianceSigns = [], localContents = [], contentCategories = []
 } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
@@ -152,7 +152,7 @@ function seedDB({
       worship_logs: worshipLogs, tasks, task_records: taskRecords,
       calendar_items: calendarItems, events, ceremonies,
       entry_records: entryRecords, relations, avatars,
-      albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules, greeting_cards: greetingCards, weather_cities: weatherCities, compliance_signs: complianceSigns, local_contents: localContents
+      albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules, greeting_cards: greetingCards, weather_cities: weatherCities, compliance_signs: complianceSigns, local_contents: localContents, content_categories: contentCategories
     },
     seq: 1000
   };
@@ -1891,4 +1891,114 @@ test('R25 migrate-plaza.migrateItem: 缺必填字段报错', async () => {
   const { migrateItem } = require('../scripts/migrate-plaza.js');
   const out = migrateItem({ _id: 'bad' }, true);
   assert.ok(out.error, '应返回 error');
+});
+
+// ═══════════════════════ V2.0 模块一：本地内容/分类/安全 ═══════════════════════
+
+test('V2 content.save: 正常保存含三级分类', async () => {
+  seedDB({ localContents: [] });
+  const res = await FN('content').main(
+    {
+      action: 'content.save', type: 'story', title: '梨花节记忆',
+      content: '1988 年梨花节全家合影的记录文字内容。',
+      mainCategory: '家族记忆', subCategory: '节庆', tags: ['梨花节', '1988年'],
+      visibility: 'PRIVATE'
+    },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(res.data.contentId);
+});
+
+test('V2 content.save: 敏感分类强制 PRIVATE（证件资料不可公开）', async () => {
+  seedDB({ localContents: [] });
+  const res = await FN('content').main(
+    {
+      action: 'content.save', type: 'photo', title: '证件照',
+      content: '身份证扫描件', mainCategory: '证件资料', visibility: 'PUBLIC'
+    },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, false, '敏感分类应拒绝公开');
+  assert.equal(res.code, 400);
+});
+
+test('V2 content.save: 非法 visibility 拒绝', async () => {
+  seedDB({ localContents: [] });
+  const res = await FN('content').main(
+    { action: 'content.save', type: 'article', title: 'x', content: 'y'.repeat(10), visibility: 'HACKER' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('V2 content.search: 按主分类过滤', async () => {
+  seedDB({
+    localContents: [
+      { _id: 'lcA', openid: 'u-member', type: 'article', title: 'A 内容', content: 'x'.repeat(20), mainCategory: '旅行', updatedAt: '2026-09-06T10:00:00Z' },
+      { _id: 'lcB', openid: 'u-member', type: 'article', title: 'B 内容', content: 'y'.repeat(20), mainCategory: '家族记忆', updatedAt: '2026-09-06T11:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main(
+    { action: 'content.search', mainCategory: '家族记忆' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true);
+  assert.equal(res.data.contents.length, 1, '应只返回家族记忆分类');
+  assert.equal(res.data.contents[0]._id, 'lcB');
+});
+
+test('V2 category.save: 主分类创建', async () => {
+  seedDB({ contentCategories: [] });
+  const res = await FN('content').main(
+    { action: 'category.save', name: '家族记忆', type: 'MAIN' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(res.data.categoryId);
+});
+
+test('V2 category.save: 非法 type 拒绝', async () => {
+  seedDB({ contentCategories: [] });
+  const res = await FN('content').main(
+    { action: 'category.save', name: 'x', type: 'ROOT' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('V2 category.list: 返回本人分类', async () => {
+  seedDB({
+    contentCategories: [
+      { _id: 'c1', openid: 'u-member', type: 'MAIN', name: '家族记忆', level: 1 }
+    ]
+  });
+  const res = await FN('content').main({ action: 'category.list' }, CTX_WITH_ROLE('MEMBER'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.categories.length, 1);
+});
+
+test('V2 secscan.detectText: 敏感词命中返回 block + flaggedWords', async () => {
+  const res = await FN('secscan').main(
+    { action: 'detectText', content: '这里有赌博和毒品宣传内容需要检测' },
+    CTX
+  );
+  assert.equal(res.success, true);
+  assert.equal(res.data.status, 'block');
+  assert.ok(Array.isArray(res.data.flaggedWords) && res.data.flaggedWords.length > 0);
+});
+
+test('V2 secscan.detectText: msgSecCheck 降级正常文本仍 pass', async () => {
+  // stub 环境 wx.cloud.callFunction 返回无 errCode → 降级到敏感词库 → pass
+  const res = await FN('secscan').main(
+    { action: 'detectText', content: '清明节阖族祭祖，缅怀先辈郝公。' },
+    CTX
+  );
+  assert.equal(res.success, true);
+  assert.equal(res.data.status, 'pass', '正常文本应通过');
+});
+
+test('V2 secscan.detectImage: sourceType 校验', async () => {
+  const res = await FN('secscan').main({ action: 'detectImage', sourceType: 'ftp' }, CTX);
+  assert.equal(res.code, 400);
 });
