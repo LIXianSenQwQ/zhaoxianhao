@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "family_moments",
+  "description": "V2.0 F5: 家族动态主集合（升级自 plaza_posts，兼容迁移）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "authorId": { "type": "string" },
+    "authorName": { "type": "string" },
+    "type": { "type": "string", "enum": ["TEXT", "IMAGE", "VIDEO", "MIXED", "POLL"] },
+    "content": { "type": "string" },
+    "mediaIds": { "type": "array", "items": { "type": "string" } },
+    "topicTags": { "type": "array", "items": { "type": "string" } },
+    "mentions": { "type": "array", "items": { "type": "object" } },
+    "visibility": { "type": "string", "enum": ["PUBLIC", "FAMILY", "GROUP", "PRIVATE"] },
+    "groupIds": { "type": "array", "items": { "type": "string" } },
+    "stats": { "type": "object" },
+    "publishAt": { "type": "string", "format": "date-time" },
+    "hotScore": { "type": "number" },
+    "status": { "type": "string", "enum": ["PUBLISHED", "DELETED", "REPORTED"] }
+  },
+  "required": ["authorId", "type", "content", "publishAt", "status"],
+  "indexes": [
+    { "keys": { "publishAt": -1 }, "name": "timeline_idx" },
+    { "keys": { "authorId": 1, "publishAt": -1 }, "name": "author_idx" }
+  ]
+}

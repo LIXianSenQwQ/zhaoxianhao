@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "home_worlds",
+  "description": "V2.0 F9-F10: 虚拟家园（2D 等距庭院布局/建筑/装饰），home_avatars 的 companion world storage，type 字段区分记录类型",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": "string" },
+    "level": { "type": "integer" },
+    "experience": { "type": "integer" },
+    "buildings": { "type": "array", "items": { "type": "object" } },
+    "decorations": { "type": "array", "items": { "type": "object" } },
+    "tasks": { "type": "array", "items": { "type": "object" } },
+    "visits": { "type": "number" },
+    "likes": { "type": "number" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["userId", "level", "createdAt"],
+  "indexes": [
+    { "keys": { "userId": 1 }, "name": "user_world_idx" },
+    { "keys": { "level": -1, "visits": -1 }, "name": "ranking_idx" }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "search_index",
+  "description": "V2.0 F3: 本地内容倒排索引（关键词 → 内容ID）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "openid": { "type": "string" },
+    "contentId": { "type": "string" },
+    "tokens": { "type": "array", "items": { "type": "string" } },
+    "title": { "type": "string" },
+    "mainCategory": { "type": "string" },
+    "subCategory": { "type": "string" },
+    "type": { "type": "string", "enum": ["article", "story", "photo", "video", "record"] },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "deleted": { "type": "boolean" }
+  },
+  "required": ["openid", "contentId", "tokens", "updatedAt"],
+  "indexes": [
+    { "keys": { "openid": 1, "contentId": 1 }, "name": "owner_content_idx" },
+    { "keys": { "openid": 1, "deleted": 1, "updatedAt": -1 }, "name": "owner_search_idx" }
+  ]
+}

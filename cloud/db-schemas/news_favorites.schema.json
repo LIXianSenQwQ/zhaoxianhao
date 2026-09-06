@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "news_favorites",
+  "description": "V2.0 F4: 新闻收藏与离线包",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "openid": { "type": "string" },
+    "newsId": { "type": "string" },
+    "groupId": { "type": "string" },
+    "groupName": { "type": "string" },
+    "snapshot": { "type": "object" },
+    "offline": { "type": "boolean" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["openid", "newsId", "createdAt"],
+  "indexes": [
+    { "keys": { "openid": 1, "newsId": 1 }, "name": "user_news_idx" },
+    { "keys": { "openid": 1, "offline": 1, "createdAt": -1 }, "name": "offline_idx" }
+  ]
+}

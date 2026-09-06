@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "home_avatars",
+  "description": "V2.0 F9: 虚拟角色（家园模块），2D 古典工笔立绘，参数化捏脸/服饰/称号",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": "string" },
+    "name": { "type": "string" },
+    "face": { "type": "object" },
+    "outfit": { "type": "array", "items": { "type": "string" } },
+    "title": { "type": "string" },
+    "level": { "type": "integer" },
+    "exp": { "type": "integer" },
+    "skillTree": { "type": "object" },
+    "achievements": { "type": "array", "items": { "type": "string" } },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["userId", "name", "level", "createdAt"],
+  "indexes": [
+    { "keys": { "userId": 1 }, "name": "user_avatar_idx" }
+  ]
+}

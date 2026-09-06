@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "game_records",
+  "description": "V2.0 F6-F8: 合规游戏记录（棋谱/答题/灯谜战绩/回放），仅单机与异步，无联机对局",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": "string" },
+    "gameType": { "type": "string", "enum": ["CHESS", "QUIZ", "RIDDLE", "SCOREBOARD", "SIMULATE"] },
+    "gameName": { "type": "string", "enum": ["象棋", "围棋", "五子棋", "百业问学", "灯谜会", "牌局记分板", "梨园小筑"] },
+    "result": { "type": "string", "enum": ["WIN", "LOSE", "DRAW", "SCORE", "NONE"] },
+    "durationSec": { "type": "integer" },
+    "moveLog": { "type": "string" },
+    "score": { "type": "integer" },
+    "opponentId": { "type": "string" },
+    "branchId": { "type": "string" },
+    "playedAt": { "type": "string", "format": "date-time" },
+    "status": { "type": "string", "enum": ["COMPLETED", "ONGOING", "ABANDONED"] }
+  },
+  "required": ["userId", "gameType", "playedAt", "status"],
+  "indexes": [
+    { "keys": { "userId": 1, "playedAt": -1 }, "name": "user_game_idx" },
+    { "keys": { "gameType": 1, "result": 1 }, "name": "game_stat_idx" }
+  ]
+}

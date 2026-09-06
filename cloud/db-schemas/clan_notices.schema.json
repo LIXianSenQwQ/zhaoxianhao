@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "clan_notices",
+  "description": "V2.0 F5: 家族公告（管理员发布，置顶/已阅回执）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "publisherId": { "type": "string" },
+    "publisherName": { "type": "string" },
+    "title": { "type": "string" },
+    "content": { "type": "string" },
+    "category": { "type": "string", "enum": ["族务", "红白事", "节庆", "应急", "公示"] },
+    "priority": { "type": "integer" },
+    "stickingCountdown": { "type": "integer" },
+    "requiresReadReceipt": { "type": "boolean" },
+    "readBy": { "type": "array", "items": { "type": "object" } },
+    "publishAt": { "type": "string", "format": "date-time" },
+    "expireAt": { "type": "string", "format": "date-time" },
+    "status": { "type": "string", "enum": ["PUBLISHED", "EXPIRED", "DELETED"] }
+  },
+  "required": ["publisherId", "title", "content", "publishAt", "status"],
+  "indexes": [
+    { "keys": { "status": 1, "stickingCountdown": -1 }, "name": "active_stick_idx" }
+  ]
+}

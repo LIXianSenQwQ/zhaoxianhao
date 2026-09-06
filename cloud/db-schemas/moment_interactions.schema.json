@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "moment_interactions",
+  "description": "V2.0 F5: 动态互动（点赞/评论/@提及）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "momentId": { "type": "string" },
+    "type": { "type": "string", "enum": ["LIKE", "COMMENT", "MENTION", "SHARE"] },
+    "userId": { "type": "string" },
+    "userName": { "type": "string" },
+    "content": { "type": "string" },
+    "parentId": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["momentId", "type", "userId", "createdAt"],
+  "indexes": [
+    { "keys": { "momentId": 1, "type": 1, "createdAt": -1 }, "name": "moment_type_idx" }
+  ]
+}

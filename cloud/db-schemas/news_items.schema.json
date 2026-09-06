@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "news_items",
+  "description": "V2.0 F3: 新闻条目缓存（标题+摘要+来源，正文外链，时政不缓存正文）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "sourceId": { "type": "string" },
+    "sourceName": { "type": "string" },
+    "title": { "type": "string" },
+    "summary": { "type": "string" },
+    "category": { "type": "string" },
+    "subCategory": { "type": "string" },
+    "url": { "type": "string" },
+    "coverUrl": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "publishAt": { "type": "string", "format": "date-time" },
+    "fingerprint": { "type": "string" },
+    "hot": { "type": "number" },
+    "fetchedAt": { "type": "string", "format": "date-time" },
+    "status": { "type": "string", "enum": ["PUBLISHED", "OFFLINE"] }
+  },
+  "required": ["sourceId", "title", "category", "url", "fingerprint", "publishAt", "fetchedAt", "status"],
+  "indexes": [
+    { "keys": { "fingerprint": 1 }, "name": "dedup_idx" },
+    { "keys": { "category": 1, "publishAt": -1 }, "name": "cat_time_idx" },
+    { "keys": { "publishAt": -1 }, "name": "time_idx" }
+  ]
+}
