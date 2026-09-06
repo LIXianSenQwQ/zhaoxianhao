@@ -142,7 +142,7 @@ function seedDB({
   worshipLogs = [], tasks = [], taskRecords = [], calendarItems = [], events = [],
   ceremonies = [], entryRecords = [], relations = [],
   settings = [], avatars = [],
-  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = []
+  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = [], complianceSigns = [], localContents = []
 } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
@@ -152,7 +152,7 @@ function seedDB({
       worship_logs: worshipLogs, tasks, task_records: taskRecords,
       calendar_items: calendarItems, events, ceremonies,
       entry_records: entryRecords, relations, avatars,
-      albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules, greeting_cards: greetingCards, weather_cities: weatherCities
+      albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules, greeting_cards: greetingCards, weather_cities: weatherCities, compliance_signs: complianceSigns, local_contents: localContents
     },
     seq: 1000
   };
@@ -1814,4 +1814,81 @@ test('R24 _utils.termOnDate: 2026-06-21 夏至', async () => {
   const utils = FN('calendar')._utils;
   const t = utils.termOnDate(2026, 6, 21);
   assert.equal(t, '夏至', '2026-06-21 应为夏至');
+});
+
+// ─── Sprint R25: V2.0 F1 合规签字 + 本地内容 + plaza 迁移 ───
+
+test('R25 content.compliance.sign: 家规签字成功', async () => {
+  seedDB({ complianceSigns: [] });
+  const res = await FN('content').main(
+    { action: 'compliance.sign', complianceType: '家规', documentId: 'rules-v1', sign: '郝某某 敬签' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+});
+
+test('R25 content.compliance.sign: 非法类型 → 400', async () => {
+  const res = await FN('content').main(
+    { action: 'compliance.sign', complianceType: '合同', documentId: 'x', sign: '郝某某' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R25 content.compliance.sign: 缺 documentId/sign → 400', async () => {
+  const res = await FN('content').main(
+    { action: 'compliance.sign', complianceType: '家训' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R25 content.article.save: 标题空 → 400', async () => {
+  const res = await FN('content').main(
+    { action: 'article.save', type: 'article', title: '   ', content: '这是一段足够长的内容，用于测试草稿保存。' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R25 content.article.save: 内容不足 10 字 → 400', async () => {
+  const res = await FN('content').main(
+    { action: 'article.save', type: 'article', title: '短故事', content: '太短了' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R25 content.article.save: 正常保存返回 DRAFT', async () => {
+  seedDB({ localContents: [] });
+  const res = await FN('content').main(
+    { action: 'article.save', type: 'story', title: '祖辈的口述', content: '曾祖父在 1930 年代的口述记录，保存为草稿方便后续完善。' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.status, 'DRAFT');
+});
+
+test('R25 content.article.list: 列出本人内容', async () => {
+  seedDB({
+    localContents: [
+      { _id: 'lc1', openid: 'u-member', type: 'article', title: 't1', content: 'x'.repeat(20), updatedAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main({ action: 'article.list' }, CTX_WITH_ROLE('MEMBER'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.contents.length, 1);
+});
+
+test('R25 migrate-plaza.migrateItem: 字段规范化', async () => {
+  const { migrateItem } = require('../scripts/migrate-plaza.js');
+  const out = migrateItem({ _id: 'p1', type: 'text', content: 'hi' }, true);
+  assert.equal(out.migrated.type, 'post', 'text → post 规范化');
+  assert.ok(out.migrated.updatedAt);
+});
+
+test('R25 migrate-plaza.migrateItem: 缺必填字段报错', async () => {
+  const { migrateItem } = require('../scripts/migrate-plaza.js');
+  const out = migrateItem({ _id: 'bad' }, true);
+  assert.ok(out.error, '应返回 error');
 });

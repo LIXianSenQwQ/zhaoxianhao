@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "local_contents",
+  "description": "V2.0 F1: 用户本地创作内容（文章/口述故事）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "openid": { "type": "string" },
+    "userId": { "type": "string" },
+    "type": { "type": "string", "enum": ["article", "story"] },
+    "title": { "type": "string", "maxLength": 100 },
+    "content": { "type": "string", "minLength": 10 },
+    "mediaIds": { "type": "array", "items": { "type": "string" } },
+    "visibility": { "type": "string", "enum": ["FAMILY", "GROUP", "PRIVATE"] },
+    "status": { "type": "string", "enum": ["DRAFT", "PUBLISHED", "ARCHIVED"] },
+    "createdAt": { "type": "string" },
+    "updatedAt": { "type": "string" }
+  },
+  "required": ["_id", "openid", "type", "title", "content", "createdAt"],
+  "indexes": [
+    { "keys": { "openid": 1, "updatedAt": -1 }, "name": "user_content_idx" }
+  ]
+}

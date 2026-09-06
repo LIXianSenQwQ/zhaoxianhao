@@ -91,6 +91,69 @@ async function listMessages(ctx, targetMemberId, page = 1, pageSize = 20) {
   });
 }
 
+/**
+ * R25: V2.0 F1 合规签字 - compliance.sign
+ * 入参：{ complianceType: '家规'|'家训'|'倡议书', documentId, sign }
+ */
+async function complianceSign(ctx, userId, { complianceType, documentId, sign }) {
+  const db = wx.getDatabase();
+  if (!['家规','家训','倡议书'].includes(complianceType)) return BAD_REQUEST('complianceType 无效');
+  if (!documentId || !sign) return BAD_REQUEST('documentId/sign 必填');
+
+  await db.collection('compliance_signs').add({
+    userId: ctx.openid, openid: ctx.openid, complianceType, documentId, sign,
+    status: 'SIGNING_IN_PROGRESS',
+    createdAt: new Date()
+  });
+
+  // audit log
+  await db.collection('audit_logs').add({
+    userId: ctx.openid, action: 'content.compliance.sign', target: `${complianceType}:${documentId}`,
+    detail: JSON.stringify({ sign }), time: new Date()
+  });
+  return OK({ message: '签字已提交（待审核）' });
+}
+
+/**
+ * R25: V2.0 F1 合规列表 - compliance.list
+ */
+async function complianceList(ctx, userId) {
+  const db = wx.getDatabase();
+  const res = await db.collection('compliance_signs')
+    .where({ openid: ctx.openid }).orderBy('createdAt', 'desc').limit(50).get();
+  return OK({ signs: (res.data || []).map(s => ({ ...s, _id: s._id })) });
+}
+
+/**
+ * R25: content.article.save 本地内容保存（草稿/发布）
+ * 入参：{ type:'article'|'story', title, content, visibility }
+ */
+async function articleSave(ctx, userId, { type = 'article', title, content, visibility = 'FAMILY' }) {
+  const db = wx.getDatabase();
+  if (!['article','story'].includes(type)) return BAD_REQUEST('type 必需为 article/story');
+  if (!title || title.trim().length === 0) return BAD_REQUEST('标题必填');
+  if (typeof content !== 'string' || content.length < 10) return BAD_REQUEST('内容≥10 字');
+
+  const res = await db.collection('local_contents').add({
+    userId: ctx.openid, openid: ctx.openid, type, title: title.trim(), content, visibility,
+    status: 'DRAFT',
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+
+  return OK({ contentId: res._id, status: 'DRAFT' });
+}
+
+/**
+ * R25: content.article.list 本人本地内容列表
+ */
+async function articleList(ctx, userId) {
+  const db = wx.getDatabase();
+  const res = await db.collection('local_contents')
+    .where({ openid: ctx.openid }).orderBy('updatedAt', 'desc').limit(50).get();
+  return OK({ contents: (res.data || []).slice(0, 50) });
+}
+
 module.exports = { main: async (params, context) => {
   const { action } = params || {};
   const userId = params.userId || context.openid;
@@ -106,6 +169,14 @@ module.exports = { main: async (params, context) => {
       return await sendMessage(roleCtx, userId, params.targetMemberId, params.content);
     case 'listMessages':
       return await listMessages(roleCtx, params.targetMemberId, params.page, params.pageSize);
+    case 'compliance.sign':
+      return await complianceSign(roleCtx, userId, params);
+    case 'compliance.list':
+      return await complianceList(roleCtx, userId);
+    case 'article.save':
+      return await articleSave(roleCtx, userId, params);
+    case 'article.list':
+      return await articleList(roleCtx, userId);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }

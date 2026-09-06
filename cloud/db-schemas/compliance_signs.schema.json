@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "compliance_signs",
+  "description": "V2.0 F1: 合规签字记录（家规/家训/倡议书）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "openid": { "type": "string" },
+    "userId": { "type": "string" },
+    "complianceType": { "type": "string", "enum": ["家规", "家训", "倡议书"] },
+    "documentId": { "type": "string" },
+    "sign": { "type": "string", "maxLength": 500 },
+    "status": { "type": "string", "enum": ["SIGNING_IN_PROGRESS", "APPROVED", "REJECTED"] },
+    "createdAt": { "type": "string" }
+  },
+  "required": ["_id", "openid", "complianceType", "documentId", "sign", "createdAt"],
+  "indexes": [
+    { "keys": { "openid": 1, "createdAt": -1 }, "name": "user_sign_idx" },
+    { "keys": { "complianceType": 1, "status": 1 }, "name": "compliance_status_idx" }
+  ]
+}
