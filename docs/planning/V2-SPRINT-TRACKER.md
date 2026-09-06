@@ -48,7 +48,8 @@
 | **模块一 搜索倒排索引** | search_index 集合 + content.index.build/content.search.index + save/update/delete 同步 | ✅ F3a |
 | **模块二 新闻数据源** | news 云函数（ensureSources 5 源登记 + fetchFromSource 指纹去重 + cronPull + searchItems + favoriteToggle）| ✅ F3d |
 | **模块三 内容安全 secscan 加固** | detectText（词库+msgSecCheck 降级）+ detectImage + 审计 | ✅ E14 |
-| 模块二 新闻推荐/定时/离线 | 待 F4（三路召回 + 10min 触发器 + 收藏分组/离线包）| ⏳ |
+| **模块二 新闻推荐引擎** | news.recommend.get（三路召回：兴趣/热度/家族；牛顿冷却时效；冷启动包）+ interest.init/list/click/negative + hot.bump | ✅ F4 |
+| **模块二 收藏分组+离线包** | favorite.group.create/list/rename/remove/move + offline.pack/list/remove/cleanup（合规仅快照）+ 10min 定时触发器 | ✅ F4 |
 | 模块三 家族动态 | plaza 既有；family_moments 迁移脚本既有 | ⏳ |
 | 模块四 合规游戏 | 待 F6-F8 | ⏳ |
 | 模块五 虚拟家园 | 待 F9-F10 | ⏳ |
@@ -56,12 +57,12 @@
 ### 测试覆盖（开发框架二十三 23.5：覆盖率≥90%）
 | 指标 | 数值 | 状态 |
 | --- | --- | --- |
-| 测试总数 | 278（F3 累计 +10）| ✅ F3 |
+| 测试总数 | 286（F4 累计 +17）| ✅ F4 |
 | 失败 | 0 | ✅ |
 | Lint error | 0 | ✅ |
 | 云函数结构校验 | 24/24（新增 news）| ✅ |
-| **新增测试项** | content.index.build 软删标记、content.search.index 倒排命中+软删排除、news.ensureSources 5 源、news.fetchFromSource 指纹去重+状态、news.searchItems 关键词 | ✅ F3 |
-| 本次修复 | stub command.neq `__neq` 不一致（F3 搜索暴露）；stub add 兼容标准签名 `{doc}` | ✅ F3 |
+| **新增测试项** | interest.init（正常/非法/幂等）、recommend.get（冷启动/热度排序/点击回流/负反馈过滤）、favorite.group 全生命周期、offline.pack/list/cleanup、cron.refresh | ✅ F4 |
+| 本次修复 | test where 排除 isGroup 元数据行；note 子串断言 | ✅ F4 |
 
 ---
 
