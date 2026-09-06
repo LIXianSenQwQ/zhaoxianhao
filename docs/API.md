@@ -388,3 +388,28 @@
 #### 前端路由失配修复（R14）
 
 - index.vue 快捷条路由对齐 pages.json 注册页（shrine/tree/task 三处）+ `muted` 字段对齐；openCard 按卡类型分流（ceremony/notice→日历、moment→广场、motto→提示）
+
+### 8.8 member.stats 家族速览 + member.heroList 英烈名录（R15 · 蓝图 0.3.2 ④/6.3/8.0 对齐）
+
+#### member.stats（MEMBER+）
+
+| 出参 | 说明 |
+|---|---|
+| totalGenerations | 最大世代（orderBy generation desc limit 1） |
+| aliveCount | 在世人口（status=ALIVE count 聚合；万级再物化） |
+| monthEvents | 本月已发布大事（createdAt ≥ 月初 + PUBLISHED count） |
+| myGeneration / myGenerationChar | 我的世代 + 字辈字（users.memberId → members.generation → generations.order 匹配）；未绑定档案 → null/'' |
+
+#### member.heroList（公开 L1，蓝图 6.3 访客可浏览英烈）
+
+| 入参 | 出参 | 说明 |
+|---|---|---|
+| page? | `{heroes[{id,name,generation,deathDate,heroNote,worshipCount}], page, hasMore}` | members where isHero+DECEASED，generation asc，20/页；**字段白名单**，tomb/specialNotes/occupation 等私密字段不出 |
+
+> **schema 增量（GAP 登记）**：members 新增公开标记字段 `isHero`（B）+ `heroNote`（S，英烈事迹摘要）；读兼容缺失即 false/空，由族史委录入（R16 补 admin 通道）。
+
+#### 前端（R15）
+
+- `pkg-shrine/pages/hero/hero.vue`：英烈名录 + 献花（ceremony.worship type=flower，功德分按日幂等）+ 花瓣粒子
+- `pkg-shrine/pages/shrine/shrine.vue`：合拜（group）第四按钮 + 祭拜成功烛火/花瓣粒子（类型区分）
+- `pages/index/index.vue`：家族速览卡接 member.stats（5min 缓存，未认证保持占位）

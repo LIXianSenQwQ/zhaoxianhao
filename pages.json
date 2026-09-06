@@ -99,6 +99,10 @@
 				{
 					"path": "pages/history/history",
 					"style": {}
+				},
+				{
+					"path": "pages/hero/hero",
+					"style": {}
 				}
 			]
 		},

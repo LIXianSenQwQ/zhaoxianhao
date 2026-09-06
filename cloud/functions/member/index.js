@@ -43,6 +43,10 @@ async function main(event, context) {
       return await listMyAuthRequests(db, openid, event);
     case 'reviewAuth':
       return await reviewAuth(db, openid, event);
+    case 'stats':
+      return await familyStats(db, openid);
+    case 'heroList':
+      return await heroList(db, event.page);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }
@@ -415,6 +419,76 @@ async function buildTree(db, openid, focusId, page, cursor = '') {
     nextCursor: paged.nextCursor,
     hasMore: paged.hasMore,
     total: paged.total
+  });
+}
+
+/**
+ * 家族速览（Sprint R15，蓝图 0.3.2 ④）：族谱代数 / 在世人口 / 本月大事 / 我的字辈
+ * 量级说明：在世人口/本月大事用 count 聚合；万级以上如需细分再走定时物化（蓝图 7.10 预案）
+ */
+async function familyStats(db, openid) {
+  const ctx = await requesterCtx(db, openid);
+  if (!hasRole(ctx.role, 'MEMBER')) return FORBIDDEN('认证族人可查看家族速览');
+
+  const maxGenRes = await db.collection('members')
+    .orderBy('generation', 'desc').limit(1).get();
+  const start = new Date();
+  start.setDate(1); start.setHours(0, 0, 0, 0);
+  const [aliveCount, monthEvents] = await Promise.all([
+    db.collection('members').where({ status: 'ALIVE' }).count(),
+    db.collection('events')
+      .where({ status: 'PUBLISHED', createdAt: db.command.gte(start) })
+      .count()
+  ]);
+
+  // 我的字辈：memberId → generation → generations 表字辈字
+  let myGeneration = null;
+  let myGenerationChar = '';
+  const userRes = await db.collection('users').where({ openid }).limit(1).get();
+  const memberId = userRes.data[0] && userRes.data[0].memberId;
+  if (memberId) {
+    const mRes = await db.collection('members').doc(memberId).get().catch(() => null);
+    const m = mRes && mRes.data && !Array.isArray(mRes.data) ? mRes.data : (mRes && mRes.data && mRes.data[0]);
+    if (m && m.generation) {
+      myGeneration = m.generation;
+      const gRes = await db.collection('generations').where({ order: m.generation }).limit(1).get();
+      if (gRes.data[0] && gRes.data[0].char) myGenerationChar = gRes.data[0].char;
+    }
+  }
+
+  return OK({
+    totalGenerations: (maxGenRes.data[0] && maxGenRes.data[0].generation) || 0,
+    aliveCount: aliveCount.total || 0,
+    monthEvents: monthEvents.total || 0,
+    myGeneration,
+    myGenerationChar
+  });
+}
+
+/**
+ * 英烈名录（Sprint R15，蓝图 8.0 hero/index + 6.3：访客可浏览英烈献花，公开 L1）
+ * members.isHero + heroNote 为公开标记字段（GAP 登记 schema 增量，族史委录入）；
+ * 仅返回白名单字段，私密字段（tomb/marriage/specialNotes 等）不出
+ */
+async function heroList(db, page = 1) {
+  const size = 20;
+  const p = Math.max(1, Number(page) || 1);
+  const res = await db.collection('members')
+    .where({ isHero: true, status: 'DECEASED' })
+    .orderBy('generation', 'asc')
+    .skip((p - 1) * size).limit(size)
+    .get();
+  return OK({
+    heroes: res.data.map(m => ({
+      id: m._id,
+      name: m.genealogyName || m.name,
+      generation: m.generation ?? null,
+      deathDate: m.deathDate || '',
+      heroNote: m.heroNote || '',
+      worshipCount: m.worshipCount || 0
+    })),
+    page: p,
+    hasMore: res.data.length === size
   });
 }
 

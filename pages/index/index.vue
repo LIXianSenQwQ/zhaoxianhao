@@ -81,11 +81,27 @@ const loadError = ref<{ message: string } | null>(null);
 const cards = ref<{ id: string; title: string; desc: string; type: string }[]>([]);
 
 const overviewStats = ref([
+  { value: '—', label: '族谱代数' },
   { value: '—', label: '在世人口' },
-  { value: '—', label: '最新代数' },
   { value: '—', label: '本月大事' },
   { value: '—', label: '我的字辈' }
 ]);
+
+/** 家族速览（蓝图 0.3.2 ④，R15 接 member.stats 真数据；未认证/失败保持占位不阻塞首屏） */
+async function loadOverview() {
+  const res = await call('member', { action: 'stats' }, {
+    cacheKey: 'member:stats',
+    cacheTTL: 5 * 60 * 1000
+  });
+  if (res.error || !res.data) return;
+  const s = res.data.data ?? res.data;
+  overviewStats.value = [
+    { value: s.totalGenerations || '—', label: '族谱代数' },
+    { value: s.aliveCount ?? '—', label: '在世人口' },
+    { value: s.monthEvents ?? '—', label: '本月大事' },
+    { value: s.myGenerationChar || (s.myGeneration ? `第${s.myGeneration}世` : '—'), label: '我的字辈' }
+  ];
+}
 
 // 快捷 5 键（图标用字形占位，切图后替换 image；路由对齐 pages.json 注册页）
 const quickItems = [
@@ -101,6 +117,7 @@ onMounted(() => {
   const h = new Date().getHours();
   greeting.value = h < 6 ? '夜安' : h < 12 ? '晨安' : h < 18 ? '午安' : '晚安';
   loadTodayCards();
+  loadOverview();
 });
 
 /**

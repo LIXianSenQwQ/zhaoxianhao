@@ -35,20 +35,33 @@
         <text v-if="selectedSpirit">正祭 · {{ selectedSpirit.name }}</text>
         <text v-else class="target-hint">请先在上方选择灵位</text>
       </view>
-      <view class="worship-btns">
-        <view
-          v-for="w in WORSHIPS"
-          :key="w.type"
-          class="worship-btn"
-          :style="{ background: w.bg }"
-          @click="doWorship(w.type)"
-          @longpress="openMessage(w.type)"
-        >
-          <text class="worship-icon">{{ w.icon }}</text>
-          <text class="worship-name">{{ w.label }}</text>
+      <view class="worship-zone">
+        <view class="worship-btns">
+          <view
+            v-for="w in WORSHIPS"
+            :key="w.type"
+            class="worship-btn"
+            :style="{ background: w.bg }"
+            @click="doWorship(w.type)"
+            @longpress="openMessage(w.type)"
+          >
+            <text class="worship-icon">{{ w.icon }}</text>
+            <text class="worship-name">{{ w.label }}</text>
+          </view>
+        </view>
+        <text class="worship-tip">点击祭拜 · 长按可附祝福语</text>
+
+        <!-- 祭拜粒子（蓝图 11：烛火/花瓣粒子，纯 CSS 动效克制） -->
+        <view v-if="burstType" class="burst-layer">
+          <view
+            v-for="i in 10"
+            :key="i"
+            class="burst-particle"
+            :class="burstType === 'flower' ? 'petal' : 'spark'"
+            :style="particleStyle(i)"
+          />
         </view>
       </view>
-      <text class="worship-tip">点击祭拜 · 长按可附祝福语</text>
 
       <!-- 祝福语弹层 -->
       <view v-if="msgVisible" class="msg-mask" @click="closeMessage">
@@ -95,7 +108,8 @@ import BaseCard from '@/components/common/BaseCard.vue';
 const WORSHIPS = [
   { type: 'lamp', label: '点灯', icon: '🕯', bg: '#F7F1E3' },
   { type: 'incense', label: '上香', icon: '🪔', bg: '#F9EDEB' },
-  { type: 'flower', label: '献花', icon: '🌸', bg: '#EDF2EC' }
+  { type: 'flower', label: '献花', icon: '🌸', bg: '#EDF2EC' },
+  { type: 'group', label: '合拜', icon: '🙇', bg: '#F0EEE8' }
 ];
 const WORSHIP_MAP: Record<string, string> = { lamp: '点灯', incense: '上香', flower: '献花', group: '合拜' };
 
@@ -113,6 +127,19 @@ const loading = ref(false);
 const msgVisible = ref(false);
 const msgType = ref('lamp');
 const msgText = ref('');
+
+// 祭拜粒子（成功后 1.2s 飘散；flower=花瓣，其余=烛火金星）
+const burstType = ref('');
+
+function particleStyle(i: number) {
+  const angle = (i / 10) * Math.PI * 2;
+  const dist = 46 + (i % 3) * 20;
+  return {
+    '--dx': `${Math.cos(angle) * dist}px`,
+    '--dy': `${Math.sin(angle) * dist - 24}px`,
+    '--delay': `${(i % 5) * 70}ms`
+  };
+}
 
 function fmtDate(t: string) {
   if (!t) return '';
@@ -182,8 +209,10 @@ async function doWorship(type: string, message = '') {
       title: b && !b.duplicated ? `${WORSHIP_MAP[type]}敬上 · 功德+${b.delta}` : `${WORSHIP_MAP[type]}敬上`,
       icon: 'none'
     });
-    // 乐观更新灵位计数
+    // 乐观更新灵位计数 + 粒子动效
     if (selectedSpirit.value) selectedSpirit.value.worshipCount = res.data.worshipCount;
+    burstType.value = type;
+    setTimeout(() => { burstType.value = ''; }, 1200);
     fetchLogs(1);
   } else {
     uni.showToast({ title: res.message || '祭拜失败，请重试', icon: 'none' });
@@ -226,8 +255,18 @@ fetchSpirits(1);
 
 .worship-target { font-size: 13px; color: #6E6659; margin-bottom: 10px; }
 .target-hint { color: #B0A99A; }
+.worship-zone { position: relative; }
 .worship-btns { display: flex; gap: 8px; }
-.worship-btn { flex: 1; border-radius: 10px; padding: 16px 0; text-align: center; }
+.worship-btn { flex: 1; border-radius: 10px; padding: 14px 0; text-align: center; }
+
+.burst-layer { position: absolute; left: 50%; top: 40%; pointer-events: none; z-index: 5; }
+.burst-particle { position: absolute; width: 9px; height: 9px; animation: burst-fly 1.1s ease-out forwards; animation-delay: var(--delay); }
+.burst-particle.petal { background: #F5B8C4; border-radius: 50% 0 50% 50%; }
+.burst-particle.spark { background: #E8C777; border-radius: 50%; box-shadow: 0 0 6px #D4B06A; }
+@keyframes burst-fly {
+  0% { transform: translate(0, 0) scale(1); opacity: 0.95; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0.4); opacity: 0; }
+}
 .worship-icon { font-size: 22px; display: block; }
 .worship-name { font-size: 13px; color: #2B2320; margin-top: 4px; display: block; }
 .worship-tip { font-size: 11px; color: #B0A99A; margin-top: 8px; display: block; text-align: center; }

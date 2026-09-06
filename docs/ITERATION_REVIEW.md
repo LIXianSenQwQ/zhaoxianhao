@@ -712,3 +712,53 @@
 4. **性能实测**（持续等待用户环境——微信开发者工具真机调试）
 
 <!-- 模板：下一轮评审复制此节 -->
+
+## 第 R15 轮（Sprint R15 · MVP 收口轨：R14 承诺兑现——家族速览真数据 + 点灯打磨 + 英烈献花）
+
+> 主题：兑现 R15 承诺①②③——首页速览卡接 member.stats 真数据、祭拜交互按蓝图 11 定案打磨（合拜+粒子）、英烈献花页（访客 L1 闭环）。
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R14 | R15 | 变化 |
+|---|---|---|---|---|---|
+| 功能覆盖 | 云函数接口 | 23 函数计划 | 18/23 | **18/23**（member 增 stats/heroList 两 action，函数数不变） | ↑ |
+| 功能覆盖 | 前端页面 | 82 计划 | ~28/82 | **~29/82**（hero 英烈页；pages.json 18 页全对齐） | ↑ |
+| 蓝图还原 | 首页 0.3.2 四区 | 四区全通 | 速览卡占位「—」 | **四区全真数据**（问候区/快捷条/要事卡流/家族速览） | ↑ |
+| 交互 | 点灯定案（蓝图 11） | 粒子+轻震+长按 | 轻震+长按 | **+合拜入口 + 烛火/花瓣粒子**（纯 CSS，音效待切图资源如实登记） | ↑ |
+| 质量 | 测试数 | ≥80% | 142 | **148**（+6：stats 四指标/空态/403 + heroList 白名单/空态 + 合拜正向） | ↑ |
+| 门禁 | npm run verify | 全绿 | 绿 | **绿**（148 用例 0 fail · lint 0E · 云函数 15/15 · 路由 18 页对齐） | = |
+
+### 二、本轮交付清单
+
+**新增接口（member +2 action）：**
+- `member.stats`（MEMBER+，蓝图 0.3.2 ④）：totalGenerations（orderBy generation desc limit 1）/ aliveCount（count 聚合）/ monthEvents（createdAt ≥ 月初 + PUBLISHED count）/ myGeneration + myGenerationChar（memberId → generation → generations.order 匹配字辈字）；未绑定档案 → null 空态
+- `member.heroList`（**公开 L1**，蓝图 6.3「访客仅可浏览英烈献花」）：members where isHero+DECEASED orderBy generation asc 分页 20；**字段白名单** {id,name,generation,deathDate,heroNote,worshipCount}，私密字段（tomb/specialNotes/occupation）不出
+- members 增 `isHero` + `heroNote` 公开标记字段（**GAP 登记 schema 增量**，族史委录入，无迁移需求——读兼容缺失即 false/空）
+
+**新增前端页面（+1）：**
+- `pkg-shrine/pages/hero/hero.vue`（蓝图 8.0 hero/index）：晨光渐变头 + 英烈名录卡（谱名朱砂/世代/事迹/卒日）+ 献花按钮（接 ceremony.worship type=flower，功德分按日幂等）+ **花瓣飘散粒子**（8 瓣 CSS 变量轨迹）+ 访客可见提示
+
+**交互打磨（蓝图 11 定案）：**
+- shrine.vue 祭拜区：**合拜（group）第四按钮**走通后端白名单 + 祭拜成功**烛火（金）/花瓣（粉）粒子**按类型区分（10 粒 CSS 变量轨迹，1.1s ease-out，动效克制）+ vibrateShort 轻震保留
+- 音效（磬/点灯）**如实登记待切图资源**：不伪造音频文件，静态资源到位后接 uni.createInnerAudioContext
+- index.vue 家族速览卡接 member.stats（5 分钟缓存，未认证/失败保持占位不阻塞首屏）；标签对齐蓝图「族谱代数·在世人口·本月大事·我的字辈」
+
+**测试 +6（142→148）**：stats 四指标正向（含旧大事不计入本月）/ 无 memberId 字辈空态 / VISITOR 403 / heroList 访客可见+DECEASED 过滤+白名单断言 / 空名录空态 / 合拜 group 正向（typeLabel+功德池）。
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 真机 P95/首屏采集（连续 15 轮阻塞） | 高 | 沙箱侧全部就绪；**突破必须依赖微信开发者工具环境** |
+| members.isHero/heroNote 为自定 schema 增量 | 低 | 蓝图 5.2 无此字段；GAP 已登记，读兼容（缺失=false），族议会确认后回写蓝图基线 |
+| 祭拜音效缺位 | 低 | 交互定案的轻震/粒子已落地；音频 <100KB 资源到位后一行接入 |
+| aliveCount/monthEvents 实时 count | 低 | 家族千级无压力；万级触发定时物化（蓝图 7.10 预案已在注释） |
+
+### 四、R16 承诺
+
+1. **关系编辑页 relationeditor**（蓝图 8.0 L4 关系维护，接 relation.edit——族谱核心最后缺口）
+2. **传记查看页 lifebook**（蓝图 8.0 篇章浏览，接 member.getDetail deeds/lifebook 字段）
+3. **英烈的 admin 录入通道**（admin 增 heroTag 设置 action 或 entry 流转，族史委维护英名录）
+4. **性能实测**（持续等待用户环境——微信开发者工具真机调试）
+
+<!-- 模板：下一轮评审复制此节 -->

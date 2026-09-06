@@ -836,3 +836,90 @@ test('R14 atmosphere.homeCards：匿名访客祖训兜底（公开接口不空�
   assert.equal(res.data.homeCards[0].type, 'motto');
   assert.ok(res.data.homeCards[0].desc.length > 0);
 });
+
+// ─── Sprint R15：member.stats 家族速览 + member.heroList 英烈名录 + 合拜正向 ───
+
+test('R15 member.stats：四指标正向（代数/在世/本月大事/我的字辈）', async () => {
+  const monthStart = new Date();
+  monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER', memberId: 'm-me' }],
+    members: [
+      { _id: 'm-me', name: '郝我', generation: 3, status: 'ALIVE' },
+      { _id: 'm-a', name: '郝甲', generation: 5, status: 'ALIVE' },
+      { _id: 'm-b', name: '郝乙', generation: 5, status: 'DECEASED' }
+    ],
+    events: [
+      { _id: 'e-1', title: '新谱初稿', status: 'PUBLISHED', createdAt: new Date() },
+      { _id: 'e-old', title: '旧大事', status: 'PUBLISHED', createdAt: new Date('2020-01-01T00:00:00Z') }
+    ]
+  });
+  globalThis.__HCS_STUB_SEED__.collections.generations = [{ _id: 'g-3', char: '庆', order: 3 }];
+  const res = await FN('member').main({ action: 'stats' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.totalGenerations, 5, '最大世代');
+  assert.equal(res.data.aliveCount, 2, '在世人口');
+  assert.equal(res.data.monthEvents, 1, '本月已发布大事（旧事不计）');
+  assert.equal(res.data.myGeneration, 3);
+  assert.equal(res.data.myGenerationChar, '庆', '字辈字按 generations.order 匹配');
+});
+
+test('R15 member.stats：无 memberId（未绑定档案）→ 字辈空态', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    members: [{ _id: 'm-a', generation: 4, status: 'ALIVE' }]
+  });
+  const res = await FN('member').main({ action: 'stats' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.totalGenerations, 4);
+  assert.equal(res.data.myGeneration, null);
+  assert.equal(res.data.myGenerationChar, '');
+});
+
+test('R15 member.stats：VISITOR 403（蓝图 0.3.2 家族速览为族人数据）', async () => {
+  seedDB({ users: [{ openid: 'u-v', role: 'VISITOR' }] });
+  const res = await FN('member').main({ action: 'stats' }, { OPENID: 'u-v', openid: 'u-v' });
+  assert.equal(res.code, 403);
+});
+
+test('R15 member.heroList：访客可浏览（L1）+ DECEASED 过滤 + 字段白名单', async () => {
+  seedDB({
+    users: [{ openid: 'u-v', role: 'VISITOR' }],
+    members: [
+      { _id: 'h-1', genealogyName: '郝忠烈', name: '郝忠', generation: 4, status: 'DECEASED', isHero: true, heroNote: '抗战殉国', deathDate: '1942-03-08', worshipCount: 12, tomb: { place: 'x' }, specialNotes: [{ type: 'x', desc: 'y' }], occupation: { job: 'secret' } },
+      { _id: 'h-2', name: '郝健在', generation: 5, status: 'ALIVE', isHero: true, heroNote: '老兵在世' },
+      { _id: 'h-3', name: '郝普通', generation: 3, status: 'DECEASED' }
+    ]
+  });
+  const res = await FN('member').main({ action: 'heroList', page: 1 }, { OPENID: 'u-v', openid: 'u-v' });
+  assert.equal(res.success, true, '蓝图 6.3：访客仅可浏览英烈献花');
+  assert.equal(res.data.heroes.length, 1, '仅 DECEASED+isHero 入名录');
+  const h = res.data.heroes[0];
+  assert.equal(h.name, '郝忠烈');
+  assert.equal(h.heroNote, '抗战殉国');
+  assert.equal(h.worshipCount, 12);
+  assert.ok(!('tomb' in h) && !('specialNotes' in h) && !('occupation' in h), '私密字段不出白名单');
+  assert.equal(res.data.hasMore, false);
+});
+
+test('R15 member.heroList：空名录空态', async () => {
+  seedDB({ users: [], members: [] });
+  const res = await FN('member').main({ action: 'heroList' }, { OPENID: 'u-x', openid: 'u-x' });
+  assert.equal(res.success, true);
+  assert.deepEqual(res.data.heroes, []);
+});
+
+test('R15 ceremony.worship：合拜 group 正向（第四祭拜类型走通）', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    members: [{ _id: 'm-dec', name: '郝公', status: 'DECEASED', worshipCount: 0 }]
+  });
+  const res = await FN('ceremony').main(
+    { action: 'worship', type: 'group', targetMemberId: 'm-dec' },
+    { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.typeLabel, '合拜');
+  assert.equal(res.data.blessing.delta, 10, '合拜同入功德池');
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.equal(seed.collections.worship_logs[0].type, 'group');
+});
