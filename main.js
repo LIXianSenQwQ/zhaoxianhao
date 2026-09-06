@@ -1,4 +1,4 @@
-import App from './App'
+import App from './App.vue' // CLI 构建下 rollup 不自动补 .vue 扩展名，必须显式
 
 // #ifndef VUE3
 import Vue from 'vue'

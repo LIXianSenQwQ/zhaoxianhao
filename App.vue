@@ -1,9 +1,8 @@
 <script setup>
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app';
+import { CLOUD_ENV_ID } from '@/utils/cloud-env';
 
-// ⚠️ 必须替换！微信云开发环境 ID：
-// 微信开发者工具 → 工具栏「云开发」→ 开通并创建环境 → 复制环境 ID（形如 cloud1-xxxxxxxx）
-const CLOUD_ENV_ID = 'YOUR_CLOUD_ENV_ID'; // TODO: 替换为你的真实环境 ID
+// 云开发环境 ID 读取已收口至 utils/cloud-env.ts（SFC 内禁写环境注入表达式，见该文件注释）
 
 onLaunch(() => {
 	// #ifdef MP-WEIXIN

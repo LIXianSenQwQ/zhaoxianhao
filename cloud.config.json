@@ -1,1 +1,19 @@
-{"functions":{"login":{},"member":{},"relation":{},"entry":{},"doc":{},"ceremony":{},"points":{},"task":{},"notify":{},"atmosphere":{},"admin":{},"upload":{},"event":{}}}
+{
+  "functions": {
+    "login": {},
+    "auth": {},
+    "member": {},
+    "relation": {},
+    "entry": {},
+    "doc": {},
+    "ceremony": {},
+    "points": {},
+    "task": {},
+    "notify": {},
+    "atmosphere": {},
+    "admin": {},
+    "upload": {},
+    "event": {},
+    "plaza": {}
+  }
+}

@@ -3,24 +3,38 @@
   "version": "2.0.0",
   "description": "好诚事家风 - 数字祠堂掌上家园 V2.0（uni-app + 微信云开发）",
   "scripts": {
-    "dev:mp-wechat": "uni -p mp-wechat",
-    "build:mp-wechat": "uni build -p mp-wechat",
-    "dev:h5": "uni",
-    "build:h5": "uni build",
+    "dev:mp-wechat": "node scripts/uni-run.js dev:mp-wechat",
+    "build:mp-wechat": "node scripts/uni-run.js build:mp-wechat",
+    "dev:h5": "node scripts/uni-run.js dev:h5",
+    "build:h5": "node scripts/uni-run.js build:h5",
     "test": "node --test --test-isolation=none tests/roles.test.js tests/privacy.test.js tests/kindship.test.js tests/core.test.js tests/tree.test.js tests/lineage.test.js tests/linkage.test.js tests/tree-view.test.js tests/tree-flow.test.js tests/smoke-functions.test.js",
     "test:watch": "node --test --test-isolation=none --watch tests/roles.test.js tests/privacy.test.js tests/kindship.test.js tests/core.test.js tests/tree.test.js tests/lineage.test.js tests/linkage.test.js tests/tree-view.test.js tests/tree-flow.test.js tests/smoke-functions.test.js",
     "lint": "node scripts/lint-check.js",
     "check:functions": "node scripts/check-functions.js",
-    "verify": "npm run test && npm run lint && npm run check:functions",
+    "check:env": "node scripts/check-env.js",
+    "verify": "npm run check:env && npm run test && npm run lint && npm run check:functions",
     "sync:common": "node scripts/sync-common.js",
     "lineage:verify": "node scripts/verify-lineage.js"
   },
+  "engines": {
+    "node": ">=18 <=25",
+    "npm": ">=8"
+  },
+  "browserslist": [
+    "Chrome >= 90",
+    "Firefox >= 88",
+    "Safari >= 14",
+    "Edge >= 90",
+    "iOS >= 13",
+    "Android >= 9"
+  ],
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-4020920240930001",
     "@dcloudio/uni-components": "3.0.0-4020920240930001",
+    "@dcloudio/uni-h5": "3.0.0-4020920240930001",
     "@dcloudio/uni-mp-weixin": "3.0.0-4020920240930001",
     "pinia": "^2.1.7",
-    "vue": "^3.4.21",
+    "vue": "3.4.21",
     "vue-i18n": "^9.1.9"
   },
   "devDependencies": {
@@ -29,7 +43,7 @@
     "@dcloudio/uni-cli-shared": "3.0.0-4020920240930001",
     "@dcloudio/uni-stacktracey": "3.0.0-4020920240930001",
     "@dcloudio/vite-plugin-uni": "3.0.0-4020920240930001",
-    "@vue/runtime-core": "^3.4.21",
+    "@vue/runtime-core": "3.4.21",
     "sass": "^1.77.0",
     "typescript": "^5.4.5",
     "vite": "^5.2.8"
