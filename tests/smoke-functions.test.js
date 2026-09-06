@@ -1380,11 +1380,16 @@ test('R20 profile.updateFamilyInfo: MEMBER 修改家训 → 403', async () => {
 
 test('R20 profile.updateFamilyInfo: EDITOR 设置家训/字辈 OK', async () => {
   seedDB({ settings: [{ _id: 'flags', key: 'featureFlags', value: {} }] });
-  const res = await FN('profile').main({ action: 'updateFamilyInfo', userId: 'u-editor', familyMotto: '忠厚传家久', generationChars: ['德','文','光','明'] }, CTX_WITH_ROLE('EDITOR'));
+  const res = await FN('profile').main(
+    { 
+      action: 'updateFamilyInfo', userId: 'u-editor', 
+      familyMotto: '忠厚传家久', generationChars: ['德','文','光','明'] 
+    }, CTX_WITH_ROLE('EDITOR'));
   assert.equal(res.success, true);
 });
 
 test('R20 profile.updateFamilyInfo: generationChars 非数组 → 400', async () => {
-  const res = await FN('profile').main({ action: 'updateFamilyInfo', userId: 'u-member', familyMotto: 'test', generationChars: 'not-array' }, CTX_WITH_ROLE('EDITOR'));
+  const res = await FN('profile').main(
+    { action: 'updateFamilyInfo', userId: 'u-member', familyMotto: 'test', generationChars: 'not-array' }, CTX_WITH_ROLE('EDITOR'));
   assert.equal(res.code, 400);
 });
