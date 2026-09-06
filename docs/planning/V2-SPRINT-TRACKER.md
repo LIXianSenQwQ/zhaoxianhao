@@ -44,6 +44,7 @@
 | **模块一 敏感分类强制 PRIVATE** | contentSave 服务端拒绝证件资料公开 | ✅ E13 |
 | **模块一 内容库首页** | pages/content/content.vue（网格/列表/分类 chips/上传入口/骨架屏）| ✅ E12/F2 |
 | **模块一 详情/编辑/删除/批量权限** | content.detail/update/delete/batch.setVisibility + detail.vue + upload.vue | ✅ F2 |
+| **模块一 分类管理/搜索页** | category.vue（树形增删改）+ search.vue（组合筛选）+ category.update/delete | ✅ F2 |
 | **模块三 内容安全 secscan 加固** | detectText（词库+msgSecCheck 降级）+ detectImage + 审计 | ✅ E14 |
 | 模块二 新闻资讯 | 待 F3/F4（数据源对接/推荐）| ⏳ |
 | 模块三 家族动态 | plaza 既有；family_moments 迁移脚本既有 | ⏳ |
@@ -79,10 +80,12 @@
 - [x] 内容详情页 pages/content/detail（预览/编辑/删除/权限/分享）→ be02934
 - [x] 内容库首页完善（备份入口/骨架屏/网格列表）→ be02934
 - [x] services/content.ts 封装（saveContent/search/detail/update/delete/batch）→ be02934
-- [ ] 分类管理页 pages/content/category（树形增删改）
-- [ ] 内容搜索页 pages/content/search（组合筛选 UI）
+- [x] 分类管理页 pages/content/category（树形增删改 + 标签展示）→ ede0bf9
+- [x] 内容搜索页 pages/content/search（关键词/日期/分类/类型组合筛选）→ ede0bf9
+- [x] 分类 rename/delete 云函数接口（category.update/delete，软删除）→ ede0bf9
 - [x] stub 增强 $or/$and/$gte/$neq → 54cb3ec
 - [x] content.search 软删除过滤 + 组合筛选测试 → 54cb3ec
+- **F2 模块一全部交付 ✅**
 
 ### F3 模块一收尾 + 模块二启动
 - [ ] search_index 倒排索引接入（当前为正则降级）

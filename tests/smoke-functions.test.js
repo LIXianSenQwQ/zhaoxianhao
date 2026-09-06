@@ -2233,3 +2233,68 @@ test('F2 content.delete: 属主正确删除返回成功', async () => {
   assert.equal(check.data.deleted, true, '软删除标记应写入');
   assert.ok(check.data.deletedAt, 'deletedAt 应有值');
 });
+
+// ═══════════ F2 分类管理：重命名/删除 ═══════════
+test('F2 category.update: 属主重命名成功', async () => {
+  seedDB({
+    contentCategories: [
+      { _id: 'catRen', openid: 'u-member', type: 'MAIN', name: '旧名', level: 1, createdAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main(
+    { action: 'category.update', categoryId: 'catRen', name: '新名' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  const db = require('../scripts/wx-server-sdk-stub.js').getDatabase();
+  const check = await db.collection('content_categories').doc('catRen').get();
+  assert.equal(check.data.name, '新名', '名称应已更新');
+});
+
+test('F2 category.update: 非属主被拒', async () => {
+  seedDB({
+    contentCategories: [
+      { _id: 'catO', openid: 'u-other', type: 'MAIN', name: '别人分类', level: 1, createdAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main(
+    { action: 'category.update', categoryId: 'catO', name: '篡改' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, false);
+  assert.equal(res.code, 403, '非属主应 403');
+});
+
+test('F2 category.delete: 属主软删除成功并提示使用量', async () => {
+  seedDB({
+    contentCategories: [
+      { _id: 'catD', openid: 'u-member', type: 'MAIN', name: '待删分类', level: 1, createdAt: '2026-09-06T10:00:00Z' }
+    ],
+    localContents: [
+      { _id: 'lcUse', openid: 'u-member', type: 'article', title: '用该分类', content: 'x'.repeat(20), mainCategory: '待删分类', visibility: 'PRIVATE', updatedAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main(
+    { action: 'category.delete', categoryId: 'catD' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.usedByContents, 1, '应报告有 1 条内容使用该分类');
+  const db = require('../scripts/wx-server-sdk-stub.js').getDatabase();
+  const check = await db.collection('content_categories').doc('catD').get();
+  assert.equal(check.data.deleted, true, '软删除标记应写入');
+});
+
+test('F2 category.delete: 非属主被拒', async () => {
+  seedDB({
+    contentCategories: [
+      { _id: 'catD2', openid: 'u-other', type: 'MAIN', name: '别人分类2', level: 1, createdAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main(
+    { action: 'category.delete', categoryId: 'catD2' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, false);
+  assert.equal(res.code, 403);
+});
