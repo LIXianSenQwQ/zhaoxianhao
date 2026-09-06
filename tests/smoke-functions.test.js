@@ -142,7 +142,7 @@ function seedDB({
   worshipLogs = [], tasks = [], taskRecords = [], calendarItems = [], events = [],
   ceremonies = [], entryRecords = [], relations = [],
   settings = [], avatars = [],
-  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = [], complianceSigns = [], localContents = [], contentCategories = [], searchIndex = []
+  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = [], complianceSigns = [], localContents = [], contentCategories = [], searchIndex = [], newsItems = [], newsSources = []
 } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
@@ -152,7 +152,8 @@ function seedDB({
       worship_logs: worshipLogs, tasks, task_records: taskRecords,
       calendar_items: calendarItems, events, ceremonies,
       entry_records: entryRecords, relations, avatars,
-      albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules, greeting_cards: greetingCards, weather_cities: weatherCities, compliance_signs: complianceSigns, local_contents: localContents, content_categories: contentCategories, search_index: searchIndex
+      albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules, greeting_cards: greetingCards, weather_cities: weatherCities, compliance_signs: complianceSigns, local_contents: localContents, content_categories: contentCategories, search_index: searchIndex,
+      news_items: newsItems, news_sources: newsSources
     },
     seq: 1000
   };
@@ -2351,9 +2352,67 @@ test('F3 content.search.index: 倒排关键词命中 + 软删排除', async () =
     { action: 'content.search.index', keyword: '点灯', mainCategory: '祭祀' },
     CTX_WITH_ROLE('MEMBER')
   );
-  console.log('[DEBUG] index search result:', JSON.stringify(res));
   assert.equal(res.success, true, JSON.stringify(res));
   assert.equal(res.data.contents.length, 1, '应命中 i1（i3 已软删排除）');
   assert.equal(res.data.contents[0]._id, 'i1');
   assert.equal(res.data.index, true);
+});
+
+// ═══════════ F3 news modules 2 – data sources + items (skeleton) ═══════════
+test('F3 news.ensureSources: 初始空 → 5 个种子源登记', async () => {
+  seedDB({ newsSources: [], newsItems: [] });
+  const res = await FN('news').main({ action: 'ensureSources' }, CTX_WITH_ROLE('CHIEF'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.seeded, true);
+  assert.equal(res.data.count, 5, '5 家数据源注册完成');
+  const db = require('../scripts/wx-server-sdk-stub.js').getDatabase();
+  const count = await db.collection('news_sources').count();
+  assert.equal(count.total, 5);
+});
+
+test('F3 news.fetchFromSource: 模拟拉取入库 + 二次去重 + 状态更新', async () => {
+  seedDB({
+    newsSources: [{ _id: 'src-1', name: '聚合数据新闻头条', type: 'API', baseUrl: 'https://api.juhe.cn/news', categories: [], quota: { daily: 1000 }, priority: 1, status: 'ACTIVE' }],
+    newsItems: []
+  });
+  // 第一次拉取：应插入 >0 条
+  const first = await FN('news').main(
+    { action: 'fetchFromSource', sourceId: 'src-1' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(first.success, true, JSON.stringify(first));
+  assert.ok(first.data.pulled > 0, `首次拉取应插入>0，实际 ${first.data.pulled}`);
+  const db = require('../scripts/wx-server-sdk-stub.js').getDatabase();
+  const afterFirst = (await db.collection('news_items').count()).total;
+  assert.ok(afterFirst > 0);
+  let src = (await db.collection('news_sources').where({ _id: 'src-1' }).get()).data[0];
+  assert.equal(src.lastFetchStatus, 'OK', '拉取成功后应更新源状态');
+  assert.ok(src.lastFetchAt, '应记录 lastFetchAt');
+
+  // 第二次拉取：mock 标题+URL 确定性 → 指纹去重 → pulled=0 / 状态 EMPTY
+  const second = await FN('news').main(
+    { action: 'fetchFromSource', sourceId: 'src-1' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(second.success, true, JSON.stringify(second));
+  const afterSecond = (await db.collection('news_items').count()).total;
+  assert.equal(afterSecond, afterFirst, '重复拉取不得新增（指纹去重）');
+  src = (await db.collection('news_sources').where({ _id: 'src-1' }).get()).data[0];
+  assert.equal(src.lastFetchStatus, 'EMPTY', '无新增时状态应为 EMPTY');
+});
+
+test('F3 news.searchItems: 关键词命中 title/summary', async () => {
+  seedDB({
+    newsItems: [
+      { _id: 'item1', title: '赵州桥维修工程启动', summary: '今日上午，赵州桥文物保护修缮工程正式开工。', tags: ['本地', '文物'], publishAt: new Date() },
+      { _id: 'item2', title: '梨乡文化节开幕', summary: '梨花节期间，赵县举办第三届梨乡文化论坛。', tags: ['文化', '旅游'], publishAt: new Date() }
+    ]
+  });
+  const res = await FN('news').main(
+    { action: 'searchItems', keyword: '赵州桥', page: 1, pageSize: 20 },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.items.length, 1, '仅匹配 item1');
+  assert.equal(res.data.items[0].title, '赵州桥维修工程启动');
 });

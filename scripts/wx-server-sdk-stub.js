@@ -125,11 +125,13 @@ module.exports = {
           }
         }),
         get: async () => ({ data: apply(getCol(name)) }),
-        add: async ({ data }) => {
+        add: async (arg) => {
+          // 兼容两种调用：add(doc)【标准】和 add({data:doc})【兼容既有】
+          const doc = (arg && typeof arg === 'object' && 'data' in arg) ? arg.data : arg;
           const seed = seedGet();
           const col = getCol(name);
           const _id = `stub-${++seed.seq}`;
-          col.push({ ...data, _id });
+          col.push({ ...doc, _id });
           return { _id };
         },
         update: async ({ data }) => {
