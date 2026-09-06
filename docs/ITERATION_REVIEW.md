@@ -593,3 +593,67 @@
 4. **性能实测**（持续等待用户环境）
 
 <!-- 模板：下一轮评审复制此节 -->
+
+## 第 R13 轮（Sprint R13 · MVP 收口轨：R12 承诺兑现——祭祀/氛围/积分联动闭环）
+
+> 主题：兑现 R13 承诺①②③——祖堂点灯、家族日历、task 打卡积分联动；顺带大修 atmosphere（遗留桩 today 必崩）与 ceremony（五处不可运行缺陷）。
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R12 | R13 | 变化 |
+|---|---|---|---|---|---|
+| 功能覆盖 | 云函数可用 | 23 计划 | 16/23 | **17/23**（ceremony 大修+atmosphere 大修计 1 个口径不变，实际收口 2 个遗留桩） | ↑ |
+| 功能覆盖 | 前端页面 | 82 计划 | ~24/82 | **~26/82**（shrine + calendar，pages.json 注册 15 页全对齐） | ↑ |
+| 缺陷 | 遗留桩不可运行点 | 0 | 2 处（ceremony/atmosphere） | **0**（worship/today 均可运行且有测试覆盖） | ↑ |
+| 联动 | 打卡→积分链路 | 通 | 断（callFunction→award 已改 EDITOR 门禁+签名不匹配） | **通**（common/points 本地幂等发放，测试断言入账+不重复） | ↑ |
+| 质量 | 测试数 | ≥80% | 122 | **134**（+12：ceremony 9 + task 联动 1 + atmosphere 2） | ↑ |
+| 门禁 | npm run verify | 全绿 | 绿 | **绿**（134 用例 0 fail · lint 0E · 云函数 15/15 · 路由 15 页对齐） | = |
+
+### 二、本轮交付清单
+
+**缺陷修复（ceremony 大修，蓝图 9.1/11/7.9 对齐）：**
+- 修复 `_` 未定义（_.inc/_.eq/_.lte 必崩 ReferenceError）→ `db.command`
+- 修复 `wx.cloud.generateObjectId()` 不存在（祭记 _id 由 add 自动生成）
+- 修复 `awardPoints` / `notifyUser` 两个未定义函数（ worship/remindScan 必崩）
+- 补 MEMBER 门禁（此前任何请求含匿名可写 worship_logs）；type 白名单 lamp/incense/flower/group 400；祝福语 ≤100 字校验
+- 灵位校验：仅 DECEASED 可祭（在世 400 / 不存在 404）；灵位计数原子 +1
+- 积分口径：功德池 +10，幂等键 `ceremony.worship:type:灵位:日期`（同日同灵位同类型仅 1 次，祭记每次都记）
+- 新增 action=spirits（灵位列表）/ list（祭记分页 date 倒序）
+- remindScan 忌日扫描：写 notifications 站内通知（蓝图 7.9）+ notified 标记防重发；`type:'忌日'` 对齐蓝图 5.6 枚举
+
+**缺陷修复（atmosphere 大修，蓝图 0.2/0.6/7.8 对齐）：**
+- 修复 `todayAtmososphere`/`todayAtmosphere` 拼写不一致（**today 必崩**）+ `context.openid` 越界引用
+- 节气表 2 项 → **24 项完整年度近似表**（导出 SOLAR_TERMS/resolveTerm 供族议会年检校准）；圆环匹配跨年回卷冬至段
+- moodTheme 收口为端点色对象（top/mid/bottom，四季渐变 0.2.2），白事静默素色覆盖 + muted 标记（蓝图 7.8）
+- 统一响应 OK()；公开接口（蓝图 9.1）无门禁
+
+**架构收口（common/points.js 新建）：**
+- 系统侧积分发放公共模块：流水先行（bizType+bizId+userId 幂等）→ 账户四池原子 inc；ceremony.worship 与 task.checkin 共用一处实现（蓝图 7.5 口径唯一）
+- task.checkin 积分联动修复：`wx.cloud.callFunction` → common/points 本地调用（原链路断：stub 不可用 + points.award 已收口 EDITOR 代发门禁 + type 参数已改 bizType）
+
+**新增前端页面（+2，~26/82）：**
+- `pkg-shrine/pages/shrine/shrine.vue`（蓝图 shrine/index）：灵位列表（分页/选中高亮/祭拜计数）+ 点灯/上香/献花三按钮（点击轻震敬上、长按弹祝福语 ≤100 字）+ 祭记列表（按灵位过滤倒序）+ 乐观更新计数
+- `pkg-calendar/pages/calendar/calendar.vue`（蓝图 calendar/index）：晨光渐变头部（moodTheme 端点色动态替换，静默期素色+「静默期」标记）+ 月视图（周一为首/今日朱砂描边/选中填充/跨月切换）+ 选中日详情（农历宜忌占位注记 V1.1 v11Almanac）
+- pages.json 注册 pkg-shrine/pkg-calendar（子包 4→6，15 页全对齐）
+
+**测试 +12（122→134）**：ceremony VISITOR 403 / 白名单+缺参+超长 400 / 在世 400+404 / 正向（祭记+计数+功德分+审计四断言）/ 同日幂等（祭记 2 积分 1）/ spirits+list+VISITOR 403 / remindScan 到期触发+标记 / 二扫不重复+未来不触发 / task.checkin 联动打通（入账+审计+同日幂等）/ atmosphere 统一格式+节气命中+端点色 / 白事静默素色 / 24 节气完整+圆环匹配。
+
+**附带修复**：恢复 `vite.config.ts`（被误改名为 .bak，用户新增 check-env.js 环境门禁因此 ERR）；lint 修复 scripts/uni-run.js eqeqeq。
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 真机 P95/首屏采集（连续 13 轮阻塞） | 高 | 沙箱侧全部就绪；**突破必须依赖微信开发者工具环境** |
+| 节气起始日为公历近似值 | 低 | SOLAR_TERMS 已导出，族议会每年校准一次（蓝图 7.8「每年更新一次」） |
+| 祭祀积分当日幂等 vs 每日多次祭拜 | 低 | 口径已定：祭记不限次、积分同人同灵位同类型当日 1 次（防刷优先）；如需放开由族议会调 TYPE_AMOUNTS |
+| remindScan 家族级提醒（无 userId）暂跳过 | 低 | R14 接 notify.dispatch 全族订阅分发（蓝图 7.9） |
+
+### 四、R14 承诺
+
+1. **notify.digest 首页聚合**（atmosphere.homeCards 真数据：仪式提醒/公告/动态摘要，蓝图 0.3.2 卡流）
+2. **task 打卡页前端**（pkg-growth task：今日任务列表+打卡按钮+积分反馈，接 task.today/checkin——闭环最后一环）
+3. **event/history 史记时间轴页**（pkg-shrine/history 或 pkg-family，接 event.list，蓝图 8.0 祭祀包 history）
+4. **性能实测**（持续等待用户环境——微信开发者工具真机调试）
+
+<!-- 模板：下一轮评审复制此节 -->

@@ -83,6 +83,26 @@
 					"style": {}
 				}
 			]
+		},
+		{
+			"root": "pkg-shrine",
+			"name": "shrine",
+			"pages": [
+				{
+					"path": "pages/shrine/shrine",
+					"style": {}
+				}
+			]
+		},
+		{
+			"root": "pkg-calendar",
+			"name": "calendar",
+			"pages": [
+				{
+					"path": "pages/calendar/calendar",
+					"style": {}
+				}
+			]
 		}
 	],
 	"preloadRule": {

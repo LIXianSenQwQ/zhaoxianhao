@@ -7,6 +7,7 @@ const wx = require('wx-server-sdk');
 const { OK, BAD_REQUEST, FORBIDDEN } = require('./common/response');
 const { idempotencyKey } = require('./common/idempotency');
 const { writeAudit } = require('./common/audit');
+const { awardSystemPoints } = require('./common/points');
 
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
 
@@ -78,11 +79,18 @@ async function checkin(db, openid, taskId, evidence) {
     }
   });
 
-  // 积分联动（幂等键同口径传入）
+  // 积分联动（R13 修复：改走 common/points 本地幂等发放。
+  // 原实现 callFunction points.award 链路已断——stub 不可用，且该入口
+  // R12 已收口为 EDITOR 代发门禁 + bizType 签名，系统发放不应回环调用）
+  let points = null;
   try {
-    await wx.cloud.callFunction({
-      name: 'points',
-      data: { action: 'award', pool: 'normal', type: 'checkin', bizId: key, points: task.points || 1 }
+    points = await awardSystemPoints(db, {
+      userId: openid,
+      pool: 'normal',
+      bizType: 'task.checkin',
+      bizId: `${taskId}:${dateStr}`,
+      amount: task.points || 1,
+      note: `打卡任务 ${task.title || taskId}`
     });
   } catch (e) {
     // 积分失败不阻塞打卡本体；补偿扫描按 dateStr 补发
@@ -90,7 +98,7 @@ async function checkin(db, openid, taskId, evidence) {
   }
 
   await writeAudit(db, { userId: openid, action: 'task.checkin', target: taskId, detail: dateStr });
-  return OK({ alreadyDone: false, recordId: addRes._id });
+  return OK({ alreadyDone: false, recordId: addRes._id, points });
 }
 
 /** 打卡日历：按页返回近 30 天内记录（倒序） */

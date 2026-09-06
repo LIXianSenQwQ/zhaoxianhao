@@ -78,3 +78,18 @@
 1. **R11–R12（MVP 收口轨）**：称谓计算页 / 广场+聊天（IM 前端壳）/ 日历页 / points/growth 页 / 谱库页——补齐 MVP 页面清单；包名重组对齐蓝图 3.2
 2. **E1–E6（V1.1 轨，按蓝图 26.6）**：需 CI/MPS/短信/天气开通后启动；E1 先交付三级可见性中间件 + users schemaVersion 迁移
 3. **F1–F10（V2.0 轨）**：F1 secscan + plaza 迁移先行（无外部依赖，可提前）；模块二/四严格按 9.0 合规边界
+
+## 二·七 R13（Sprint R13 · 祭祀/氛围/积分联动收口）
+
+| 蓝图条目 | 状态 | 差距说明 |
+|---|---|---|
+| 9.1 ceremony.worship（MEMBER） | ✅ | 门禁+白名单+灵位校验+积分幂等（遗留桩五处不可运行缺陷清零） |
+| 5.6 worship_logs / 11 点灯交互 | ✅ | 祭记每次记+计数原子+1；长按祝福语（前端）；音效/粒子入 P1 打磨 |
+| 9.1 atmosphere.today（公开） | ✅ | 24 节气年度近似表+四季端点色+白事静默；**24 节气全量图氛围 P1**（蓝图为四季版 MVP） |
+| 7.8 moodTheme/homeCards | ◐ | moodTheme 全量；homeCards 占位空数组——R14 接 notify.digest 真卡流 |
+| 7.9 忌日提醒（定时器扫描） | ◐ | remindScan 站内通知已通；**订阅消息推送需用户开通**；家族级提醒分发 R14 |
+| 9.1 task.today/checkin（MEMBER） | ✅ | 后端早已就绪；积分联动修复（callFunction→common/points） |
+| 8.0 task/index 打卡页 | ⏳ | R14 前端（pkg-growth task 页） |
+| 0.3.2 首页卡流 | ⏳ | 依赖 notify.digest（R14） |
+| V1.1 老皇历（calendar.almanac） | ⏳ | 日历页已留切换位（v11Almanac），E4 交付 lunar 引擎 |
+| 真机性能实测（1.4 验收底线） | ⏳ | 连续 13 轮阻塞：等待微信开发者工具环境 |

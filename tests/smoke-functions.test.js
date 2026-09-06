@@ -135,12 +135,18 @@ test('member.exportFile：VISITOR → 403（鉴权先行）', async () => {
 // ─── Sprint R9: stub 数据注入 + CHIEF 正向路径 + 幂等 upsert ───
 
 /** 预置 seed 数据（getDatabase 每次 main() 调用时读全局 seed，无需重新 require） */
-function seedDB({ users = [], members = [], authRequests = [], authorizations = [], auditLogs = [], plazaPosts = [], notifications = [], accounts = [], pointsLogs = [] } = {}) {
+function seedDB({
+  users = [], members = [], authRequests = [], authorizations = [], auditLogs = [],
+  plazaPosts = [], notifications = [], accounts = [], pointsLogs = [],
+  worshipLogs = [], tasks = [], taskRecords = [], calendarItems = [], events = []
+} = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
       users, members, auth_requests: authRequests, authorizations,
       audit_logs: auditLogs, notifications, plaza_posts: plazaPosts, settings: [],
-      points_accounts: accounts, points_logs: pointsLogs
+      points_accounts: accounts, points_logs: pointsLogs,
+      worship_logs: worshipLogs, tasks, task_records: taskRecords,
+      calendar_items: calendarItems, events
     },
     seq: 1000
   };
@@ -530,4 +536,192 @@ test('notify.list：分页结构', async () => {
   const res = await FN('notify').main({ action: 'list' }, CTX);
   assert.equal(res.success, true);
   assert.ok(Array.isArray(res.data.records));
+});
+
+// ─── Sprint R13：ceremony 大修 + atmosphere 氛围引擎 + 积分联动闭环 ───
+
+test('R13 ceremony.worship：VISITOR 403（鉴权先行）', async () => {
+  seedDB({
+    users: [{ openid: 'u-v', role: 'VISITOR' }],
+    members: [{ _id: 'm-dec', name: '郝公', status: 'DECEASED' }]
+  });
+  const res = await FN('ceremony').main(
+    { action: 'worship', type: 'lamp', targetMemberId: 'm-dec' },
+    { OPENID: 'u-v', openid: 'u-v' });
+  assert.equal(res.code, 403);
+});
+
+test('R13 ceremony.worship：type 白名单 400 + 缺灵位 400 + 祝福语超长 400', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    members: [{ _id: 'm-dec', name: '郝公', status: 'DECEASED' }]
+  });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  const badType = await FN('ceremony').main({ action: 'worship', type: 'dance', targetMemberId: 'm-dec' }, ctx);
+  assert.equal(badType.code, 400, '白名单 lamp/incense/flower/group');
+  const noTarget = await FN('ceremony').main({ action: 'worship', type: 'lamp' }, ctx);
+  assert.equal(noTarget.code, 400);
+  const longMsg = await FN('ceremony').main(
+    { action: 'worship', type: 'lamp', targetMemberId: 'm-dec', message: '祝'.repeat(101) }, ctx);
+  assert.equal(longMsg.code, 400, '祝福语 ≤100 字');
+});
+
+test('R13 ceremony.worship：在世族人不可立灵位 400 + 灵位不存在 404', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    members: [{ _id: 'm-alive', name: '郝生', status: 'ALIVE' }]
+  });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  const alive = await FN('ceremony').main({ action: 'worship', type: 'lamp', targetMemberId: 'm-alive' }, ctx);
+  assert.equal(alive.code, 400);
+  const missing = await FN('ceremony').main({ action: 'worship', type: 'lamp', targetMemberId: 'm-none' }, ctx);
+  assert.equal(missing.code, 404);
+});
+
+test('R13 ceremony.worship：正向（祭记+原子计数+功德分+审计）', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    members: [{ _id: 'm-dec', name: '郝公', genealogyName: '郝公讳某', status: 'DECEASED', worshipCount: 0 }]
+  });
+  const res = await FN('ceremony').main(
+    { action: 'worship', type: 'lamp', targetMemberId: 'm-dec', message: '爷爷安好' },
+    { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.worshipCount, 1, '灵位计数原子 +1');
+  assert.equal(res.data.blessing.duplicated, false);
+  assert.equal(res.data.blessing.delta, 10);
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.equal(seed.collections.worship_logs.length, 1, '祭记落库');
+  assert.equal(seed.collections.worship_logs[0].typeLabel, '点灯');
+  const log = seed.collections.points_logs[0];
+  assert.equal(log.pool, 'gongde');
+  assert.equal(log.delta, 10);
+  assert.equal(log.bizType, 'ceremony.worship');
+  assert.equal(seed.collections.points_accounts.find(a => a.userId === 'u-m').gongde, 10, '账户 gongde +10');
+  assert.ok(seed.collections.audit_logs.some(a => a.action === 'ceremony.worship'), '审计留痕');
+});
+
+test('R13 ceremony.worship：同日同灵位同类型幂等（祭记每次记、积分只发一次）', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    members: [{ _id: 'm-dec', name: '郝公', status: 'DECEASED', worshipCount: 0 }]
+  });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  await FN('ceremony').main({ action: 'worship', type: 'incense', targetMemberId: 'm-dec' }, ctx);
+  const second = await FN('ceremony').main({ action: 'worship', type: 'incense', targetMemberId: 'm-dec' }, ctx);
+  assert.equal(second.success, true);
+  assert.equal(second.data.blessing.duplicated, true, '同日重复祭拜积分幂等');
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.equal(seed.collections.worship_logs.length, 2, '祭记每次都记');
+  assert.equal(seed.collections.points_logs.length, 1, '积分只发一次');
+  assert.equal(seed.collections.points_accounts.find(a => a.userId === 'u-m').gongde, 10);
+});
+
+test('R13 ceremony.spirits/list：灵位列表仅含已故 + 祭记按灵位过滤 + VISITOR 403', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    members: [
+      { _id: 'm-1', genealogyName: '郝一世祖', status: 'DECEASED', worshipCount: 3, deathDate: '1901-02-02' },
+      { _id: 'm-2', genealogyName: '郝二世祖', status: 'DECEASED', worshipCount: 0 },
+      { _id: 'm-3', name: '郝在世', status: 'ALIVE' }
+    ],
+    worshipLogs: [
+      { _id: 'w-1', type: 'lamp', targetMemberId: 'm-1', date: new Date('2025-01-02T00:00:00Z') },
+      { _id: 'w-2', type: 'flower', targetMemberId: 'm-2', date: new Date('2025-01-03T00:00:00Z') }
+    ]
+  });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  const spirits = await FN('ceremony').main({ action: 'spirits' }, ctx);
+  assert.equal(spirits.success, true);
+  assert.equal(spirits.data.spirits.length, 2, '在世不入灵位列表');
+  assert.equal(spirits.data.spirits[0].worshipCount, 3);
+  const logs = await FN('ceremony').main({ action: 'list', targetMemberId: 'm-1' }, ctx);
+  assert.equal(logs.success, true);
+  assert.equal(logs.data.logs.length, 1, '按灵位过滤祭记');
+  const denied = await FN('ceremony').main({ action: 'spirits' }, { OPENID: 'u-x', openid: 'u-x' });
+  assert.equal(denied.code, 403, '未认证不可看灵位');
+});
+
+test('R13 ceremony.remindScan：到期忌日写站内通知并标记已提醒', async () => {
+  seedDB({
+    calendarItems: [
+      { _id: 'ci-1', type: '忌日', userId: 'u-m', memberName: '郝公', remindAt: new Date(Date.now() - 86400000), notified: false }
+    ]
+  });
+  const res = await FN('ceremony').main({ action: 'remindScan' }, {});
+  assert.equal(res.success, true);
+  assert.equal(res.data.total, 1);
+  const seed = globalThis.__HCS_STUB_SEED__;
+  const note = seed.collections.notifications[0];
+  assert.equal(note.userId, 'u-m');
+  assert.ok(note.body.includes('郝公'));
+  assert.ok(note.targetRoute.includes('shrine'));
+  assert.equal(seed.collections.calendar_items.find(i => i._id === 'ci-1').notified, true, '已提醒标记');
+});
+
+test('R13 ceremony.remindScan：未来忌日不触发 + 二次扫描不重复', async () => {
+  seedDB({
+    calendarItems: [
+      { _id: 'ci-future', type: '忌日', userId: 'u-m', memberName: '郝先', remindAt: new Date(Date.now() + 86400000), notified: false },
+      { _id: 'ci-due', type: '忌日', userId: 'u-m', memberName: '郝祖', remindAt: new Date(Date.now() - 86400000), notified: false }
+    ]
+  });
+  const first = await FN('ceremony').main({ action: 'remindScan' }, {});
+  assert.equal(first.data.total, 1, '仅到期忌日触发');
+  const again = await FN('ceremony').main({ action: 'remindScan' }, {});
+  assert.equal(again.data.total, 0, '已提醒不再触发');
+  assert.equal(globalThis.__HCS_STUB_SEED__.collections.notifications.length, 1);
+});
+
+test('R13 task.checkin：积分联动打通（normal 池入账+同日幂等不重复）', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    tasks: [{ _id: 't-1', title: '每日打卡', desc: '坚持', points: 5, status: 'ACTIVE' }],
+    taskRecords: []
+  });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  const res = await FN('task').main({ action: 'checkin', taskId: 't-1' }, ctx);
+  assert.equal(res.success, true);
+  assert.equal(res.data.alreadyDone, false);
+  assert.equal(res.data.points.duplicated, false);
+  assert.equal(res.data.points.delta, 5);
+  const seed = globalThis.__HCS_STUB_SEED__;
+  const log = seed.collections.points_logs[0];
+  assert.equal(log.bizType, 'task.checkin');
+  assert.equal(log.pool, 'normal');
+  assert.equal(seed.collections.points_accounts.find(a => a.userId === 'u-m').normal, 5, 'normal 池 +5');
+  assert.ok(seed.collections.audit_logs.some(a => a.action === 'task.checkin'));
+  const dup = await FN('task').main({ action: 'checkin', taskId: 't-1' }, ctx);
+  assert.equal(dup.data.alreadyDone, true, '同日重复打卡幂等');
+  assert.equal(seed.collections.points_logs.length, 1, '积分不重复发放');
+});
+
+test('R13 atmosphere.today：统一格式 + 节气命中 + 端点色结构', async () => {
+  seedDB({});
+  const res = await FN('atmosphere').main({ action: 'today' }, {});
+  assert.equal(res.success, true, '统一响应（原 today 必崩 ReferenceError）');
+  assert.ok(res.data.solarTerm.length >= 2, '任一日期都命中节气');
+  assert.ok(['春', '夏', '秋', '冬'].includes(res.data.season));
+  assert.ok(/^#[0-9A-F]{6}$/i.test(res.data.moodTheme.top), 'moodTheme 为端点色对象');
+  assert.ok(res.data.greeting.length > 0, '节气笺非空');
+  assert.equal(Array.isArray(res.data.homeCards), true);
+  assert.equal(res.data.muted, false);
+});
+
+test('R13 atmosphere.today：白事静默素色覆盖（蓝图 7.8）', async () => {
+  seedDB({ events: [{ _id: 'e-1', type: 'funeral', status: 'ACTIVE' }] });
+  const res = await FN('atmosphere').main({ action: 'today' }, {});
+  assert.equal(res.data.muted, true);
+  assert.equal(res.data.moodTheme.top, '#F7F5F0', '素色端点覆盖节日端点');
+  assert.equal(res.data.season, '', '静默期不下发季节主题');
+  assert.ok(res.data.greeting.includes('慎终追远'));
+});
+
+test('R13 atmosphere：24 节气表完整 + 圆环匹配（跨年回卷冬至段）', async () => {
+  const atm = FN('atmosphere');
+  assert.equal(atm.SOLAR_TERMS.length, 24, '24 节气齐备（原仅 2 项）');
+  assert.equal(atm.resolveTerm(new Date('2025-01-03T04:00:00Z')).name, '冬至', '1 月初回卷冬至段');
+  assert.equal(atm.resolveTerm(new Date('2025-04-06T04:00:00Z')).name, '清明');
+  assert.equal(atm.resolveTerm(new Date('2025-08-09T04:00:00Z')).name, '立秋');
+  assert.equal(atm.resolveTerm(new Date('2025-12-25T04:00:00Z')).name, '冬至');
 });

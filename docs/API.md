@@ -335,3 +335,30 @@
 - 真机接入点：云开发事务（db.startTransaction）包住流水+余额写
 
 ---
+
+### 8.6 ceremony 大修 + atmosphere 氛围引擎（R13 · 蓝图 9.1/11/7.8/7.9 对齐）
+
+#### ceremony（祭祀礼拜 · R13 重写，此前遗留桩不可运行）
+
+| action | 入参 | 出参 | 权限 | 说明 |
+|---|---|---|---|---|
+| worship | type, targetMemberId, message? | `{logId, type, typeLabel, worshipCount, blessing}` | MEMBER+ | type 白名单 `lamp/incense/flower/group`；灵位仅限 DECEASED（在世 400/缺失 404）；message ≤100 字；祭记每次落库，功德池 +10 幂等键 `ceremony.worship:type:灵位:YYYYMMDD`（同日同灵位同类型仅 1 次）；计数原子 +1；审计 ceremony.worship |
+| spirits | page? | `{spirits[{id,name,generation,deathDate,worshipCount}], page, hasMore}` | MEMBER+ | 已故族人性列表 20/页（蓝图 shrine/index 灵位列表） |
+| list | targetMemberId?, page? | `{logs[], page, hasMore}` | MEMBER+ | 祭记分页 20/页 date 倒序，可按灵位过滤 |
+| remindScan | —（定时触发） | `{total, items[]}` | 系统 | 扫 `calendar_items{type:'忌日', notified:false, remindAt≤now}` → 写 notifications 站内通知（蓝图 7.9）+ 标记 notified 防重发 |
+
+#### atmosphere（节气氛围引擎 · R13 重写，today 此前必崩）
+
+| action | 入参 | 出参 | 权限 | 说明 |
+|---|---|---|---|---|
+| today | — | `{solarTerm, season, moodTheme{top,mid,bottom}, greeting, muted, festival, homeCards[]}` | 公开（蓝图 9.1） | 内置 24 节气年度近似表（模块导出 SOLAR_TERMS/resolveTerm 供年检校准）；圆环匹配跨年回卷冬至段；moodTheme 四季端点色（0.2.2 晨光渐变），白事静默（events 有 ACTIVE 讣告）→ 素色端点 + muted=true（7.8）；homeCards 占位 R14 接 digest |
+
+#### common/points（系统积分发放公共模块 · R13 新建）
+
+`awardSystemPoints(db, {userId, pool, bizType, bizId, amount, note})` → `{duplicated, logId, delta, pool}`
+- 流水先行（幂等键 bizType+bizId+userId）→ 账户四池 `db.command.inc` 原子更新（蓝图 7.5）
+- ceremony.worship（gongde）与 task.checkin（normal）共用；禁止系统内 callFunction 回环 points.award（该入口已收口 EDITOR 代发门禁）
+
+#### task.checkin（R13 联动修复）
+
+打卡响应新增 `points` 字段（awardSystemPoints 结果）；积分失败不阻塞打卡本体（console.warn + 审计兜底，补偿扫描按 dateStr）。
