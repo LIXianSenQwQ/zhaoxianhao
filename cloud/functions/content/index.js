@@ -266,6 +266,150 @@ async function categoryList(ctx, userId) {
   return OK({ categories: res.data || [] });
 }
 
+/**
+ * V2.0 模块一（A.7）：内容详情（按可见性过滤）
+ */
+async function contentDetail(ctx, userId, { contentId }) {
+  const db = wx.getDatabase();
+  if (!contentId) return BAD_REQUEST('缺少 contentId');
+  
+  // 本人内容均可见；他人仅读取 PUBLIC
+  const mineRes = await db.collection('local_contents')
+    .where({ _id: contentId, openid: ctx.openid }).limit(1).get();
+  if (mineRes.data && mineRes.data.length) {
+    return OK({ content: mineRes.data[0], isOwner: true });
+  }
+  
+  // 非属主：仅 PUBLIC 可见
+  const publicRes = await db.collection('local_contents')
+    .where({ _id: contentId, visibility: 'PUBLIC' }).limit(1).get();
+  if (publicRes.data && publicRes.data.length) {
+    return OK({ content: publicRes.data[0], isOwner: false });
+  }
+  
+  return BAD_REQUEST('该内容不存在或不可见');
+}
+
+/**
+ * V2.0 模块一（A.3）：编辑内容（title/content/category/tags/visibility/mediaIds）
+ * 仅属主可编辑
+ */
+async function contentUpdate(ctx, userId, { contentId, title, content, mainCategory, subCategory, tags, visibility, mediaIds }) {
+  const db = wx.getDatabase();
+  if (!contentId) return BAD_REQUEST('缺少 contentId');
+  
+  // 权限校验：仅属主（先查属主文档是否存在）
+  const ownerRes = await db.collection('local_contents')
+    .where({ _id: contentId, openid: ctx.openid }).limit(1).get();
+  if (!ownerRes.data || !ownerRes.data.length) return FORBIDDEN('无权限修改该内容');
+  
+  // 当前分类（若未传 mainCategory 但切 PUBLIC 需校验存量分类是否敏感）
+  const cur = ownerRes.data[0];
+  const effectiveMain = mainCategory !== undefined ? String(mainCategory).trim() : (cur.mainCategory || '');
+  if (visibility !== undefined) {
+    if (!['PRIVATE', 'GROUP', 'PUBLIC'].includes(visibility)) return BAD_REQUEST('visibility 无效');
+    // 敏感分类强制 PRIVATE
+    if (SENSITIVE_CATEGORIES.includes(effectiveMain) && visibility !== 'PRIVATE') {
+      return BAD_REQUEST('证件资料等敏感分类仅可设为私密');
+    }
+  }
+  
+  // 更新字段
+  const updateData = { updatedAt: new Date() };
+  if (title !== undefined && typeof title === 'string') updateData.title = title.trim();
+  if (content !== undefined && typeof content === 'string') updateData.content = content;
+  if (mainCategory !== undefined) updateData.mainCategory = String(mainCategory).trim();
+  if (subCategory !== undefined) updateData.subCategory = String(subCategory).trim();
+  if (tags !== undefined) {
+    if (!Array.isArray(tags) || tags.length > 50) return BAD_REQUEST('标签须为数组且 ≤50');
+    updateData.tags = tags;
+  }
+  if (visibility !== undefined) updateData.visibility = visibility;
+  if (mediaIds !== undefined) {
+    if (!Array.isArray(mediaIds) || mediaIds.length > 100) return BAD_REQUEST('媒体数不得超过 100');
+    updateData.mediaIds = mediaIds;
+  }
+  
+  await db.collection('local_contents').doc(contentId).update({ data: updateData });
+  
+  // audit log
+  try {
+    await db.collection('audit_logs').add({
+      userId: ctx.openid, action: 'content.update', target: contentId,
+      detail: JSON.stringify(Object.keys(updateData)), time: new Date()
+    });
+  } catch {}
+  
+  return OK({ message: '已更新' });
+}
+
+/**
+ * V2.0 模块一（A.3）：删除内容（软删除，标记 deleted=true）
+ * 仅属主可删除；管理员可强制删除（预留）
+ */
+async function contentDelete(ctx, userId, { contentId }) {
+  const db = wx.getDatabase();
+  if (!contentId) return BAD_REQUEST('缺少 contentId');
+  
+  // 权限校验：仅属主
+  const ownerRes = await db.collection('local_contents')
+    .where({ _id: contentId, openid: ctx.openid }).limit(1).get();
+  if (!ownerRes.data || !ownerRes.data.length) return FORBIDDEN('无权限删除该内容');
+  
+  // 软删除：标记 deleted 并下沉（保留审计追溯）
+  await db.collection('local_contents').doc(contentId).update({
+    data: { deleted: true, deletedAt: new Date(), updatedAt: new Date() }
+  });
+  
+  // audit log
+  try {
+    await db.collection('audit_logs').add({
+      userId: ctx.openid, action: 'content.delete', target: contentId,
+      detail: '{}', time: new Date()
+    });
+  } catch {}
+  
+  return OK({ message: '已删除' });
+}
+
+/**
+ * V2.0 模块一（A.3）：批量设置可见性
+ * 支持根据条件筛选内容统一改权限
+ */
+async function batchSetVisibility(ctx, userId, { contentIds, visibility }) {
+  const db = wx.getDatabase();
+  if (!visibility) return BAD_REQUEST('visibility 必填');
+  if (!['PRIVATE', 'GROUP', 'PUBLIC'].includes(visibility)) return BAD_REQUEST('visibility 无效');
+  
+  const SENSITIVE_CATEGORIES = ['证件资料'];
+  // 检查这批内容是否有敏感分类且非 PRIVATE
+  let sensitiveFound = false;
+  for (const id of contentIds) {
+    const item = await db.collection('local_contents').doc(id).get();
+    if (item.data?.mainCategory && SENSITIVE_CATEGORIES.includes(item.data.mainCategory) && visibility !== 'PRIVATE') {
+      sensitiveFound = true;
+      break;
+    }
+  }
+  if (sensitiveFound) return BAD_REQUEST('包含敏感分类的内容不可设为公开/指定可见');
+  
+  const res = await db.collection('local_contents').where({
+    _id: db.command.in(contentIds),
+    openid: ctx.openid
+  }).set({ data: { visibility, updatedAt: new Date() } });
+  
+  // audit log（批量记录一次即可）
+  try {
+    await db.collection('audit_logs').add({
+      userId: ctx.openid, action: 'content.batch.setVisibility',
+      target: contentIds.join(','),
+      detail: JSON.stringify({ count: res.stats.updated }), time: new Date()
+    });
+  } catch {}
+  
+  return OK({ message: `已更新 ${res.stats.updated} 条` });
+}
+
 module.exports = { main: async (params, context) => {
   const { action } = params || {};
   const userId = params.userId || context.openid;
@@ -297,6 +441,14 @@ module.exports = { main: async (params, context) => {
       return await categorySave(roleCtx, userId, params);
     case 'category.list':
       return await categoryList(roleCtx, userId);
+    case 'content.detail':
+      return await contentDetail(roleCtx, userId, params);
+    case 'content.update':
+      return await contentUpdate(roleCtx, userId, params);
+    case 'content.delete':
+      return await contentDelete(roleCtx, userId, params);
+    case 'content.batch.setVisibility':
+      return await batchSetVisibility(roleCtx, userId, params);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }

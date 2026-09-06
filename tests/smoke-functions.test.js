@@ -2049,3 +2049,104 @@ test('F1 seed: 合规红线——新闻开关携带外链合规备注', () => {
   assert.ok(/外链/.test(INITIAL_FLAGS.v20News.note || ''), 'v20News 应标注时政仅外链');
   assert.ok(/零内购|无内购/.test(INITIAL_FLAGS.v20Home.note || ''), 'v20Home 应标注零内购');
 });
+
+// ═══════════ F2 模块一：本地内容详情/编辑/删除/批量权限 ═══════════
+
+test('F2 content.detail: 本人内容详情可读', async () => {
+  seedDB({
+    localContents: [
+      { _id: 'c1', openid: 'u-member', type: 'article', title: '祖辈口述', content: 'x'.repeat(20), visibility: 'PRIVATE', updatedAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main({ action: 'content.detail', contentId: 'c1' }, CTX_WITH_ROLE('MEMBER'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.content.title, '祖辈口述');
+});
+
+test('F2 content.detail: 他人 PRIVATE 内容不可读', async () => {
+  seedDB({
+    localContents: [
+      { _id: 'c2', openid: 'u-other', type: 'article', title: '私密', content: 'y'.repeat(20), visibility: 'PRIVATE', updatedAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main({ action: 'content.detail', contentId: 'c2' }, CTX_WITH_ROLE('MEMBER'));
+  assert.equal(res.success, false);
+  assert.equal(res.code, 400, '他人私密内容应视为不可见');
+});
+
+test('F2 content.detail: 他人 PUBLIC 内容可读', async () => {
+  seedDB({
+    localContents: [
+      { _id: 'c3', openid: 'u-other', type: 'photo', title: '公开梨园照', content: '', visibility: 'PUBLIC', updatedAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main({ action: 'content.detail', contentId: 'c3' }, CTX_WITH_ROLE('MEMBER'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.content.visibility, 'PUBLIC');
+});
+
+test('F2 content.update: 非属主更新被拒', async () => {
+  seedDB({
+    localContents: [
+      { _id: 'c4', openid: 'u-other', type: 'article', title: '别人内容', content: 'z'.repeat(20), visibility: 'PRIVATE', updatedAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main(
+    { action: 'content.update', contentId: 'c4', title: '篡改' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, false);
+  assert.equal(res.code, 403, '非属主应 403');
+});
+
+test('F2 content.update: 敏感分类改公开被拒', async () => {
+  seedDB({
+    localContents: [
+      { _id: 'c5', openid: 'u-member', type: 'photo', title: '证件', content: '', mainCategory: '证件资料', visibility: 'PRIVATE', updatedAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main(
+    { action: 'content.update', contentId: 'c5', visibility: 'PUBLIC' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, false);
+  assert.equal(res.code, 400, '敏感分类改公开应拒绝');
+});
+
+test('F2 content.update: 属主正常更新', async () => {
+  seedDB({
+    localContents: [
+      { _id: 'c6', openid: 'u-member', type: 'article', title: '旧题', content: 'a'.repeat(20), visibility: 'PRIVATE', updatedAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main(
+    { action: 'content.update', contentId: 'c6', title: '新标题' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+});
+
+test('F2 content.delete: 非属主删除被拒', async () => {
+  seedDB({
+    localContents: [
+      { _id: 'c7', openid: 'u-other', type: 'article', title: '他人', content: 'b'.repeat(20), visibility: 'PRIVATE', updatedAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main({ action: 'content.delete', contentId: 'c7' }, CTX_WITH_ROLE('MEMBER'));
+  assert.equal(res.success, false);
+  assert.equal(res.code, 403);
+});
+
+test('F2 content.batch.setVisibility: 敏感分类批量设公开被拒', async () => {
+  seedDB({
+    localContents: [
+      { _id: 'c8', openid: 'u-member', type: 'photo', title: '身份证', content: '', mainCategory: '证件资料', visibility: 'PRIVATE', updatedAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('content').main(
+    { action: 'content.batch.setVisibility', contentIds: ['c8'], visibility: 'PUBLIC' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, false);
+  assert.equal(res.code, 400, '批量设置含敏感分类应拒绝');
+});
