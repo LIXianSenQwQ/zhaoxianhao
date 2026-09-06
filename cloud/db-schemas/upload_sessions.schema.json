@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "upload_sessions",
+  "description": "V2.0 F3c: 2GB 大文件分片上传会话（断点续传状态），文件合并完成后标记 completed",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "sessionId": { "type": "string" },
+    "userId": { "type": "string" },
+    "scene": { "type": "string", "enum": ["avatar", "document", "evidence", "media", "video", "album", "docscan", "eventimg"] },
+    "fileName": { "type": "string", "maxLength": 255 },
+    "mimeType": { "type": "string" },
+    "totalSize": { "type": "number", "description": "文件总字节（≤2GB）" },
+    "chunkSize": { "type": "number", "description": "分片大小字节" },
+    "totalChunks": { "type": "number" },
+    "uploadedChunks": { "type": "array", "items": { "type": "number" }, "description": "已收分片下标（断点续传依据）" },
+    "completed": { "type": "boolean" },
+    "fileId": { "type": "string", "description": "合并后的最终云存储 fileId" },
+    "transcode": {
+      "type": "object",
+      "description": "MPS 转码任务骨架",
+      "properties": {
+        "status": { "type": "string", "enum": ["PENDING", "RUNNING", "DONE", "FAIL"] },
+        "template": { "type": "string" },
+        "transcodedFileId": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "expireAt": { "type": "string", "format": "date-time", "description": "会话 TTL（默认 24h，未完成自动过期）" }
+  },
+  "required": ["sessionId", "userId", "scene", "totalSize", "chunkSize", "totalChunks", "createdAt"],
+  "indexes": [
+    { "keys": { "sessionId": 1 }, "options": { "unique": true, "name": "sessionId_unique" } },
+    { "keys": { "userId": 1, "createdAt": -1 }, "name": "user_session_idx" }
+  ]
+}

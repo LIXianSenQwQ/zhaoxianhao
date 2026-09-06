@@ -2690,6 +2690,122 @@ test('F3b backup.restore: 恢复 DONE 照片返回下载直链，非 DONE 不返
   assert.equal(bad.code, 400);
 });
 
+// ═══════════ F3c upload chunked (2GB) – init/put/resume/complete ═══════════
+const uploadCtx = CTX_WITH_ROLE('MEMBER');
+
+test('F3c upload.policy: video 场景支持 2GB 分片', async () => {
+  seedDB();
+  const res = await FN('upload').main({ action: 'policy', scene: 'video' }, uploadCtx);
+  assert.equal(res.success, true);
+  assert.equal(res.data.maxFileSize, 2 * 1024 * 1024 * 1024);
+  assert.equal(res.data.chunked, true);
+});
+
+test('F3c upload.chunk.init: 2GB 校验 + 会话创建', async () => {
+  seedDB();
+  // 超 2GB → 拒绝
+  const over = await FN('upload').main(
+    { action: 'chunk.init', scene: 'video', fileName: 'big.mp4', totalSize: 2 * 1024 * 1024 * 1024 + 1, mimeType: 'video/mp4' },
+    uploadCtx
+  );
+  assert.equal(over.code, 400);
+  // 类型非法 → 拒绝
+  const badType = await FN('upload').main(
+    { action: 'chunk.init', scene: 'video', fileName: 'x.pdf', totalSize: 1024, mimeType: 'application/pdf' },
+    uploadCtx
+  );
+  assert.equal(badType.code, 400);
+  // 正常 1GB → 512 片（默认 2MB）
+  const ok = await FN('upload').main(
+    { action: 'chunk.init', scene: 'video', fileName: 'tour.mp4', totalSize: 1024 * 1024 * 1024, mimeType: 'video/mp4' },
+    uploadCtx
+  );
+  assert.equal(ok.success, true, JSON.stringify(ok));
+  assert.equal(ok.data.totalChunks, 512);
+  assert.equal(ok.data.resumed, false);
+  const sessions = (await backupDb().collection('upload_sessions').get()).data;
+  assert.equal(sessions.length, 1, '会话应落库');
+});
+
+test('F3c upload.chunk.put + progress: 断点续传进度', async () => {
+  seedDB();
+  const init = await FN('upload').main(
+    { action: 'chunk.init', scene: 'video', fileName: 'part.mp4', totalSize: 8 * 1024 * 1024, mimeType: 'video/mp4' },
+    uploadCtx
+  );
+  const sid = init.data.sessionId;
+  // 提交前 3 片
+  for (let i = 0; i < 3; i++) {
+    const p = await FN('upload').main({ action: 'chunk.put', sessionId: sid, index: i }, uploadCtx);
+    assert.equal(p.success, true, JSON.stringify(p));
+  }
+  // 越界片拒绝
+  const over = await FN('upload').main({ action: 'chunk.put', sessionId: sid, index: 5 }, uploadCtx);
+  assert.equal(over.code, 400);
+  // 重复片幂等（不算新增）
+  const dup = await FN('upload').main({ action: 'chunk.put', sessionId: sid, index: 1 }, uploadCtx);
+  assert.equal(dup.data.uploadedCount, 3);
+  const prog = await FN('upload').main({ action: 'chunk.progress', sessionId: sid }, uploadCtx);
+  assert.equal(prog.data.uploadedCount, 3);
+  assert.deepEqual(prog.data.uploadedChunks, [0, 1, 2]);
+  assert.ok(prog.data.missing.includes(3), '缺失片应列出');
+  // 会话归属校验：他人不能续传
+  const other = await FN('upload').main({ action: 'chunk.progress', sessionId: sid }, CTX_WITH_ROLE('VISITOR'));
+  assert.equal(other.code, 400);
+});
+
+test('F3c upload.chunk.complete: 缺片拒绝 → 齐全后合并 + 视频转码任务登记', async () => {
+  seedDB();
+  const init = await FN('upload').main(
+    { action: 'chunk.init', scene: 'video', fileName: 'full.mp4', totalSize: 8 * 1024 * 1024, mimeType: 'video/mp4' },
+    uploadCtx
+  );
+  const sid = init.data.sessionId;
+  // 缺 1 片 → 400
+  for (let i = 0; i < 3; i++) {
+    await FN('upload').main({ action: 'chunk.put', sessionId: sid, index: i }, uploadCtx);
+  }
+  const incomplete = await FN('upload').main({ action: 'chunk.complete', sessionId: sid }, uploadCtx);
+  assert.equal(incomplete.code, 400, '缺片不应合并');
+  // 补齐 4 片
+  await FN('upload').main({ action: 'chunk.put', sessionId: sid, index: 3 }, uploadCtx);
+  const done = await FN('upload').main({ action: 'chunk.complete', sessionId: sid }, uploadCtx);
+  assert.equal(done.success, true, JSON.stringify(done));
+  assert.ok(done.data.fileId, '应生成合并 fileId');
+  assert.equal(done.data.completed, true);
+  assert.ok(done.data.transcode, '视频应登记转码任务');
+  assert.equal(done.data.transcode.status, 'PENDING');
+  assert.equal(done.data.metaRegistered, true);
+  const metas = (await backupDb().collection('upload_metas').get()).data;
+  assert.equal(metas.length, 1, '合并完成应登记 upload_metas');
+  // 重复 complete 幂等返回
+  const again = await FN('upload').main({ action: 'chunk.complete', sessionId: sid }, uploadCtx);
+  assert.equal(again.data.repeatedComplete, true);
+  const metasAfter = (await backupDb().collection('upload_metas').get()).data;
+  assert.equal(metasAfter.length, 1, '重复 complete 不得重复登记元数据');
+});
+
+test('F3c upload.chunk.init: 断点续传复用未完成会话（resumed=true）', async () => {
+  seedDB();
+  const init = await FN('upload').main(
+    { action: 'chunk.init', scene: 'video', fileName: 'resume.mp4', totalSize: 8 * 1024 * 1024, mimeType: 'video/mp4' },
+    uploadCtx
+  );
+  const sid = init.data.sessionId;
+  await FN('upload').main({ action: 'chunk.put', sessionId: sid, index: 0 }, uploadCtx);
+  await FN('upload').main({ action: 'chunk.put', sessionId: sid, index: 2 }, uploadCtx);
+  // 再次 init 同文件 → 复用会话
+  const again = await FN('upload').main(
+    { action: 'chunk.init', scene: 'video', fileName: 'resume.mp4', totalSize: 8 * 1024 * 1024, mimeType: 'video/mp4' },
+    uploadCtx
+  );
+  assert.equal(again.success, true);
+  assert.equal(again.data.resumed, true, '应断点续传');
+  assert.equal(again.data.uploadedCount, 2, '已传分片应被带出');
+  const sessions = (await backupDb().collection('upload_sessions').get()).data;
+  assert.equal(sessions.length, 1, '不得重复建会话');
+});
+
 test('F4 news.cron.refresh: 定时刷新入口成功返回统计（空源不崩溃）', async () => {
   newsSeed([
     { _id: 't1', category: '本地', title: '24h 内热点', tags: [], hot: 3, publishAt: new Date().toISOString(), status: 'PUBLISHED' }
