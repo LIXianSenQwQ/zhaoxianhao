@@ -12,7 +12,12 @@
     "lazySizes": { "type": "array", "items": { "type": "string" } },
     "tags": { "type": "array", "items": { "type": "string" } },
     "shotAt": { "type": "string" },
+    "fileSize": { "type": "number", "description": "原文件字节数（F3b 配额统计用）" },
     "backupStatus": { "type": "string", "enum": ["PENDING", "DONE", "FAIL"] },
+    "backupAttempts": { "type": "number", "description": "备份重试次数（上限 3）" },
+    "backupFileId": { "type": "string", "description": "异地备份产物 fileId（真实环境由 backup 云函数写入）" },
+    "backupAt": { "type": "string", "format": "date-time" },
+    "backupError": { "type": "string" },
     "createdAt": { "type": "string" }
   },
   "required": ["_id", "albumId", "userId", "fileId", "createdAt"],

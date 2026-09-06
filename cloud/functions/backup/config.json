@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "openapi": []
+  },
+  "triggers": [
+    {
+      "name": "backupQueueTimer",
+      "type": "timer",
+      "config": "0 0 * * * * *",
+      "description": "V2.0 F3b: 每小时消费一次备份队列（PENDING/FAIL 重试，配额内）",
+      "handler": "index.main"
+    }
+  ],
+  "envVariables": {}
+}

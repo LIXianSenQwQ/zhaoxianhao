@@ -93,11 +93,13 @@ async function uploadBatch(ctx, userId, albumId, photos = []) {
     const res = await col.add({
       albumId, userId,
       fileId: p.fileId,
+      fileSize: Number(p.size) || 0, // F3b: 配额/备份统计用
       thumbUrl: '',          // CI 生成后回填
-      lazySizes: [],          // 80/200/600 三档
+      lazySizes: [],         // 80/200/600 三档
       tags: Array.isArray(p.tags) ? p.tags : [],
       shotAt: p.shotAt || now,
       backupStatus: 'PENDING',
+      backupAttempts: 0,     // F3b: 备份重试计数
       createdAt: now
     });
     added.push(res._id);

@@ -2559,6 +2559,137 @@ test('F4 news.offline.pack/list/cleanup: 合规离线快照（仅摘要不缓存
   assert.equal(after.length, 0, '清理后应无离线标记');
 });
 
+// ═══════════ F3b album backup queue – status/retry/quota/export ═══════════
+const backupDb = () => require('../scripts/wx-server-sdk-stub.js').getDatabase();
+const BACKUP_CTX = CTX_WITH_ROLE('CHIEF');
+
+test('F3b album.uploadBatch: 新照片标记 backupStatus=PENDING + 记录 fileSize', async () => {
+  seedDB({ albums: [{ _id: 'b1', userId: 'u-member', level: 1, photoCount: 0 }], albumPhotos: [] });
+  const res = await FN('album').main(
+    { action: 'uploadBatch', albumId: 'b1', photos: [{ fileId: 'photoA', size: 2 * 1024 * 1024 }] },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  const rows = (await backupDb().collection('album_photos').get()).data;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].backupStatus, 'PENDING', '上传后应进入备份队列');
+  assert.equal(rows[0].backupAttempts, 0);
+  assert.equal(rows[0].fileSize, 2 * 1024 * 1024, '应记录原文件字节');
+});
+
+test('F3b backup.process: 队列消费 → DONE / FAIL 重试 / 已达上限', async () => {
+  seedDB({
+    albumPhotos: [
+      { _id: 'p-ok', albumId: 'a1', userId: 'u1', fileId: 'f-ok', fileSize: 10, backupStatus: 'PENDING', backupAttempts: 0 },
+      { _id: 'p-bad', albumId: 'a1', userId: 'u1', fileId: 'bad-1', fileSize: 10, backupStatus: 'PENDING', backupAttempts: 0 },
+      { _id: 'p-retry', albumId: 'a1', userId: 'u1', fileId: 'f-retry', fileSize: 10, backupStatus: 'FAIL', backupAttempts: 2 }
+    ]
+  });
+  const res = await FN('backup').main({ action: 'process' }, BACKUP_CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.done, 2, 'p-ok 与 p-retry(第3次成功) 应备份成功');
+  assert.equal(res.data.failed, 1, 'p-bad 模拟失败');
+  const db = backupDb();
+  const ok = (await db.collection('album_photos').where({ _id: 'p-ok' }).get()).data[0];
+  assert.equal(ok.backupStatus, 'DONE');
+  assert.equal(ok.backupAttempts, 1);
+  assert.ok(ok.backupFileId.startsWith('backup://'), '应有备份产物标识');
+  assert.ok(ok.backupAt, '应记录备份时间');
+  const retry = (await db.collection('album_photos').where({ _id: 'p-retry' }).get()).data[0];
+  assert.equal(retry.backupStatus, 'DONE');
+  assert.equal(retry.backupAttempts, 3, '第 3 次重试成功');
+  const bad = (await db.collection('album_photos').where({ _id: 'p-bad' }).get()).data[0];
+  assert.equal(bad.backupStatus, 'PENDING', '未达上限应留在队列等待重试');
+  assert.equal(bad.backupAttempts, 1);
+  assert.ok(bad.backupError, '应记录错误原因');
+});
+
+test('F3b backup.process: 连续失败达到 3 次 → FAIL 封存', async () => {
+  seedDB({
+    albumPhotos: [
+      { _id: 'p-fail1', albumId: 'a1', userId: 'u1', fileId: 'bad-x', fileSize: 10, backupStatus: 'FAIL', backupAttempts: 2 },
+      { _id: 'p-fail2', albumId: 'a1', userId: 'u1', fileId: 'bad-y', fileSize: 10, backupStatus: 'PENDING', backupAttempts: 2 }
+    ]
+  });
+  const res = await FN('backup').main({ action: 'process' }, BACKUP_CTX);
+  const db = backupDb();
+  const f1 = (await db.collection('album_photos').where({ _id: 'p-fail1' }).get()).data[0];
+  assert.equal(f1.backupStatus, 'FAIL', '达到上限应封存');
+  assert.equal(f1.backupAttempts, 3);
+  const f2 = (await db.collection('album_photos').where({ _id: 'p-fail2' }).get()).data[0];
+  assert.equal(f2.backupStatus, 'FAIL', '第 3 次失败封存');
+  assert.equal(f2.backupAttempts, 3);
+  // 再次 process：已封存不再重试
+  const again = await FN('backup').main({ action: 'process' }, BACKUP_CTX);
+  assert.equal(again.data.processed, 0, '封存 FAIL 不再消费');
+});
+
+test('F3b backup.retry + backup.stats: 重试队列与状态统计', async () => {
+  seedDB({
+    albumPhotos: [
+      { _id: 'r1', albumId: 'a1', userId: 'u1', fileId: 'bad-r', fileSize: 5, backupStatus: 'FAIL', backupAttempts: 1, backupError: '模拟失败' },
+      { _id: 'r2', albumId: 'a1', userId: 'u1', fileId: 'f2', fileSize: 20, backupStatus: 'DONE', backupAttempts: 1, backupAt: '2026-09-06T10:00:00Z' },
+      { _id: 'r3', albumId: 'a1', userId: 'u1', fileId: 'f3', fileSize: 15, backupStatus: 'PENDING', backupAttempts: 0 }
+    ]
+  });
+  const retry = await FN('backup').main({ action: 'retry', userId: 'u1' }, BACKUP_CTX);
+  assert.equal(retry.success, true);
+  assert.equal(retry.data.queue.length, 1, '仅 FAIL 入重试队列');
+  assert.equal(retry.data.queue[0].retryable, true);
+  assert.equal(retry.data.queue[0].lastError, '模拟失败');
+  const stats = await FN('backup').main({ action: 'stats', userId: 'u1' }, BACKUP_CTX);
+  assert.deepEqual(stats.data.stats, { PENDING: 1, DONE: 1, FAIL: 1, totalBytes: 40 });
+});
+
+test('F3b backup.quota: 用量统计与剩余额度', async () => {
+  seedDB({
+    albumPhotos: [
+      { _id: 'q1', albumId: 'a1', userId: 'u1', fileId: 'fq1', fileSize: 2 * 1024 * 1024 * 1024, backupStatus: 'DONE', backupAttempts: 1 },
+      { _id: 'q2', albumId: 'a1', userId: 'u1', fileId: 'fq2', fileSize: 1 * 1024 * 1024 * 1024, backupStatus: 'DONE', backupAttempts: 1 },
+      { _id: 'q3', albumId: 'a1', userId: 'u1', fileId: 'fq3', fileSize: 500 * 1024 * 1024, backupStatus: 'PENDING', backupAttempts: 0 }
+    ]
+  });
+  const quota = await FN('backup').main({ action: 'quota', userId: 'u1' }, BACKUP_CTX);
+  assert.equal(quota.success, true, JSON.stringify(quota));
+  assert.equal(quota.data.usedBytes, 3 * 1024 * 1024 * 1024, '仅 DONE 计配额');
+  assert.equal(quota.data.quotaBytes, 10 * 1024 * 1024 * 1024, '默认 10GB');
+  assert.equal(quota.data.pct, 30);
+  assert.equal(quota.data.remainingBytes, 7 * 1024 * 1024 * 1024);
+});
+
+test('F3b backup.export: 仅导出 DONE 照片清单（可按相册过滤）', async () => {
+  seedDB({
+    albumPhotos: [
+      { _id: 'e1', albumId: 'albA', userId: 'u1', fileId: 'f1', fileSize: 10, backupStatus: 'DONE', backupAttempts: 1, backupFileId: 'backup://f1', backupAt: '2026-09-06T10:00:00Z' },
+      { _id: 'e2', albumId: 'albB', userId: 'u1', fileId: 'f2', fileSize: 10, backupStatus: 'DONE', backupAttempts: 1, backupFileId: 'backup://f2' },
+      { _id: 'e3', albumId: 'albA', userId: 'u1', fileId: 'f3', fileSize: 10, backupStatus: 'PENDING', backupAttempts: 0 }
+    ]
+  });
+  const all = await FN('backup').main({ action: 'export', userId: 'u1' }, BACKUP_CTX);
+  assert.equal(all.success, true);
+  assert.equal(all.data.manifest.count, 2, 'PENDING 不入导出清单');
+  const inA = await FN('backup').main({ action: 'export', userId: 'u1', albumId: 'albA' }, BACKUP_CTX);
+  assert.equal(inA.data.manifest.count, 1);
+  assert.equal(inA.data.manifest.items[0].photoId, 'e1');
+});
+
+test('F3b backup.restore: 恢复 DONE 照片返回下载直链，非 DONE 不返回', async () => {
+  seedDB({
+    albumPhotos: [
+      { _id: 'rv1', albumId: 'a1', userId: 'u1', fileId: 'f1', fileSize: 10, backupStatus: 'DONE', backupAttempts: 1, backupFileId: 'backup://rv1' },
+      { _id: 'rv2', albumId: 'a1', userId: 'u1', fileId: 'f2', fileSize: 10, backupStatus: 'PENDING', backupAttempts: 0 }
+    ]
+  });
+  const res = await FN('backup').main({ action: 'restore', photoIds: ['rv1', 'rv2'], userId: 'u1' }, BACKUP_CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.count, 1, '仅 DONE 可恢复');
+  assert.equal(res.data.restored[0].photoId, 'rv1');
+  assert.ok(res.data.restored[0].downloadUrl, '应有下载直链');
+  // 空参 → 400
+  const bad = await FN('backup').main({ action: 'restore', photoIds: [] }, BACKUP_CTX);
+  assert.equal(bad.code, 400);
+});
+
 test('F4 news.cron.refresh: 定时刷新入口成功返回统计（空源不崩溃）', async () => {
   newsSeed([
     { _id: 't1', category: '本地', title: '24h 内热点', tags: [], hot: 3, publishAt: new Date().toISOString(), status: 'PUBLISHED' }
