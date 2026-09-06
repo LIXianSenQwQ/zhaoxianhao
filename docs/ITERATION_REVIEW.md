@@ -1063,3 +1063,41 @@
 | secscan 敏感词库过简 | 低 | R23+ 接入 msgSecCheck + 专业词库 |
 | album 断点续传未实现 | 中 | R26 性能收口补分片队列 |
 | 真机性能实测 | 高 | 持续等待微信开发者工具环境 |
+
+## 第 R23–R25 轮（Sprint R23/R24/R25 · V1.1 E1/E4 + V2.0 F1）
+
+> 主题：私密委托/反向密码/百年设置 + 老皇历 almanac + 合规签字与本地内容。
+
+### 指标回顾
+
+| 维度 | 指标 | R22 | R25 | 变化 |
+|---|---|---|---|---|
+| V1.1 E1 | 私密委托 | 无 | **setDelegates/revokeDelegate**（≤3 名+smsCode+细粒度 scope） | ↑ |
+| V1.1 E1 | 反向密码 | 无 | **setReversePassword/verifyReverse**（复杂度校验+sha256 占位+300s 令牌） | ↑ |
+| V1.1 E4 | 百年设置 | 无 | **capsule.create/scan/list**（time_capsules SEALED→UNLOCKED） | ↑ |
+| V1.1 E4 | 老皇历 | 占位 | **calendar.almanac**（干支/生肖/24 节气公式+宜忌+almanacExt 定制） | ↑ |
+| V2.0 F1 | 合规签字 | 无 | **compliance.sign/list**（家规/家训/倡议书） | ↑ |
+| V2.0 F1 | 本地内容 | 无 | **article.save/list**（article/story 草稿）+ plaza 迁移脚本 | ↑ |
+| 质量 | 测试数 | 210 | **241**（+31：auth/weather/greeting/capsule/almanac/compliance/article） | ↑ |
+| 门禁 | verify | 绿 | **绿**（241 用例 · lint 0E） | = |
+
+### 关键取舍
+- **lunar 采用公式层而非整库**：网络受限无法 npm 装 lunar-javascript，交付可测的干支/节气/宜忌公式层（21 世纪近似 ±1 日），真实 1900-2100 农历留 lunar-placeholder 部署接入点——符合「真实云函数 + 占位降级」一贯模式。
+- **auth 旧式响应保留**：certify/auditCertify/grantAuth 沿用 `{success:false,error}`，R23 新增 action 全部走统一 code 口径；前端无 error 字段引用，零破坏。
+- **verifyReverse 测试改为先设后验**：无 hash 时返回 400「尚未设置」语义正确，错误密码 403 分支需先设密码命中。
+
+## 第 R26 轮（Sprint R26 · 全局优化收口）
+
+> 主题：性能/安全/文档/回归四线收口。
+
+### 收口动作
+1. **文档同步**：API.md 新增第 9 章（R19–R25 全部新 action 汇总 22 项）；GAP-V2.0.md 更新 V1.1/V2.0 F1 差距为「✅ 地基」，登记部署期 4 项待办；ITERATION_REVIEW 本轮收口
+2. **一致性复核**：auth 新 action 与全库统一 code 口径；album 父相册校验 stub truthy 加固；album.list scope 语义修正（mine 也查全量再过滤）
+3. **回归门禁**：npm run verify 全绿
+
+### 最终交付盘点
+| 范围 | 交付 |
+|---|---|
+| V1.1 全部 13 项增强 | CI/MPS/Secscan/Album/Weather/Greeting/委托/反向密码/百年/老皇历 + 前端留言板与老皇历 UI（部署密钥/lunar 库为待办） |
+| V2.0 F1 地基 | secscan + compliance 签字 + 本地内容 + plaza 迁移脚本 |
+| 质量基线 | **241 测试全绿**、lint 0E、check-functions 通过；每轮 feat(RN) 提交（R21 56947ea → R25 7f3b734 → R26 收口） |

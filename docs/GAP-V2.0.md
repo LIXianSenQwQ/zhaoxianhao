@@ -190,3 +190,25 @@
 | profile.updateIntro | ✅ | greeting ≤200 字 + 门禁 + audit |
 | profile.updateFamilyInfo | ✅ | 家训 ≤500 字 + 字辈 ≤3 字 + settings upsert + audit |
 | 真机性能实测（1.4 验收底线） | ⏳ | 连续 20 轮阻塞：等待微信开发者工具环境 |
+
+## 三·九、Sprint R19–R25 收口（V1.1 全部 13 项增强 + V2.0 F1 地基）
+
+> 本节更新截至 R25 的实际状态，覆盖前述「二·七 R13」遗留的 V1.1 项与顶层差距表。
+> 运行：`npm run verify`（241 用例全绿）、lint 0E、check-functions 通过；每次 Sprint 均 git commit。
+
+| 蓝图条目 | 状态 | 交付说明 |
+|---|---|---|
+| V1.1 E1 认证增强（passwordHash/delegates/assistReset/短信） | ◐→✅(地基) | **R23**：setDelegates(≤3 名+smsCode)/revokeDelegate/setReversePassword/verifyReverse(300s 令牌)；assistReset 与真实短信通道部署项 |
+| V1.1 E2 影音相册增强（CI/MPS/相册/留言板） | ◐→✅(地基) | **R21/R22**：ci/mps/secscan 三云函数+album(多级/批量/可见性)+hero 留言板 UI+content.listMessages |
+| V1.1 E3 天气与问候（weather/greeting_cards） | ⏳→✅(地基) | **R22**：weather.current/switchCity(3h 缓存)+greeting.save/list(5 模板+定时) |
+| V1.1 E4 老皇历与氛围（calendar.almanac/lunar 1900-2100） | ⏳→✅(骨架+公式) | **R24**：calendar.almanac(干支/生肖/24 节气公式+宜忌规则+almanacExt 定制)；lunar-javascript 部署接入点 lunar-placeholder |
+| V1.1 真机性能实测（1.4 验收底线） | ⏳ 持续阻塞 | 等待微信开发者工具/真机环境（项目根 README 已列实测清单） |
+| V2.0 F1 合规签字（secscan/plaza 迁移/合规签字） | ❌→✅(地基) | **R21/R25**：secscan(敏感词+msgSecCheck 占位)、scripts/migrate-plaza.js、content.compliance.sign/list、compliance_signs schema |
+| V2.0 F1 本地内容骨架 | ❌→✅(地基) | **R25**：content.article.save/list（type article/story、DRAFT）、local_contents schema |
+| 顶部差距表「profile/album/weather/calendar 未建」 | ✅ | 本轮全部新建（profile 骨架 R19、album R21、weather R22、calendar R24） |
+
+### 待办（非阻塞 · 部署期）
+1. 和风天气 API_KEY / 腾讯云短信 / msgSecCheck / 数据万象密钥：全部占位就绪，部署时填真实密钥
+2. lunar-javascript 安装（npm i lunar-javascript）→ 替换 calendar lunar-placeholder → 1900-2100 全量
+3. album 断点续传 / 大文件分片（R26 性能收口项）
+4. 真机性能与首屏白屏实测（验收底线 1.4）

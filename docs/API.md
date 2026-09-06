@@ -510,3 +510,46 @@
 - **upload.triggerCi**：`{ action:'triggerCi', fileId, scene }` → 数据万象 CI 触发（avatar/album），未配置降级占位 URL（80/200/600 三档缩略图 + WEBP 压缩）
 - **upload.triggerMps**：`{ action:'triggerMps', fileId, duration }` → duration>60s 拒收；H.264 MP4 转码 + cover_frame 封面截取
 - **content.sendMessage**：`{ action:'sendMessage', targetMemberId, content }` → 频控 ≤5 条/5min、长度 1-500、audit 留痕、secscan 占位 pass
+
+## 9. Sprint R19–R25 新增 API（V1.1 增强 + V2.0 F1 地基）
+
+### 9.1 R21 CI/MPS/Secscan/Album 云函数
+
+**ci.triggerCi**：`{ action:'triggerCi', fileId, scene }` → ImageProcessJob 签名占位，未配置降级占位 URL（80/200/600 WEBP）
+**mps.triggerMps**：`{ action:'triggerMps', fileId, duration }` → duration>60s 拒收；H.264+cover_frame
+**secscan.detectText**：`{ action:'detectText', content }` → 敏感词库 kDang/kAiy dawn；msgSecCheck 部署接入点
+**secscan.detectImage**：`{ action:'detectImage', fileId }` → 阻塞模式 400 拒绝
+**album.save**：`{ action:'save', name, parentId?, visibility?, tags? }` → 层级≤5、三级可见性（PUBLIC/GROUP/PRIVATE）、检查父相册存在
+**album.uploadBatch**：`{ action:'uploadBatch', albumId, photos:[] }` → ≤20 张/批、fileId 必填
+**album.tag**：`{ action:'tag', albumId, tags }` → tags ≤20 项、≤20 字符/项
+**album.list**：`{ action:'list', userId?, scope? }` → scope mine|all；可见性过滤（PUBLIC MEMBER+、PRIVATE 本人、GROUP 名单）；MEMBER 门禁
+**content.sendMessage**：英烈留言 `{ targetMemberId, content }` → 频控≤5 条/5min、1-500 字符、secscan 占位
+**content.listMessages**：`{ targetMemberId, page?, pageSize? }` → APPROVED 全员 + 本人 PENDING 合并
+
+### 9.2 R22 Weather + Greeting + Album 照片
+
+**weather.current**：`{ action:'current', cityId? }` → 3h 缓存（HOT_CITIES_CACHE），默认北京 101010100
+**weather.switchCity**：`{ action:'switchCity', cityId, cityName }` → 写 users.weatherCityId + 预加载天气缓存
+**profile.greeting.save**：`{ action:'greeting.save', content:{text,font?,color?,size?}, templateId?, schedule? }` → text ≤200 字、5 模板（default/morning/night/festival/solar/family）、HH:mm 定时；写 greeting_cards 集合
+**profile.greeting.list**：`{ action:'greeting.list' }` → 本人 20 条最近卡片
+
+### 9.3 R23 私有委托 + 反向密码 + 百年设置
+
+**auth.setDelegates**：`{ action:'setDelegates', delegates:[{userId,scopes}], smsCode }` → ≤3 名、必须 ACTIVE、smsCode='000000'（占位）
+**auth.revokeDelegate**：`{ action:'revokeDelegate', delegateId }` → 从 users.delegates 移除
+**auth.setReversePassword**：`{ action:'setReversePassword', newReversePwd }` → ≥8 位含大小写+数字、sha256(salt:pwd) 占位 hash
+**auth.verifyReverse**：`{ action:'verifyReverse', reversePwd }` → 比对成功返回 short-lived token（ expiresIn=300s）
+**profile.capsule.create**：`{ action:'capsule.create', targetType, targetId, unlockDate:YYYY-MM-DD }` → 日期必须晚于今天；写 time_capsules SEALED
+**profile.capsule.scan**：`{ action:'capsule.scan' }` → 扫描到期 SEALED→UNLOCKED（每日定时触发器调用）
+**profile.capsule.list**：`{ action:'capsule.list' }` → 本人 50 条最近胶囊
+
+### 9.4 R24 老皇历 Almanac
+
+**calendar.almanac**：`{ action:'almanac', date:YYYY-MM-DD }` → 干支纪年/月/日、生肖、节气、24 节气全表、宜忌（内置规则 + settings.almanacExt 族史委定制扩展）；农历 lunar-javascript 部署接入点（source:lunar-placeholder）
+
+### 9.5 R25 V2.0 F1 合规签字 + 本地内容
+
+**content.compliance.sign**：`{ action:'compliance.sign', complianceType:'家规'|'家训'|'倡议书', documentId, sign }` → 写 compliance_signs SIGNING_IN_PROGRESS
+**content.compliance.list**：`{ action:'compliance.list' }` → 本人签字记录
+**content.article.save**：`{ action:'article.save', type:'article'|'story', title, content, visibility? }` → title 必填、content≥10 字、DRAFT 状态
+**content.article.list**：`{ action:'article.list' }` → 本人本地内容列表
