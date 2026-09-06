@@ -375,7 +375,34 @@ async function getDetail(db, openid, memberId) {
   if (!view._id) {
     return { success: false, code: 403, message: '该族人资料需授权查看', needAuthCard: true, applyRoute: '/pages/privacy/privacy' };
   }
-  return OK({ member: view, hiddenFields });
+
+  // 额外字段：成就列表、留言数量、消息记录（V2.0 扩展）
+  const extra = {};
+  try {
+    // 善行事迹
+    const achRes = await db.collection('research_profiles')
+      .where({ memberId }).orderBy('year', 'desc').limit(10).get();
+    extra.achievements = (achRes.data || []).map(a => ({
+      title: a.title, desc: a.desc, year: a.year, important: a.important || false
+    }));
+
+    // 留言数字
+    const msgCount = await db.collection('content_messages')
+      .where({ targetMemberId: memberId, status: 'APPROVED' }).count();
+    extra.messageCount = msgCount.total || 0;
+
+    // 亲属关系快照（取前 10 条）
+    const relRes = await db.collection('relations')
+      .where({
+        $or: [{ fromId: memberId }, { toId: memberId }]
+      }).limit(10).get();
+    extra.relations = (relRes.data || []).map(r => ({
+      relType: r.type, targetId: r.fromId === memberId ? r.toId : r.fromId,
+      targetName: r.targetGenealogyName || r.targetName || '待补充'
+    }));
+  } catch (e) { /* 非核心字段失败不阻塞详情 */ }
+
+  return OK({ member: view, hiddenFields, ...extra });
 }
 
 /**
