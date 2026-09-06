@@ -142,7 +142,7 @@ function seedDB({
   worshipLogs = [], tasks = [], taskRecords = [], calendarItems = [], events = [],
   ceremonies = [], entryRecords = [], relations = [],
   settings = [], avatars = [],
-  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = [], complianceSigns = [], localContents = [], contentCategories = [], searchIndex = [], newsItems = [], newsSources = []
+  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = [], complianceSigns = [], localContents = [], contentCategories = [], searchIndex = [], newsItems = [], newsSources = [], userInterests = [], newsFavorites = []
 } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
@@ -153,7 +153,7 @@ function seedDB({
       calendar_items: calendarItems, events, ceremonies,
       entry_records: entryRecords, relations, avatars,
       albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules, greeting_cards: greetingCards, weather_cities: weatherCities, compliance_signs: complianceSigns, local_contents: localContents, content_categories: contentCategories, search_index: searchIndex,
-      news_items: newsItems, news_sources: newsSources
+      news_items: newsItems, news_sources: newsSources, user_interests: userInterests, news_favorites: newsFavorites
     },
     seq: 1000
   };
@@ -2415,4 +2415,156 @@ test('F3 news.searchItems: 关键词命中 title/summary', async () => {
   assert.equal(res.success, true, JSON.stringify(res));
   assert.equal(res.data.items.length, 1, '仅匹配 item1');
   assert.equal(res.data.items[0].title, '赵州桥维修工程启动');
+});
+
+// ═══════════ F4 news recommend – 三路召回 + 热度 + 冷启动 ═══════════
+const NEWS_CTX = CTX_WITH_ROLE('MEMBER');
+const dbNews = () => require('../scripts/wx-server-sdk-stub.js').getDatabase();
+
+function newsSeed(items, extras = {}) {
+  seedDB({ newsItems: items, newsSources: extras.newsSources || [], userInterests: extras.userInterests || [], newsFavorites: extras.newsFavorites || [] });
+}
+
+test('F4 news.interest.init: 3-5 分类校验 + 幂等落库', async () => {
+  newsSeed([]);
+  // 少于 3 个 → 400
+  const bad = await FN('news').main({ action: 'interest.init', categories: ['财经商业'] }, NEWS_CTX);
+  assert.equal(bad.code, 400);
+  const ok = await FN('news').main(
+    { action: 'interest.init', categories: ['财经商业', '三农乡土', '健康生活'] }, NEWS_CTX);
+  assert.equal(ok.success, true, JSON.stringify(ok));
+  assert.equal(ok.data.count, 3);
+  // 幂等：再次 init 不重复建行
+  const again = await FN('news').main(
+    { action: 'interest.init', categories: ['财经商业', '三农乡土', '健康生活', '法治社会'] }, NEWS_CTX);
+  assert.equal(again.success, true);
+  const rows = (await dbNews().collection('user_interests').get()).data;
+  assert.equal(rows.length, 5, '3 兴趣行 + 1 meta 行 = 4；meta 不应计入? 应等于 4');
+});
+
+test('F4 news.recommend.get: 冷启动（无画像）仍返回预置种子内容', async () => {
+  const nowIso = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+  newsSeed([
+    { _id: 'n1', category: '三农乡土', title: '农机补贴新政解读', tags: ['三农', '惠农'], hot: 10, publishAt: nowIso(1), status: 'PUBLISHED' },
+    { _id: 'n2', category: '文化艺术', title: '非遗展演预告', tags: ['非遗', '文化'], hot: 2, publishAt: nowIso(2), status: 'PUBLISHED' },
+    { _id: 'n3', category: '财经商业', title: '县域经济观察', tags: [], hot: 0, publishAt: nowIso(3), status: 'PUBLISHED' }
+  ]);
+  const res = await FN('news').main({ action: 'recommend.get', page: 1, pageSize: 20 }, NEWS_CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.coldStart, true, '无画像时应标记冷启动');
+  assert.ok(res.data.items.length >= 2, '冷启动应至少返回三农/文化种子内容');
+  const cats = res.data.items.map(i => i.category);
+  assert.ok(cats.includes('三农乡土') && cats.includes('文化艺术'), '冷启动包分类须优先出现');
+  assert.ok(!cats.includes('财经商业') || cats[0] !== '财经商业', '非冷启动分类不得排前');
+});
+
+test('F4 news.recommend.get: 热度归一 + 排序（hot 高者优先于同分类低热度）', async () => {
+  const nowIso = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+  newsSeed([
+    { _id: 'h1', category: '文化艺术', title: '热门文化事件', tags: [], hot: 50, publishAt: nowIso(1), status: 'PUBLISHED' },
+    { _id: 'h2', category: '文化艺术', title: '冷门文化动态', tags: [], hot: 0, publishAt: nowIso(1), status: 'PUBLISHED' }
+  ], { userInterests: [{ openid: 'u-member', category: '文化艺术', weight: 0.9, updatedAt: nowIso(1) }] });
+  const res = await FN('news').main({ action: 'recommend.get' }, NEWS_CTX);
+  assert.equal(res.success, true);
+  assert.equal(res.data.items[0]._id, 'h1', '同兴趣下热度高者优先');
+  assert.equal(res.data.items[0].hot, 50);
+});
+
+test('F4 news.recommend.click: 已读入 meta + 权重微升 + 热度+1', async () => {
+  const nowIso = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+  newsSeed([
+    { _id: 'c1', category: '三农乡土', title: '玉米收割机选购指南', tags: [], hot: 5, publishAt: nowIso(1), status: 'PUBLISHED' }
+  ], { userInterests: [{ openid: 'u-member', category: '三农乡土', weight: 0.5, updatedAt: nowIso(1) }] });
+
+  const click = await FN('news').main({ action: 'recommend.click', newsId: 'c1' }, NEWS_CTX);
+  assert.equal(click.success, true);
+  // meta 行含已读
+  const meta = (await dbNews().collection('user_interests')
+    .where({ openid: 'u-member', category: '__meta__' }).get()).data[0];
+  assert.ok(meta.readNewsIds.includes('c1'), '已读应写入 meta');
+  // 热度 +1
+  const item = (await dbNews().collection('news_items').where({ _id: 'c1' }).get()).data[0];
+  assert.equal(item.hot, 6);
+  // 权重微升
+  const row = (await dbNews().collection('user_interests')
+    .where({ openid: 'u-member', category: '三农乡土' }).get()).data[0];
+  assert.ok(row.weight > 0.5, '点击后权重应微升');
+});
+
+test('F4 news.recommend.negative: 负反馈进黑名单，后续推荐剔除', async () => {
+  const nowIso = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+  newsSeed([
+    { _id: 'x1', category: '文化艺术', title: '娱乐八卦一则', tags: [], hot: 99, publishAt: nowIso(1), status: 'PUBLISHED' }
+  ]);
+  const neg = await FN('news').main({ action: 'recommend.negative', newsId: 'x1' }, NEWS_CTX);
+  assert.equal(neg.success, true);
+  const meta = (await dbNews().collection('user_interests')
+    .where({ openid: 'u-member', category: '__meta__' }).get()).data[0];
+  assert.ok(meta.negativeNewsIds.includes('x1'));
+  const res = await FN('news').main({ action: 'recommend.get' }, NEWS_CTX);
+  const ids = res.data.items.map(i => i._id);
+  assert.ok(!ids.includes('x1'), '负反馈条目不得再推荐');
+});
+
+test('F4 news.favorite.group: 创建/重命名/删除 + 移动收藏', async () => {
+  newsSeed([
+    { _id: 'f1', category: '本地', title: '赵县新闻一组', tags: [], hot: 0, publishAt: new Date().toISOString(), status: 'PUBLISHED' }
+  ]);
+  const g = await FN('news').main({ action: 'favorite.group.create', groupName: '本地要闻' }, NEWS_CTX);
+  assert.equal(g.success, true, JSON.stringify(g));
+  const gid = g.data.groupId;
+  // 收藏进分组
+  const fav = await FN('news').main({ action: 'favoriteAdd', newsId: 'f1', groupId: gid }, NEWS_CTX);
+  assert.equal(fav.success, true, JSON.stringify(fav));
+  const db = dbNews();
+  const inGroup = (await db.collection('news_favorites')
+    .where({ openid: 'u-member', groupId: gid, isGroup: db.command.neq(true) }).get()).data;
+  assert.equal(inGroup.length, 1, '收藏应归属该分组');
+  assert.equal(inGroup[0].groupName, '本地要闻');
+  // 分组列表含计数
+  const gl = await FN('news').main({ action: 'favorite.group.list' }, NEWS_CTX);
+  const grp = gl.data.groups.find(x => x.groupId === gid);
+  assert.ok(grp && grp.count === 1, '分组计数应为 1');
+  // 重命名
+  const rn = await FN('news').main({ action: 'favorite.group.rename', groupId: gid, groupName: '本地' }, NEWS_CTX);
+  assert.equal(rn.success, true);
+  // 删除分组 → 成员回落未分组
+  const rm = await FN('news').main({ action: 'favorite.group.remove', groupId: gid }, NEWS_CTX);
+  assert.equal(rm.success, true);
+  const orphan = (await db.collection('news_favorites').where({ openid: 'u-member', groupId: null }).get()).data;
+  assert.ok(orphan.length === 1, '删除分组后成员应回落未分组');
+});
+
+test('F4 news.offline.pack/list/cleanup: 合规离线快照（仅摘要不缓存正文）', async () => {
+  newsSeed([
+    { _id: 'o1', category: '三农乡土', title: '农技下乡培训预告', summary: '摘要', tags: [], hot: 0, publishAt: new Date().toISOString(), status: 'PUBLISHED' }
+  ]);
+  // 先收藏
+  await FN('news').main({ action: 'favoriteAdd', newsId: 'o1' }, NEWS_CTX);
+  // 打包离线
+  const pack = await FN('news').main({ action: 'offline.pack', newsIds: ['o1'] }, NEWS_CTX);
+  assert.equal(pack.success, true, JSON.stringify(pack));
+  assert.equal(pack.data.packed, 1);
+  const db = dbNews();
+  const off = (await db.collection('news_favorites').where({ openid: 'u-member', offline: true }).get()).data;
+  assert.equal(off.length, 1, '应标记 1 条离线');
+  assert.ok(pack.data.note.includes('不缓存'), '合规：正文不缓存');
+  // 列表
+  const lst = await FN('news').main({ action: 'offline.list' }, NEWS_CTX);
+  assert.equal(lst.data.count, 1);
+  // 清理（保留收藏）
+  const clean = await FN('news').main({ action: 'offline.cleanup' }, NEWS_CTX);
+  assert.equal(clean.success, true);
+  const after = (await db.collection('news_favorites').where({ openid: 'u-member', offline: true }).get()).data;
+  assert.equal(after.length, 0, '清理后应无离线标记');
+});
+
+test('F4 news.cron.refresh: 定时刷新入口成功返回统计（空源不崩溃）', async () => {
+  newsSeed([
+    { _id: 't1', category: '本地', title: '24h 内热点', tags: [], hot: 3, publishAt: new Date().toISOString(), status: 'PUBLISHED' }
+  ]);
+  const res = await FN('news').main({ action: 'cron.refresh' }, CTX_WITH_ROLE('CHIEF'));
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.published24h, 1, '应统计到 24h 内已发布条目');
+  assert.ok(res.data.refreshedAt, '应返回刷新时间');
 });

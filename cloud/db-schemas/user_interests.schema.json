@@ -10,6 +10,16 @@
     "tags": { "type": "array", "items": { "type": "string" } },
     "weight": { "type": "number" },
     "lastClickedAt": { "type": "string", "format": "date-time" },
+    "readNewsIds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "用户级最近已读/已曝光条目 ID（存于 category='__meta__' 单行，滚动窗口 ≤200，用于 7 天去重）"
+    },
+    "negativeNewsIds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "用户点「不感兴趣」的条目 ID（存于 category='__meta__' 单行，召回阶段过滤）"
+    },
     "updatedAt": { "type": "string", "format": "date-time" }
   },
   "required": ["openid", "category", "updatedAt"],

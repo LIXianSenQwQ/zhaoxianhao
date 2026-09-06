@@ -7,10 +7,12 @@
     "_id": { "type": "string" },
     "openid": { "type": "string" },
     "newsId": { "type": "string" },
+    "isGroup": { "type": "boolean", "description": "true 表示该行是收藏分组元数据（newsId 为空，groupName 为分组名）" },
     "groupId": { "type": "string" },
     "groupName": { "type": "string" },
     "snapshot": { "type": "object" },
     "offline": { "type": "boolean" },
+    "offlineSize": { "type": "number", "description": "离线包快照字节估算（≤50MB/包校验）" },
     "createdAt": { "type": "string", "format": "date-time" }
   },
   "required": ["openid", "newsId", "createdAt"],

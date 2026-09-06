@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "openapi": []
+  },
+  "triggers": [
+    {
+      "name": "newsRefreshTimer",
+      "type": "timer",
+      "config": "0 */10 * * * * *",
+      "description": "V2.0 F4: 每 10 分钟拉取增量 + 更新热度/推荐数据（蓝图 B.4 实时更新：满足 ≤15 分钟要求）",
+      "handler": "index.main"
+    }
+  ],
+  "envVariables": {}
+}
