@@ -1,0 +1,92 @@
+{
+  "comment": "微信小程序《用户隐私保护指引》JSON 申报草稿（用于后台一键导入）",
+  "version": "1.0",
+  "required": true,
+  "collectInfo": [
+    {
+      "name": "微信昵称、头像",
+      "purpose": "用户登录标识、首页问候展示",
+      "userCanDeny": true,
+      "denyEffect": "仅无法显示个性化名称头像，仍可浏览公开谱系"
+    },
+    {
+      "name": "微信 OpenID / UnionID",
+      "purpose": "用户唯一标识、身份认证、防重复注册",
+      "userCanDeny": false,
+      "denyEffect": "无法注册与登录本小程序"
+    },
+    {
+      "name": "手机号（可选）",
+      "purpose": "敏感操作验证（反向密码修改、委托人变更）",
+      "userCanDeny": true,
+      "denyEffect": "无法使用反向密码等敏感功能，其他功能不受影响"
+    },
+    {
+      "name": "操作日志、IP 地址",
+      "purpose": "安全审计留痕（≥1 年）、异常行为识别",
+      "userCanDeny": false,
+      "denyEffect": "系统安全必须项，不可关闭"
+    },
+    {
+      "name": "出生日期（公历）",
+      "purpose": "族谱成员档案展示",
+      "userCanDeny": true,
+      "denyEffect": "个人条目中该字段为空白，不影响他人查看"
+    },
+    {
+      "name": "去世日期（公历）",
+      "purpose": "族谱成员档案展示",
+      "userCanDeny": true,
+      "denyEffect": "个人条目中该字段为空白"
+    },
+    {
+      "name": "位置信息（可选）",
+      "purpose": "天气页面自动定位城市",
+      "userCanDeny": true,
+      "denyEffect": "无法自动定位，需手动选择城市"
+    },
+    {
+      "name": "相册/本地内容（可选）",
+      "purpose": "用户主动上传的头像、生活照、动态图片",
+      "userCanDeny": true,
+      "denyEffect": "无法上传图片"
+    }
+  ],
+  "collectNot": "不收集身份证号、病历、财务账号、墓葬坐标等《隐私政策》中列明的非必要数据",
+  "shareThirdParty": [
+    {
+      "name": "腾讯云开发",
+      "detail": "云函数、云数据库、云存储，仅用于本小程序运行",
+      "link": "https://privacy.qq.com/"
+    },
+    {
+      "name": "和风天气（QWeather）",
+      "detail": "获取当前城市天气信息",
+      "link": "https://dev.qweather.com/privacy/"
+    },
+    {
+      "name": "腾讯云短信",
+      "detail": "发送短信验证码（仅用户主动触发敏感操作时）",
+      "link": "https://cloud.tencent.com/document/product/301"
+    }
+  ],
+  "child": {
+    "ageLimit": 14,
+    "mode": "少年模式自动开启：时长限制≤30 分钟/日，内容限制公开互动",
+    "needGuardian": true
+  },
+  "contact": {
+    "name": "族史委（上线前填入真实负责人）",
+    "phone": "分别为谁",
+    "email": "compliance@haochengshi.family"
+  },
+  "openTime": "____年__月__日",
+  "revision": [
+    {
+      "version": "v1.0",
+      "date": "____年__月__日",
+      "detail": "初始版本"
+    }
+  ],
+  "commentNote": "本 JSON 为草稿模板，导入微信公众平台前需要：① 填写 contact 真实联系人；② 核对所有 collectInfo 字段是否与 docs/compliance/PRIVACY_POLICY.md 一致；③ 提交前由族议会最终确认"
+}
