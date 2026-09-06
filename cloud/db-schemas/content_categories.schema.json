@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "content_categories",
+  "description": "V2.0 F1: 本地内容三级分类管理（主/子/标签）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "openid": { "type": "string" },
+    "userId": { "type": "string" },
+    "type": { "type": "string", "enum": ["MAIN", "SUB", "TAG"] },
+    "name": { "type": "string", "minLength": 1, "maxLength": 30 },
+    "parentId": { "type": "string" },
+    "level": { "type": "integer", "minimum": 1, "maximum": 2 },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["openid", "userId", "type", "name"],
+  "indexes": [
+    { "key": { "openid": 1, "userId": 1, "type": 1 } }
+  ]
+}

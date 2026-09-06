@@ -1,9 +1,17 @@
 <template>
   <view class="home-page" :class="{ 'elder-mode': userStore.elderMode }">
-    <!-- ① 问候区（晨光渐变） -->
-    <view class="home-header" :class="{ muted: isMutedPeriod }">
+    <!-- ① 问候区（晨光渐变 · 动态主题） -->
+    <view 
+      class="home-header" 
+      :style="{
+        background: `linear-gradient(165deg, ${theme.top} 0%, ${theme.mid} 45%, ${theme.bottom} 100%)`
+      }"
+      :class="{ muted: isMutedPeriod }"
+    >
       <text class="home-greeting">{{ greeting }}</text>
-      <text class="home-greeting-sub" v-if="loaded">{{ solarTerm }} · {{ weatherInfo }}</text>
+      <text class="home-greeting-sub" v-if="loaded">
+        {{ solarTerm }} · {{ weatherInfo }}
+      </text>
     </view>
 
     <!-- ② 快捷工具条（固定 5 键） -->
@@ -68,14 +76,19 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ErrorPage from '@/components/common/ErrorPage.vue';
+import { resolveTheme } from '@/utils/home-atmosphere';
 
 const userStore = useUserStore();
 
+// 问候区渐变主题：白事静默 → 素色；节气/节日 → 换端点色；否则晨光默认
+// computed 绑定，atmosphere 数据到达 muted=true 后自动切换素色（蓝图 0.2.2）
 const greeting = ref('您好');
 const solarTerm = ref('');
 const weatherInfo = ref('');
 const isMutedPeriod = ref(false);
 const loaded = ref(false);
+
+const theme = computed(() => resolveTheme(isMutedPeriod.value));
 
 const loading = ref(true);
 const loadError = ref<{ message: string } | null>(null);

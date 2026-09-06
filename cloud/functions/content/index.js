@@ -154,6 +154,118 @@ async function articleList(ctx, userId) {
   return OK({ contents: (res.data || []).slice(0, 50) });
 }
 
+/**
+ * V2.0 模块一（二十七章 A.3）：本地内容保存 — 扩展分类/标签/权限
+ * 三级分类：mainCategory → subCategory → tags；敏感分类强制 PRIVATE（服务端拒绝公开）
+ */
+const SENSITIVE_CATEGORIES = ['证件资料'];
+
+async function contentSave(ctx, userId, params) {
+  const db = wx.getDatabase();
+  const { type = 'article', title, content, mainCategory, subCategory, tags = [], visibility = 'PRIVATE', mediaIds = [] } = params;
+
+  if (!['article', 'story', 'photo', 'video', 'record'].includes(type)) return BAD_REQUEST('type 无效');
+  if (!title || title.trim().length === 0) return BAD_REQUEST('标题必填');
+  if (typeof content !== 'string' || content.length < 1) return BAD_REQUEST('内容必填');
+  if (tags.length > 50) return BAD_REQUEST('标签数不得超过 50');
+  if (mediaIds.length > 100) return BAD_REQUEST('媒体数不得超过 100');
+
+  // 敏感分类强制 PRIVATE
+  if (SENSITIVE_CATEGORIES.includes(mainCategory) && visibility !== 'PRIVATE') {
+    return BAD_REQUEST('证件资料等敏感分类仅可设为私密');
+  }
+  if (!['PRIVATE', 'GROUP', 'PUBLIC'].includes(visibility)) return BAD_REQUEST('visibility 无效');
+
+  // 分类层级校验（≤3 级）
+  if (mainCategory && typeof mainCategory !== 'string') return BAD_REQUEST('主分类无效');
+  if (subCategory && typeof subCategory !== 'string') return BAD_REQUEST('子分类无效');
+
+  const now = new Date();
+  const res = await db.collection('local_contents').add({
+    userId: ctx.openid, openid: ctx.openid, type, title: title.trim(), content,
+    mainCategory: mainCategory || '', subCategory: subCategory || '', tags,
+    visibility, mediaIds,
+    status: params.status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT',
+    createdAt: now, updatedAt: now
+  });
+
+  // 审计
+  await db.collection('audit_logs').add({
+    userId: ctx.openid, action: 'content.save', target: res._id,
+    detail: JSON.stringify({ type, visibility }), time: now
+  }).catch(() => {});
+
+  return OK({ contentId: res._id, status: params.status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT' });
+}
+
+/**
+ * V2.0 模块一（A.4）：组合搜索（关键词+日期+分类）
+ */
+async function contentSearch(ctx, userId, params) {
+  const db = wx.getDatabase();
+  const { keyword = '', mainCategory = '', subCategory = '', type = '', from, to, page = 1, pageSize = 20 } = params;
+  const skip = (Math.max(1, Number(page) || 1) - 1) * pageSize;
+
+  // 构建查询（仅本人内容 + 可选过滤）
+  const q = { openid: ctx.openid };
+  if (mainCategory) q.mainCategory = mainCategory;
+  if (subCategory) q.subCategory = subCategory;
+  if (type) q.type = type;
+
+  // 日期范围（createdAt 区间）
+  if (from || to) {
+    q.createdAt = {};
+    if (from) q.createdAt.$gte = new Date(from);
+    if (to) q.createdAt.$lte = new Date(to);
+  }
+
+  let res;
+  if (keyword) {
+    // 关键词：标题或内容正则（简化；生产可接 search_index 倒排索引）
+    const kw = String(keyword).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    res = await db.collection('local_contents')
+      .where({ ...q, $or: [{ title: db.RegExp({ regexp: kw, options: 'i' }) }, { content: db.RegExp({ regexp: kw, options: 'i' }) }] })
+      .orderBy('updatedAt', 'desc').skip(skip).limit(pageSize).get();
+  } else {
+    res = await db.collection('local_contents')
+      .where(q).orderBy('updatedAt', 'desc').skip(skip).limit(pageSize).get();
+  }
+
+  return OK({ contents: res.data || [], page, hasMore: (res.data || []).length === pageSize });
+}
+
+/**
+ * V2.0 模块一（A.2）：分类管理
+ * 主分类/子分类/标签维护在 content_categories（每用户独立）
+ */
+async function categorySave(ctx, userId, params) {
+  const db = wx.getDatabase();
+  const { action, name, parentId = '', level = 1, type = 'MAIN' } = params;
+  if (!name || !name.trim()) return BAD_REQUEST('分类名必填');
+  if (!['MAIN', 'SUB', 'TAG'].includes(type)) return BAD_REQUEST('type 无效');
+  // 层级校验：主分类 level=1、子分类 level=2、标签无层级
+  if (type === 'MAIN' && level !== 1) return BAD_REQUEST('主分类层级必须为 1');
+  if (type === 'SUB' && level !== 2) return BAD_REQUEST('子分类层级必须为 2');
+
+  // 数量上限校验
+  const countCol = await db.collection('content_categories').where({ openid: ctx.openid, type }).count();
+  const MAX = type === 'MAIN' ? 20 : type === 'SUB' ? 200 : 200;
+  if ((countCol.total || 0) >= MAX) return BAD_REQUEST(`分类数已达上限（${MAX}）`);
+
+  const res = await db.collection('content_categories').add({
+    openid: ctx.openid, userId: ctx.openid, type, name: name.trim(),
+    parentId, level, createdAt: new Date()
+  });
+  return OK({ categoryId: res._id });
+}
+
+async function categoryList(ctx, userId) {
+  const db = wx.getDatabase();
+  const res = await db.collection('content_categories')
+    .where({ openid: ctx.openid }).orderBy('level', 'asc').orderBy('createdAt', 'asc').limit(500).get();
+  return OK({ categories: res.data || [] });
+}
+
 module.exports = { main: async (params, context) => {
   const { action } = params || {};
   const userId = params.userId || context.openid;
@@ -177,6 +289,14 @@ module.exports = { main: async (params, context) => {
       return await articleSave(roleCtx, userId, params);
     case 'article.list':
       return await articleList(roleCtx, userId);
+    case 'content.save':
+      return await contentSave(roleCtx, userId, params);
+    case 'content.search':
+      return await contentSearch(roleCtx, userId, params);
+    case 'category.save':
+      return await categorySave(roleCtx, userId, params);
+    case 'category.list':
+      return await categoryList(roleCtx, userId);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }
