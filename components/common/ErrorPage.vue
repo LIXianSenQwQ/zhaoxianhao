@@ -28,7 +28,8 @@ withDefaults(
 defineEmits(['retry']);
 
 function goHome() {
-  uni.switchTab({ url: '/pages/index/index' });
+  // 项目未配置 tabBar，switchTab 会失败；reLaunch 可跳转任意页面并清空页面栈
+  uni.reLaunch({ url: '/pages/index/index' });
 }
 </script>
 

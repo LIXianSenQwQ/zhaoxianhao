@@ -322,4 +322,16 @@
 - R11 修复集合名分裂：member 内联 `audit_log`（单数）→ `audit_logs`；member.writeExportAudit 改为 writeAudit 薄封装（补 time/target 字段）
 - admin.featureFlag 变更写审计 `admin.featureFlag`（此前裸写 audit_logs 无统一字段）
 
+### 8.5 points 大修（R12 · 蓝图 7.5/9.1 对齐）
+
+| action | 入参 | 权限 | 说明 |
+|---|---|---|---|
+| `get` | — | 登录 | 四池余额（无账户自动创建归零并返回） |
+| `list` | `filterPage?` | 登录 | 本人流水 20/页，time 倒序（新增） |
+| `award` | `pool`(四池白名单), `bizType`, `bizId`, `targetUserId?` | **EDITOR+**（R12 封堵自刷漏洞） | 幂等键 **bizType+bizId**（蓝图 7.5）；重复返回 `duplicated:true` 不重复加分；写审计 |
+
+- **R12 修复**：`_.inc` 未定义（必崩）→ `db.command.inc`；`wx.cloud.generateObjectId` 不存在 → add 自动 _id；getPoints 无账户返回 undefined；新建账户未接住 _id
+- 幂等口径：流水先插（bizType+bizId 唯一）→ 账户原子更新；重复直接返回已有结果（蓝图 7.5 定案）
+- 真机接入点：云开发事务（db.startTransaction）包住流水+余额写
+
 ---

@@ -150,7 +150,9 @@ function rawCall<T>(
       ? { ...data, idemKey: makeIdemKey(idempotency.bizType, idempotency.bizId, uni.getStorageSync('hcs:uid') || 'anon') }
       : data;
 
-    uniCloud.callFunction({ name, data: payload })
+    // 微信云开发调用（云函数使用 wx-server-sdk 编写，需配合 App.vue 中的 wx.cloud.init）
+    // @ts-ignore —— wx.cloud 为小程序全局 API，uni 类型声明中不存在
+    wx.cloud.callFunction({ name, data: payload })
       .then((res: any) => {
         clearTimeout(timer);
         const body = res.result;

@@ -55,6 +55,10 @@
 				{
 					"path": "pages/kinship/kinship",
 					"style": {}
+				},
+				{
+					"path": "pages/plaza/plaza",
+					"style": {}
 				}
 			]
 		},
@@ -68,6 +72,14 @@
 				},
 				{
 					"path": "pages/reviewAuth/reviewAuth",
+					"style": {}
+				},
+				{
+					"path": "pages/points/points",
+					"style": {}
+				},
+				{
+					"path": "pages/flags/flags",
 					"style": {}
 				}
 			]

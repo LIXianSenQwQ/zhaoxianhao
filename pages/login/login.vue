@@ -154,7 +154,8 @@ async function submitInviteCode() {
   }
   submitting.value = true;
   try {
-    const res = await uniCloud.callFunction({
+    // @ts-ignore —— wx.cloud 为小程序全局 API
+    const res = await wx.cloud.callFunction({
       name: 'auth',
       data: { action: 'certify', method: 'INVITE_CODE', code: inviteCode.value }
     });
@@ -180,7 +181,8 @@ async function submitManualReview() {
   }
   submitting.value = true;
   try {
-    const res = await uniCloud.callFunction({
+    // @ts-ignore —— wx.cloud 为小程序全局 API
+    const res = await wx.cloud.callFunction({
       name: 'auth',
       data: { action: 'certify', method: 'MANUAL_REVIEW', fatherName, branchName, contact }
     });
@@ -194,7 +196,8 @@ async function submitManualReview() {
 }
 
 function enterHome() {
-  uni.switchTab({ url: '/pages/index/index' });
+  // 项目未配置 tabBar，switchTab 会失败；reLaunch 可跳转任意页面并清空页面栈
+  uni.reLaunch({ url: '/pages/index/index' });
 }
 
 function showTerms() {

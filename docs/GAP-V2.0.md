@@ -26,6 +26,13 @@
 - **plaza 云函数 ✅（16/23）**：list/publish/like 基础版（蓝图集合 13 plaza_posts 消费方补齐）；V2.0 moment 迁移路径已按 C.1 规划
 - **称谓计算页 ✅**：pkg-family/pages/kinship/kinship.vue（蓝图页面 relation/calc）——成员搜索选择 + 称谓/五服结果卡 + 五服色带；页面 ~21/82
 - **审计口径统一 ✅**：audit_logs 集合名分裂修复（member 2 处）；writeAudit 字段统一 {userId,action,target,detail,ip,sensitive,time}
+
+## 二·六、Sprint R12 新增（R11 承诺兑现）
+
+- **points 大修 ✅（蓝图 7.5）**：封堵自刷分漏洞（award EDITOR+ 门禁）；修复 _.inc/generateObjectId/无账户 undefined 三处必崩缺陷；幂等键 bizType+bizId；新增流水 list action；targetUserId 代发
+- **广场动态页 ✅**：pkg-family/pages/plaza/plaza.vue（发布框+动态流+点赞乐观更新）；~24/82
+- **积分中心页 ✅**：pkg-growth/pages/points/points.vue（四池余额+流水分页）
+- **功能开关面板 ✅**：pkg-growth/pages/flags/flags.vue（CHIEF 专属，15 键中文标签，对接 17.2）
 | atmosphere | ✅ today 聚合（节气/氛围/卡流/白事素色） | 补四季渐变全量端点色表 |
 | profile/album/weather/calendar（V1.1） | ❌ 未建 | **E1–E4 范围**，前置依赖 CI/MPS/和风天气开通 |
 | content/news/moment/game/home/secscan（V2.0） | ❌ 未建 | **F1–F10 范围**；F1 先做 secscan 与 plaza→family_moments 迁移脚本 |

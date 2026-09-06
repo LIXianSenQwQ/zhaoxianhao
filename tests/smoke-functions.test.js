@@ -135,11 +135,12 @@ test('member.exportFile：VISITOR → 403（鉴权先行）', async () => {
 // ─── Sprint R9: stub 数据注入 + CHIEF 正向路径 + 幂等 upsert ───
 
 /** 预置 seed 数据（getDatabase 每次 main() 调用时读全局 seed，无需重新 require） */
-function seedDB({ users = [], members = [], authRequests = [], authorizations = [], auditLogs = [], plazaPosts = [], notifications = [] } = {}) {
+function seedDB({ users = [], members = [], authRequests = [], authorizations = [], auditLogs = [], plazaPosts = [], notifications = [], accounts = [], pointsLogs = [] } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
       users, members, auth_requests: authRequests, authorizations,
-      audit_logs: auditLogs, notifications, plaza_posts: plazaPosts, settings: []
+      audit_logs: auditLogs, notifications, plaza_posts: plazaPosts, settings: [],
+      points_accounts: accounts, points_logs: pointsLogs
     },
     seq: 1000
   };
@@ -386,6 +387,73 @@ test('R11 relation.calc：VISITOR 403 / MEMBER 正向（物化路径共同祖先
   const oth = await FN('relation').main({ action: 'calc', aId: 'g1', bId: 'other' }, ctx);
   assert.equal(oth.data.related, false);
   assert.equal(oth.data.fiveFu, '同宗');
+});
+
+// ─── Sprint R12: points 大修（蓝图 7.5）───
+
+test('R12 points.get：MEMBER 无账户 → 默认四池归零创建', async () => {
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  const res = await FN('points').main({ action: 'get' }, ctx);
+  assert.equal(res.success, true);
+  assert.deepEqual(res.data.account, { xiaoqin: 0, gongde: 0, fuyun: 0, normal: 0 });
+  assert.equal(globalThis.__HCS_STUB_SEED__.collections.points_accounts.length, 1, '账户已创建');
+});
+
+test('R12 points.award：MEMBER 403（自刷分漏洞封堵）/ EDITOR 正向 + 审计', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }, { openid: 'u-e', role: 'EDITOR' }],
+    accounts: [{ _id: 'acc-1', userId: 'u-e', xiaoqin: 10, gongde: 0, fuyun: 0, normal: 0 }]
+  });
+  // MEMBER 不可发放（此前任何登录者可给自己加分）
+  const denied = await FN('points').main({ action: 'award', pool: 'gongde', bizType: 'checkin', bizId: 'b1' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(denied.success, false);
+  assert.equal(denied.code, 403);
+
+  // EDITOR 正向：checkin=5 入 gongde？——bizType 决定 amount，pool 由入参指定
+  const ok = await FN('points').main({ action: 'award', pool: 'gongde', bizType: 'checkin', bizId: 'b1' }, { OPENID: 'u-e', openid: 'u-e' });
+  assert.equal(ok.success, true);
+  assert.equal(ok.data.duplicated, false);
+  assert.equal(ok.data.delta, 5);
+
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.equal(seed.collections.points_accounts[0].gongde, 5, 'inc 原子生效');
+  assert.equal(seed.collections.points_logs.length, 1, '流水落库');
+  assert.ok(seed.collections.audit_logs.some(l => l.action === 'points.award'), '发放写审计');
+});
+
+test('R12 points.award：幂等重复 → duplicated:true 不重复加分（蓝图 7.5）', async () => {
+  seedDB({
+    users: [{ openid: 'u-e', role: 'EDITOR' }],
+    accounts: [{ _id: 'acc-1', userId: 'u-e', xiaoqin: 0, gongde: 5, fuyun: 0, normal: 0 }],
+    pointsLogs: [{ _id: 'log-9', userId: 'u-e', pool: 'gongde', delta: 5, bizType: 'checkin', bizId: 'b1', time: '2025-01-01T00:00:00Z' }]
+  });
+  const res = await FN('points').main({ action: 'award', pool: 'gongde', bizType: 'checkin', bizId: 'b1' }, { OPENID: 'u-e', openid: 'u-e' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.duplicated, true, '幂等键重复直接返回已有结果');
+  assert.equal(res.data.delta, 5);
+  // 不重复加分：余额保持 5
+  assert.equal(globalThis.__HCS_STUB_SEED__.collections.points_accounts[0].gongde, 5);
+  // 不新增流水
+  assert.equal(globalThis.__HCS_STUB_SEED__.collections.points_logs.length, 1);
+});
+
+test('R12 points.award：pool 非法 400 + targetUserId 代发', async () => {
+  seedDB({
+    users: [{ openid: 'u-e', role: 'EDITOR' }],
+    accounts: [{ _id: 'acc-1', userId: 'u-e', xiaoqin: 0, gongde: 0, fuyun: 0, normal: 0 }]
+  });
+  const ctx = { OPENID: 'u-e', openid: 'u-e' };
+  const badPool = await FN('points').main({ action: 'award', pool: 'hack', bizType: 'checkin', bizId: 'b2' }, ctx);
+  assert.equal(badPool.code, 400, '四池白名单校验');
+
+  // 代发给指定族人
+  const fwd = await FN('points').main({ action: 'award', pool: 'normal', bizType: 'task_complete', bizId: 'b3', targetUserId: 'u-other' }, ctx);
+  assert.equal(fwd.success, true);
+  assert.equal(fwd.data.userId, 'u-other');
+  const seed = globalThis.__HCS_STUB_SEED__;
+  const otherAcc = seed.collections.points_accounts.find(a => a.userId === 'u-other');
+  assert.equal(otherAcc.normal, 20, '代发对象 normal +20（task_complete）');
 });
 
 // ─── Sprint R3 冒烟：doc / entry / notify ───

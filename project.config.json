@@ -1,0 +1,29 @@
+{
+  "description": "赵县郝 · 好诚事家风（uni-app + 微信云开发）",
+  "miniprogramRoot": "unpackage/dist/dev/mp-weixin/",
+  "cloudfunctionRoot": "cloud/functions/",
+  "compileType": "miniprogram",
+  "appid": "wxb2aa5edc3255ab86",
+  "projectname": "%E8%B5%B5%E5%8E%BF%E9%83%9D",
+  "libVersion": "2.23.4",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "coverView": true,
+    "lazyloadPlaceholderEnable": false,
+    "useMultiFrameRuntime": true,
+    "packNpmManually": false,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  }
+}

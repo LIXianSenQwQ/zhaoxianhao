@@ -541,3 +541,55 @@
 4. **性能实测**（持续等待用户环境）
 
 <!-- 模板：下一轮评审复制此节 -->
+
+---
+
+## 第 R12 轮（Sprint R12 · MVP 收口轨：R11 承诺兑现——积分大修 + 前端三页）
+
+### 一、指标回顾
+
+| 维度 | 指标 | 目标 | R11 现状 | R12 现状 | 趋势 |
+|---|---|---|---|---|---|
+| 安全 | 积分自刷分漏洞 | 0 | ❌ points.award 无角色门禁（任意登录者可给自己加分） | ✅ EDITOR+ 门禁（403 fail-closed + 审计） | ↑↑ |
+| 质量缺陷 | 遗留桩代码 | 0 | ❌ points：`_` 未定义（_.inc 必崩）/ wx.cloud.generateObjectId 不存在 / getPoints 无账号返回 undefined | ✅ 全部修复（db.command.inc + stub _id + 默认账户创建） | ↑↑ |
+| 蓝图对齐 | 页面 | — | ~21/82 | **~24/82**（plaza 广场 + points 积分中心 + flags 开关面板） | ↑ |
+| 幂等口径 | 蓝图 7.5 | 唯一 | ⚠️ 幂等键仅 bizId（碰撞风险）+ 响应裸格式 | ✅ bizType+bizId 复合幂等键 + duplicated 统一响应 + 流水先行 | ↑ |
+| 质量 | 测试数 | ≥80% | 118 | **122**（+4：points 门禁/正向/幂等/代发） | ↑ |
+
+### 二、本轮交付清单
+
+**缺陷修复（points 云函数大修，蓝图 7.5/9.1 对齐）：**
+- 修复 `_.inc` 未定义（ award 必崩 ReferenceError）→ `db.command.inc`
+- 修复 `wx.cloud.generateObjectId()` 不存在（stub/真机均由 add 自动生成 _id）
+- 修复 getPoints 无账户时返回 undefined（现创建默认四池账户并返回）
+- 修复 `account[0]` 笔误（account.data[0]）；新建账户未接住 _id（doc(undefined) 空更新）
+- **封堵自刷分漏洞**：award 补 EDITOR+ 门禁（此前任何登录者可给自己加分）
+- 幂等键升级 bizType+bizId（蓝图 7.5 口径）；统一响应；award 写审计 points.award
+- 新增 action=list：流水分页倒序（积分中心页依赖）；award 支持 targetUserId 代发（EDITOR 给指定族人发分，如实物奖励登记）
+
+**新增前端页面（+3，~24/82）：**
+- `pkg-family/pages/plaza/plaza.vue`（蓝图 plaza/index）：发布框（≤5000 字计数）+ 动态流（分页 20/页倒序）+ 点赞（乐观更新+失败回滚，原子 +1）
+- `pkg-growth/pages/points/points.vue`（蓝图 points/index）：四池余额卡（孝亲/功德/福运/普通，令牌着色）+ 流水列表（分页倒序，业务类型中文标签）
+- `pkg-growth/pages/flags/flags.vue`（蓝图 17.2）：CHIEF 专属开关面板（15 键中文标签 + switch 切换 + 乐观更新回滚 + getFeatureFlags/featureFlag 对接）
+- pages.json 三页注册（pkg-family 4 页 / pkg-growth 4 页）
+
+**测试 +4（118→122）**：points.get 默认创建；MEMBER award 403（漏洞封堵验证）+ EDITOR 正向（inc/流水/审计三断言）；幂等重复（duplicated:true 不重复加分不加流水）；pool 白名单 400 + targetUserId 代发。
+
+**门禁**：npm run verify 全绿（122 用例 · 0 fail · 1W · 云函数 15/15）。
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| 真机 P95/首屏采集（连续 12 轮阻塞） | 高 | 沙箱侧全部就绪；**突破必须依赖微信开发者工具环境** |
+| points.award 事务性（流水与余额非原子） | 低 | 云开发事务 API 真机接入（db.startTransaction）；stub 顺序写已覆盖幂等语义；本期 fail-safe：幂等键防重 + 审计兜底 |
+| flags 面板 auth.me 依赖 | 低 | 前端已有 storage role 兜底；后端 admin.featureFlag 二次校验 CHIEF |
+
+### 四、R13 承诺
+
+1. **祖堂点灯页前端**（pkg-shrine/shrine：点灯/上香/献花交互 + 灵位列表，接 ceremony）
+2. **家族日历页前端**（pkg-calendar/calendar：月视图+农历+节气，接 atmosphere）
+3. **task 打卡闭环**（task.today/checkin 前端 + points 积分联动打通）
+4. **性能实测**（持续等待用户环境）
+
+<!-- 模板：下一轮评审复制此节 -->
