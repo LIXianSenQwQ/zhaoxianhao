@@ -206,8 +206,8 @@ async function contentSearch(ctx, userId, params) {
   const { keyword = '', mainCategory = '', subCategory = '', type = '', from, to, page = 1, pageSize = 20 } = params;
   const skip = (Math.max(1, Number(page) || 1) - 1) * pageSize;
 
-  // 构建查询（仅本人内容 + 可选过滤）
-  const q = { openid: ctx.openid };
+  // 构建查询（仅本人内容 + 排除已删除 + 可选过滤）
+  const q = { openid: ctx.openid, deleted: db.command.neq(true) };
   if (mainCategory) q.mainCategory = mainCategory;
   if (subCategory) q.subCategory = subCategory;
   if (type) q.type = type;

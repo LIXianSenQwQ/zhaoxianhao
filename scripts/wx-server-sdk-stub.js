@@ -20,18 +20,50 @@ module.exports = {
       if (!seed.collections[name]) seed.collections[name] = [];
       return seed.collections[name];
     };
-    // where 条件匹配（Sprint R11：支持 RegExp 标记 / db.command gte|lte|and / inc 指令）
+    // where 条件匹配（Sprint R11：支持 RegExp 标记 / db.command gte|lte|and / inc 指令；以及 $gte/$lte/$neq）
     const norm = (x) => { const d = new Date(x); return isNaN(d.getTime()) ? x : d.getTime(); };
     const matchVal = (rv, cond) => {
       if (cond && typeof cond === 'object') {
-        if (cond.__op === 'gte') return norm(rv) >= norm(cond.v);
-        if (cond.__op === 'lte') return norm(rv) <= norm(cond.v);
-        if (cond.__and) return cond.__and.every(c => matchVal(rv, c));
-        if (typeof cond.test === 'function') return cond.test(rv);
+        let ok = true;
+        if (cond.$gte !== undefined) ok = ok && norm(rv) >= norm(cond.$gte);
+        if (cond.$lte !== undefined) ok = ok && norm(rv) <= norm(cond.$lte);
+        if (cond.$neq !== undefined) ok = ok && rv !== cond.$neq;
+        if (cond.__op === 'gte') ok = ok && norm(rv) >= norm(cond.v);
+        if (cond.__op === 'lte') ok = ok && norm(rv) <= norm(cond.v);
+        if (cond.__and) ok = ok && cond.__and.every(c => matchVal(rv, c));
+        if (ok && typeof cond.test === 'function') ok = ok && cond.test(rv);
+        return ok;
       }
       return rv === cond;
     };
-    const matches = (row, where) => Object.entries(where || {}).every(([k, v]) => matchVal(row[k], v));
+    const matches = (row, where) => {
+      // Support top-level AND conditions in where object
+      if (where && typeof where === 'object') {
+        if (where.__and) return where.__and.every(c => matches(row, c));
+        
+        const entries = Object.entries(where);
+        for (const [k, v] of entries) {
+          // Handle special operators like $or, $and at root level
+          if (k === '$or' || k === '$and') {
+            // For $or: any clause matches; for $and: all clauses must match
+            const shouldMatchAny = k === '$or';
+            let matched = false;
+            for (const clause of v) {
+              if (matches(row, clause)) { matched = true; break; }
+            }
+            if (shouldMatchAny) {
+              if (!matched) return false;
+            } else {
+              if (!matched) return false;
+            }
+          } else {
+            if (!matchVal(row[k], v)) return false;
+          }
+        }
+        return true;
+      }
+      return true;
+    };
     // 更新数据应用：点路径深层赋值 + {__inc} 原子递增
     const applyUpdate = (row, data) => {
       for (const [k, v] of Object.entries(data)) {
@@ -121,7 +153,7 @@ module.exports = {
       collection: chain,
       RegExp: (opts) => new RegExp(opts.regexp, opts.options),
       command: {
-        eq: (v) => v, in: (arr) => arr, inc: (n) => ({ __inc: n }),
+        eq: (v) => v, in: (arr) => arr, inc: (n) => ({ __inc: n }), neq: (v) => ({ __neq: v }),
         gte: (v) => ({ __op: 'gte', v }), lte: (v) => ({ __op: 'lte', v }),
         and: (other) => ({ __and: [other] })
       }
