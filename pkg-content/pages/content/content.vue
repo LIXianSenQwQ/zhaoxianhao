@@ -36,12 +36,23 @@
         </view>
       </view>
       <view class="toolbar-right">
+        <view class="tool-item" @click="goBackup">
+          <text class="tool-icon">💾</text>
+          <text>备份</text>
+        </view>
         <view class="grid-btn" @click="toggleView">{{ isGrid ? '☷' : '☰' }}</view>
       </view>
     </view>
 
+    <!-- 骨架屏 -->
+    <view v-if="loading && !contents.length" class="skeleton-wrap">
+      <view class="sk-item"><view class="sk-block w70"></view><view class="sk-block w40"></view></view>
+      <view class="sk-item"><view class="sk-block w60"></view><view class="sk-block w50"></view></view>
+      <view class="sk-item"><view class="sk-block w80"></view><view class="sk-block w30"></view></view>
+    </view>
+
     <!-- 内容网格 / 列表 -->
-    <view v-if="contents.length" :class="isGrid ? 'content-grid' : 'content-list'">
+    <view v-else-if="contents.length" :class="isGrid ? 'content-grid' : 'content-list'">
       <view 
         v-for="item in contents" 
         :key="item._id"
@@ -129,6 +140,7 @@ function showUploadMenu() {
 
 function goCategory() { uni.navigateTo({ url: '/pkg-content/pages/content/category' }); }
 function goSearch() { uni.navigateTo({ url: '/pkg-content/pages/content/search' }); }
+function goBackup() { uni.navigateTo({ url: '/pkg-content/pages/content/backup' }); }
 function openDetail(item: any) { uni.navigateTo({ url: `/pkg-content/pages/content/detail?id=${item._id}` }); }
 
 onMounted(() => { loadCats(); load(); });
@@ -233,5 +245,37 @@ onMounted(() => { loadCats(); load(); });
   
   .empty-icon { font-size: 48px; }
   .empty-text { display: block; margin-top: 12px; color: var(--home-text-2); }
+}
+
+/* 骨架屏 */
+.skeleton-wrap {
+  padding-bottom: 60px;
+  
+  .sk-item {
+    background: var(--home-card);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+    
+    .sk-block {
+      background: linear-gradient(90deg, #EAE4D6 8%, #F7F4EC 18%, #EAE4D6 32%);
+      border-radius: 6px;
+      height: 12px;
+      animation: shimmer 1.5s infinite;
+      
+      &.w70 { width: 70%; }
+      &.w60 { width: 60%; }
+      &.w80 { width: 80%; }
+      &.w50 { width: 50%; }
+      &.w40 { width: 40%; }
+      &.w30 { width: 30%; }
+    }
+  }
+}
+
+@keyframes shimmer {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
 }
 </style>

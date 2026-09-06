@@ -60,3 +60,28 @@ export function saveCategory(params: {
 export function listCategories() {
   return call('content', { action: 'category.list' }, 'content:cats', 60000);
 }
+
+/** 获取内容详情（本人或 PUBLIC 可见） */
+export function getContentDetail(contentId: string) {
+  return call('content', { action: 'content.detail', contentId }, undefined);
+}
+
+/** 更新内容属性 */
+export function updateContent(params: {
+  contentId: string;
+  title?: string;
+  content?: string;
+  visibility?: Visibility;
+}) {
+  return write('content', { action: 'content.update', ...params }, 'content', `update_${Date.now()}`);
+}
+
+/** 删除内容（软删除） */
+export function deleteContent(contentId: string) {
+  return write('content', { action: 'content.delete', contentId }, 'content', `del_${Date.now()}`);
+}
+
+/** 批量设置可见性 */
+export function batchSetVisibility(contentIds: string[], visibility: Visibility) {
+  return write('content', { action: 'content.batch.setVisibility', contentIds, visibility }, 'content', `batch_${Date.now()}`);
+}
