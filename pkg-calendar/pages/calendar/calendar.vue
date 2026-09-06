@@ -33,14 +33,38 @@
       </view>
     </view>
 
-    <!-- 选中日期详情（农历/宜忌走 V1.1 calendar.almanac，开关 v11Almanac） -->
+    <!-- 选中日期详情（公历 / 老皇历 无缝切换 · V1.1 calendar.almanac） -->
     <view class="detail-card">
       <template v-if="selectedStr">
-        <text class="detail-title">{{ selectedStr }}</text>
-        <text class="detail-sub">{{ weekdayOf(selectedStr) }}</text>
-        <view class="detail-hint">
-          <text>农历与宜忌（老皇历）随 V1.1 上线，本页与日历组件无缝切换</text>
+        <!-- 分段控件 -->
+        <view class="seg">
+          <view class="seg-item" :class="{ active: !almanacMode }" @click="almanacMode = false"><text>公历</text></view>
+          <view class="seg-item" :class="{ active: almanacMode }" @click="switchAlmanac(true)"><text>老皇历</text></view>
         </view>
+
+        <!-- 公历视图 -->
+        <template v-if="!almanacMode">
+          <text class="detail-title">{{ selectedStr }}</text>
+          <text class="detail-sub">{{ weekdayOf(selectedStr) }}</text>
+        </template>
+
+        <!-- 老皇历视图 -->
+        <template v-else>
+          <text class="detail-title">{{ selectedStr }} · {{ weekdayOf(selectedStr) }}</text>
+          <view v-if="almanacLoading" class="almanac-row"><text class="almanac-loading">推算中…</text></view>
+          <view v-else-if="almanac" class="almanac-block">
+            <view class="almanac-row"><text class="almanac-key">干支</text><text class="almanac-val">{{ almanac.ganzhi?.year }}年 {{ almanac.ganzhi?.month }}月 {{ almanac.ganzhi?.day }}日</text></view>
+            <view class="almanac-row"><text class="almanac-key">生肖</text><text class="almanac-val">{{ almanac.zodiac }}</text></view>
+            <view class="almanac-row"><text class="almanac-key">节气</text><text class="almanac-val">{{ almanac.solarTerm || '—' }}</text></view>
+            <view v-if="almanac.termsOfMonth?.length" class="almanac-row"><text class="almanac-key">本月节气</text><text class="almanac-val">{{ almanac.termsOfMonth.join(' · ') }}</text></view>
+            <view class="almanac-row"><text class="almanac-key">宜</text><text class="almanac-val yi">{{ (almanac.yi || []).join('、') || '—' }}</text></view>
+            <view class="almanac-row"><text class="almanac-key">忌</text><text class="almanac-val ji">{{ (almanac.ji || []).join('、') || '—' }}</text></view>
+            <view v-if="almanac.lunar?.source === 'lunar-placeholder'" class="almanac-foot">
+              <text>农历详情随 lunar-javascript 接入后展示</text>
+            </view>
+          </view>
+          <view v-else class="almanac-row"><text class="almanac-loading">暂无数据</text></view>
+        </template>
       </template>
       <template v-else>
         <text class="detail-empty">点选日期查看详情</text>
@@ -63,6 +87,10 @@ const term = ref('');
 const greeting = ref('');
 const muted = ref(false);
 const theme = ref<{ top: string; mid: string; bottom: string } | null>(null);
+// R24: 老皇历切换
+const almanacMode = ref(false);
+const almanac = ref<any>(null);
+const almanacLoading = ref(false);
 
 /** 晨光渐变端点色由 atmosphere.moodTheme 下发（蓝图 0.6.1：只换端点，不重绘结构） */
 const headerBg = computed(() => {
@@ -111,6 +139,27 @@ function changeMonth(delta: number) {
 
 function selectDay(cell: DayCell) {
   selectedStr.value = cell.dateStr;
+  if (almanacMode.value) loadAlmanac(cell.dateStr);
+}
+
+/** R24: 切换到老皇历并加载选中日 almanac */
+function switchAlmanac(on: boolean) {
+  almanacMode.value = on;
+  if (on && selectedStr.value) loadAlmanac(selectedStr.value);
+}
+
+/** R24: 拉取老皇历数据（calendar.almanac，无本地缓存，轻量 ≤200ms） */
+async function loadAlmanac(dateStr: string) {
+  almanacLoading.value = true;
+  almanac.value = null;
+  try {
+    const res = await read('calendar', { action: 'almanac', date: dateStr }, '', 0);
+    if (res.success && res.data) almanac.value = res.data;
+  } catch (e) {
+    almanac.value = null;
+  } finally {
+    almanacLoading.value = false;
+  }
 }
 
 /** 氛围缓存优先渲染（蓝图 0.6.3：atmosphere.today 缓存 10 分钟静默刷新） */
@@ -146,10 +195,24 @@ read('atmosphere', { action: 'today' }, 'atmosphere.today', 600000).then(res => 
 .day-cell.today .day-num { border: 1.5px solid #B03A2E; color: #B03A2E; font-weight: 700; }
 .day-cell.selected .day-num { background: #B03A2E; color: #FFFFFF; }
 
-.detail-card { margin: 12px 16px 16px; background: #FFFFFF; border-radius: 12px; padding: 14px; box-shadow: 0 2px 12px rgba(38, 34, 30, 0.06); display: flex; flex-direction: column; gap: 4px; }
+.detail-card { margin: 12px 16px 16px; background: #FFFFFF; border-radius: 12px; padding: 14px; box-shadow: 0 2px 12px rgba(38, 34, 30, 0.06); display: flex; flex-direction: column; gap: 6px; }
 .detail-title { font-size: 16px; font-weight: 600; color: #2B2723; }
 .detail-sub { font-size: 13px; color: #6E6659; }
-.detail-hint { margin-top: 8px; background: #F7F1E3; border-radius: 8px; padding: 8px 10px; }
-.detail-hint text { font-size: 12px; color: #8A7B5A; }
 .detail-empty { font-size: 13px; color: #B0A99A; text-align: center; padding: 8px 0; }
+
+/* R24: 老皇历分段控件 + almanac 面板 */
+.seg { display: flex; background: #F7F6F3; border-radius: 8px; padding: 2px; margin-bottom: 6px; }
+.seg-item { flex: 1; text-align: center; padding: 6px 0; border-radius: 6px; }
+.seg-item text { font-size: 13px; color: #8A7B5A; }
+.seg-item.active { background: #B03A2E; }
+.seg-item.active text { color: #FFFFFF; font-weight: 600; }
+.almanac-block { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
+.almanac-row { display: flex; align-items: baseline; gap: 10px; }
+.almanac-key { font-size: 13px; color: #8A7B5A; width: 56px; flex-shrink: 0; }
+.almanac-val { font-size: 14px; color: #2B2723; flex: 1; }
+.almanac-val.yi { color: #2E6B46; }
+.almanac-val.ji { color: #B03A2E; }
+.almanac-loading { font-size: 13px; color: #B0A99A; padding: 8px 0; }
+.almanac-foot { margin-top: 6px; border-top: 1px dashed #EAE4D6; padding-top: 6px; }
+.almanac-foot text { font-size: 11px; color: #B0A99A; }
 </style>

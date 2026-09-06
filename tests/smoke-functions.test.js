@@ -1757,3 +1757,61 @@ test('R23 profile.capsule.list: 本人胶囊列表', async () => {
   assert.equal(res.success, true);
   assert.equal(res.data.capsules.length, 1);
 });
+
+// ─── Sprint R24: 老皇历 + almanac ───
+
+test('R24 calendar.almanac: 2026-09-07 干支/生肖/节气', async () => {
+  seedDB({ settings: [] });
+  const res = await FN('calendar').main({ action: 'almanac', date: '2026-09-07' }, CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.ganzhi.year, '丙午', '2026 干支纪年应为丙午');
+  assert.equal(res.data.zodiac, '马', '2026 生肖应为马');
+  assert.ok(Array.isArray(res.data.yi), '宜为数组');
+  assert.ok(Array.isArray(res.data.ji), '忌为数组');
+});
+
+test('R24 calendar.almanac: 缺 date → 400 / 格式错 → 400', async () => {
+  const noDate = await FN('calendar').main({ action: 'almanac' }, CTX);
+  assert.equal(noDate.code, 400);
+  const bad = await FN('calendar').main({ action: 'almanac', date: '2026/09/07' }, CTX);
+  assert.equal(bad.code, 400);
+});
+
+test('R24 calendar.almanac: 立春当日命中节气且宜忌含节气规则', async () => {
+  // 2026 立春 = 2 月 4 日（21 世纪公式）
+  seedDB({ settings: [] });
+  const res = await FN('calendar').main({ action: 'almanac', date: '2026-02-04' }, CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.solarTerm, '立春', '2/4 应为立春');
+  assert.ok(res.data.yi.includes('开市') || res.data.yi.includes('祈福'), '立春宜含节气规则');
+  assert.ok(res.data.ji.includes('动土'), '立春忌含动土');
+});
+
+test('R24 calendar.almanac: 族史委定制扩展合并（almanacExt）', async () => {
+  seedDB({
+    settings: [{ _id: 's1', key: 'almanacExt', value: [{ date: '2026-09-07', yi: ['梨花节庆典'], ji: [] }] }]
+  });
+  const res = await FN('calendar').main({ action: 'almanac', date: '2026-09-07' }, CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(res.data.yi.includes('梨花节庆典'), '定制宜应合并');
+});
+
+test('R24 calendar.almanac: 未知 action → 400', async () => {
+  const res = await FN('calendar').main({ action: 'horoscope' }, CTX);
+  assert.equal(res.code, 400);
+});
+
+test('R24 _utils.ganzhiDay: 确定性推算（已知锚 2000-01-01）', async () => {
+  const utils = FN('calendar')._utils;
+  const gz = utils.ganzhiDay('2000-01-01');
+  assert.ok(/^[\u4E00-\u9FFF]{2}$/.test(gz.ganzhi), `干支格式: ${gz.ganzhi}`);
+  // 隔一天干支应 +1
+  const next = utils.ganzhiDay('2000-01-02');
+  assert.equal((next.idx - gz.idx + 60) % 60, 1, '相邻日干支应顺延一位');
+});
+
+test('R24 _utils.termOnDate: 2026-06-21 夏至', async () => {
+  const utils = FN('calendar')._utils;
+  const t = utils.termOnDate(2026, 6, 21);
+  assert.equal(t, '夏至', '2026-06-21 应为夏至');
+});
