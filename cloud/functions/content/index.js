@@ -59,6 +59,38 @@ async function sendMessage(ctx, userId, targetMemberId, content) {
   return OK({ msgId, message: '留言已提交（待审核）' });
 }
 
+/**
+ * R21: content.listMessages 英烈留言列表（APPROVED 优先 + 本人 PENDING 可见）
+ * 入参：{ targetMemberId, page?, pageSize? }
+ */
+async function listMessages(ctx, targetMemberId, page = 1, pageSize = 20) {
+  const db = wx.getDatabase();
+  if (!targetMemberId) return BAD_REQUEST('缺少 targetMemberId');
+
+  const skip = (Math.max(1, page) - 1) * pageSize;
+  // APPROVED 全员可见；PENDING 仅作者本人可见
+  const res = await db.collection('content_messages')
+    .where({ targetMemberId, status: 'APPROVED' })
+    .orderBy('publishAt', 'desc')
+    .skip(skip).limit(pageSize).get();
+
+  const items = res.data || [];
+  // 附加作者本人的 PENDING 留言
+  const mine = await db.collection('content_messages')
+    .where({ targetMemberId, authorOpenid: ctx.openid, status: 'PENDING' })
+    .orderBy('publishAt', 'desc').limit(5).get();
+
+  const all = [...(mine.data || []), ...items].sort((a, b) =>
+    new Date(b.publishAt).getTime() - new Date(a.publishAt).getTime()
+  );
+
+  return OK({
+    messages: all.slice(0, pageSize),
+    hasMore: items.length === pageSize,
+    page
+  });
+}
+
 module.exports = { main: async (params, context) => {
   const { action } = params || {};
   const userId = params.userId || context.openid;
@@ -72,6 +104,8 @@ module.exports = { main: async (params, context) => {
   switch (action) {
     case 'sendMessage':
       return await sendMessage(roleCtx, userId, params.targetMemberId, params.content);
+    case 'listMessages':
+      return await listMessages(roleCtx, params.targetMemberId, params.page, params.pageSize);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }

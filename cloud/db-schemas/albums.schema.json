@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "albums",
+  "description": "V1.1: 多级相册（最多 5 级嵌套）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": "string", "maxLength": 128 },
+    "name": { "type": "string", "maxLength": 50 },
+    "parentId": { "type": ["string", "null"] },
+    "level": { "type": "number", "minimum": 1, "maximum": 5 },
+    "visibility": { "type": "string", "enum": ["PRIVATE", "PUBLIC", "GROUP"] },
+    "groupIds": { "type": "array", "items": { "type": "string" } },
+    "autoBackup": { "type": "boolean", "default": true },
+    "photoCount": { "type": "number", "default": 0 },
+    "createdAt": { "type": "string" },
+    "updatedAt": { "type": "string" }
+  },
+  "required": ["_id", "userId", "name", "level", "visibility", "createdAt"],
+  "indexes": [
+    { "keys": { "userId": 1, "level": 1 }, "name": "user_level_idx" },
+    { "keys": { "parentId": 1 }, "name": "parent_idx" }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "album_photos",
+  "description": "V1.1: 相册照片（继承相册可见性）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "albumId": { "type": "string" },
+    "userId": { "type": "string", "maxLength": 128 },
+    "fileId": { "type": "string" },
+    "thumbUrl": { "type": "string" },
+    "lazySizes": { "type": "array", "items": { "type": "string" } },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "shotAt": { "type": "string" },
+    "backupStatus": { "type": "string", "enum": ["PENDING", "DONE", "FAIL"] },
+    "createdAt": { "type": "string" }
+  },
+  "required": ["_id", "albumId", "userId", "fileId", "createdAt"],
+  "indexes": [
+    { "keys": { "albumId": 1, "createdAt": -1 }, "name": "album_time_idx" },
+    { "keys": { "userId": 1, "createdAt": -1 }, "name": "user_time_idx" }
+  ]
+}

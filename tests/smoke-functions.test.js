@@ -141,7 +141,8 @@ function seedDB({
   plazaPosts = [], notifications = [], accounts = [], pointsLogs = [],
   worshipLogs = [], tasks = [], taskRecords = [], calendarItems = [], events = [],
   ceremonies = [], entryRecords = [], relations = [],
-  settings = [], avatars = []
+  settings = [], avatars = [],
+  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = []
 } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
@@ -150,7 +151,8 @@ function seedDB({
       points_accounts: accounts, points_logs: pointsLogs,
       worship_logs: worshipLogs, tasks, task_records: taskRecords,
       calendar_items: calendarItems, events, ceremonies,
-      entry_records: entryRecords, relations, avatars
+      entry_records: entryRecords, relations, avatars,
+      albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules
     },
     seq: 1000
   };
@@ -1391,5 +1393,153 @@ test('R20 profile.updateFamilyInfo: EDITOR 设置家训/字辈 OK', async () => 
 test('R20 profile.updateFamilyInfo: generationChars 非数组 → 400', async () => {
   const res = await FN('profile').main(
     { action: 'updateFamilyInfo', userId: 'u-member', familyMotto: 'test', generationChars: 'not-array' }, CTX_WITH_ROLE('EDITOR'));
+  assert.equal(res.code, 400);
+});
+
+// ─── Sprint R21: ci/mps/secscan/album/content.listMessages ───
+
+test('R21 ci.process: 无 CI 配置降级占位 URL', async () => {
+  const res = await FN('ci').main(
+    { action: 'process', fileId: 'temp-f1', rules: [{ rule: 'thumb', width: 80 }] },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(res.data.thumbnailUrls, 'thumbnailUrls 存在');
+});
+
+test('R21 mps.transcode: duration > 60s 拒绝', async () => {
+  const res = await FN('mps').main(
+    { action: 'transcode', fileId: 'v1', duration: 90 },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R21 mps.transcode: duration 非数字拒绝', async () => {
+  const res = await FN('mps').main(
+    { action: 'transcode', fileId: 'v1', duration: 'abc' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R21 mps.transcode: 合规 duration 降级占位', async () => {
+  const res = await FN('mps').main(
+    { action: 'transcode', fileId: 'v1', duration: 45 },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(res.data.coverFrameUrl, 'coverFrameUrl 存在');
+});
+
+test('R21 secscan.detectText: 敏感词拦截', async () => {
+  const res = await FN('secscan').main(
+    { action: 'detectText', content: '这是赌博广告内容' },
+    CTX
+  );
+  assert.equal(res.success, true);
+  assert.equal(res.data.status, 'block', '含敏感词应拦截');
+});
+
+test('R21 secscan.detectText: 正常文本通过', async () => {
+  const res = await FN('secscan').main(
+    { action: 'detectText', content: '缅怀先辈郝公' },
+    CTX
+  );
+  assert.equal(res.data.status, 'pass');
+});
+
+test('R21 secscan.detectText: 超长 400', async () => {
+  const long = 'A'.repeat(5001);
+  const res = await FN('secscan').main({ action: 'detectText', content: long }, CTX);
+  assert.equal(res.code, 400);
+});
+
+test('R21 album.save: 创建 PRIVATE 相册', async () => {
+  seedDB({ albums: [] });
+  const res = await FN('album').main(
+    { action: 'save', name: '家族相册', visibility: 'PRIVATE' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.level, 1);
+});
+
+test('R21 album.save: 父相册不存在 → 400', async () => {
+  seedDB({ albums: [] });
+  const res = await FN('album').main(
+    { action: 'save', name: '子相册', parentId: 'no-such', visibility: 'PRIVATE' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R21 album.uploadBatch: photos 空数组 → 400', async () => {
+  seedDB({ albums: [{ _id: 'alb1', userId: 'u-member', level: 1, photoCount: 0 }] });
+  const res = await FN('album').main(
+    { action: 'uploadBatch', albumId: 'alb1', photos: [] },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R21 album.uploadBatch: >20 张 → 400', async () => {
+  seedDB({ albums: [{ _id: 'alb1', userId: 'u-member', level: 1, photoCount: 0 }] });
+  const photos = Array.from({ length: 21 }, (_, i) => ({ fileId: `f${i}` }));
+  const res = await FN('album').main(
+    { action: 'uploadBatch', albumId: 'alb1', photos },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+  assert.ok(res.message?.includes('20'));
+});
+
+test('R21 album.uploadBatch: 正常 3 张批量上传', async () => {
+  seedDB({ albums: [{ _id: 'alb1', userId: 'u-member', level: 1, photoCount: 0 }], albumPhotos: [] });
+  const photos = [{ fileId: 'f1' }, { fileId: 'f2', tags: ['t1'] }, { fileId: 'f3' }];
+  const res = await FN('album').main(
+    { action: 'uploadBatch', albumId: 'alb1', photos },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.count, 3);
+});
+
+test('R21 album.list: PRIVATE 相册仅本人可见', async () => {
+  seedDB({
+    albums: [
+      { _id: 'a1', userId: 'u-member', level: 1, visibility: 'PRIVATE', name: '我的相册' },
+      { _id: 'a2', userId: 'u-other', level: 1, visibility: 'PRIVATE', name: '他人私密' },
+      { _id: 'a3', userId: 'u-other', level: 1, visibility: 'PUBLIC', name: '他人公开' }
+    ]
+  });
+  const res = await FN('album').main({ action: 'list' }, CTX_WITH_ROLE('MEMBER'));
+  const names = res.data.albums.map(a => a.name);
+  assert.ok(names.includes('我的相册'), '本人 PRIVATE 可见');
+  assert.ok(!names.includes('他人私密'), '他人 PRIVATE 不可见');
+  assert.ok(names.includes('他人公开'), '他人 PUBLIC 可见（MEMBER）');
+});
+
+test('R21 content.listMessages: APPROVED + 本人 PENDING 合并', async () => {
+  seedDB({
+    contentMessages: [
+      { _id: 'm1', targetMemberId: 'mem1', authorOpenid: 'u-other', status: 'APPROVED', publishAt: '2026-09-05T10:00:00Z', content: 'A' },
+      { _id: 'm2', targetMemberId: 'mem1', authorOpenid: 'u-test', status: 'PENDING', publishAt: '2026-09-05T11:00:00Z', content: 'B' },
+      { _id: 'm3', targetMemberId: 'mem1', authorOpenid: 'u-other2', status: 'PENDING', publishAt: '2026-09-05T12:00:00Z', content: 'C' }
+    ]
+  });
+  const res = await FN('content').main(
+    { action: 'listMessages', targetMemberId: 'mem1' },
+    CTX
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  const contents = res.data.messages.map(m => m.content);
+  assert.ok(contents.includes('A'), 'APPROVED 可见');
+  assert.ok(contents.includes('B'), '本人 PENDING 可见');
+  assert.ok(!contents.includes('C'), '他人 PENDING 不可见');
+});
+
+test('R21 content.listMessages: 缺少 targetMemberId → 400', async () => {
+  const res = await FN('content').main({ action: 'listMessages' }, CTX);
   assert.equal(res.code, 400);
 });

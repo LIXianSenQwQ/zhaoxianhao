@@ -58,12 +58,42 @@
         </view>
       </view>
 
+      <!-- 留言板（R21: content.sendMessage + listMessages，蓝图 8.0） -->
+      <view class="card">
+        <text class="section-title">缅怀留言</text>
+        <view class="msg-input-row">
+          <input
+            v-model="msgDraft"
+            class="msg-input"
+            placeholder="写一段缅怀的话（1-500 字）"
+            maxlength="500"
+            confirm-type="send"
+            @confirm="doSendMessage"
+          />
+          <button size="mini" class="msg-send" :disabled="sending || !msgDraft.trim()" @click="doSendMessage">发送</button>
+        </view>
+        <view v-if="messages.length" class="msg-list">
+          <view v-for="(msg, i) in messages" :key="msg._id || i" class="msg-item" :class="{ pending: msg.status === 'PENDING' }">
+            <view class="msg-head">
+              <text class="msg-author">{{ msg.authorName || '族人' }}</text>
+              <text v-if="msg.status === 'PENDING'" class="msg-status">待审核</text>
+              <text class="msg-time">{{ shortTime(msg.publishAt) }}</text>
+            </view>
+            <text class="msg-content">{{ msg.content }}</text>
+          </view>
+        </view>
+        <view v-else-if="!msgLoading" class="msg-empty">
+          <text class="msg-empty-text">暂无留言，写下第一条缅怀吧</text>
+        </view>
+        <button v-if="msgHasMore" size="mini" plain class="msg-more" @click="loadMessages(msgPage + 1)">加载更多</button>
+      </view>
+
       <!-- 无内容空态 -->
       <view v-if="!m.heroNote && !(m.deeds && m.deeds.length) && !m.motto" class="card">
         <EmptyState text="暂无详细事迹，待族史委补充" />
       </view>
 
-      <text class="page-tip">献花需认证族人（MEMBER+）· 留言板规划中（蓝图 8.0 篇章）</text>
+      <text class="page-tip">献花需认证族人（MEMBER+）· 留言经审核后展示</text>
     </template>
 
     <view v-else class="card">
@@ -85,6 +115,14 @@ const m = ref<any>(null);
 const worshipCount = ref(0);
 let memberId = '';
 
+// R21: 留言板相关
+const msgDraft = ref('');
+const sending = ref(false);
+const messages = ref<any[]>([]);
+const msgLoading = ref(false);
+const msgPage = ref(1);
+const msgHasMore = ref(false);
+
 onLoad((q: any = {}) => {
   memberId = String(q.memberId || q.id || '');
   if (!memberId) {
@@ -93,6 +131,7 @@ onLoad((q: any = {}) => {
     return;
   }
   loadDetail();
+  loadMessages(1); // 初页加载留言
 });
 
 async function loadDetail() {
@@ -135,6 +174,61 @@ async function doFlower() {
     uni.showToast({ title: res.message || '献花失败，请重试', icon: 'none' });
   }
 }
+
+// R21: 发送留言
+async function doSendMessage() {
+  if (sending.value || !msgDraft.value.trim()) return;
+  sending.value = true;
+  try {
+    const res = await write(
+      'content',
+      { action: 'sendMessage', targetMemberId: memberId, content: msgDraft.value.trim() },
+      'content.sendMessage',
+      ''
+    );
+    if (res.success) {
+      msgDraft.value = '';
+      uni.showToast({ title: '留言已提交审核', icon: 'none' });
+      loadMessages(msgPage.value); // 刷新列表
+    } else {
+      uni.showToast({ title: res.message || '发送失败', icon: 'none' });
+    }
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '网络错误', icon: 'none' });
+  } finally {
+    sending.value = false;
+  }
+}
+
+// R21: 加载留言列表
+async function loadMessages(page = 1) {
+  msgLoading.value = true;
+  try {
+    const res = await read('content', { action: 'listMessages', targetMemberId: memberId, page, pageSize: 20 }, '', 1 * 60 * 1000);
+    if (res.success && res.data) {
+      messages.value = page === 1 ? res.data.messages : [...messages.value, ...res.data.messages];
+      msgHasMore.value = !!res.data.hasMore;
+      msgPage.value = page;
+    } else {
+      uni.showToast({ title: res.message || '加载失败', icon: 'none' });
+    }
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '网络错误', icon: 'none' });
+  } finally {
+    msgLoading.value = false;
+  }
+}
+
+// 辅助：短时间格式化（如“2 分钟前”）
+function shortTime(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  const diff = Math.max(0, now - then);
+  if (diff < 60 * 1000) return `${Math.floor(diff / 1000)}秒前`;
+  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60 / 1000)}分钟前`;
+  if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / (60 * 60 * 1000))}小时前`;
+  return new Date(iso).toLocaleDateString().replace(/\//g, '-');
+}
 </script>
 
 <style scoped>
@@ -164,4 +258,19 @@ async function doFlower() {
 .motto-text { font-size: 15px; color: #FFFFFF; line-height: 1.7; letter-spacing: 1px; }
 .error { color: #B03A2E; font-size: 14px; line-height: 1.6; }
 .page-tip { display: block; text-align: center; font-size: 11px; color: #B0A99A; padding: 8px 16px; }
+
+/* R21: 留言板 */
+.msg-input-row { display: flex; gap: 8px; }
+.msg-input { flex: 1; background: #FAF8F2; border-radius: 12px; padding: 8px 12px; font-size: 14px; border: none; outline: none; }
+.msg-send { height: 36px; font-size: 13px; background: #B03A2E; color: #FFFFFF; opacity: 0.9; }
+.msg-list { max-height: 360px; overflow-y: auto; }
+.msg-item { border-bottom: 1px dashed #EAE4D6; padding: 12px 0; }
+.msg-item.pending { background: #FFFBE6; border-left: 3px solid #B0A99A; padding-left: 10px; }
+.msg-head { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.msg-author { font-size: 13px; font-weight: 600; color: #2B2723; }
+.msg-status { font-size: 11px; color: #B0A99A; background: #F7F4EC; padding: 2px 6px; border-radius: 4px; }
+.msg-time { font-size: 11px; color: #999; margin-left: auto; }
+.msg-content { font-size: 13px; color: #555; line-height: 1.6; word-break: break-word; }
+.msg-empty { text-align: center; color: #999; font-size: 13px; padding: 24px 0; }
+.msg-more { width: calc(100% - 32px); margin: 12px 16px; }
 </style>
