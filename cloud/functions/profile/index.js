@@ -150,6 +150,54 @@ async function updateFamilyInfo(ctx, userId, familyMotto, generationChars) {
   return OK({ message: '家族信息更新成功', updates });
 }
 
+/**
+ * R22: profile.greeting.save 保存家庭问候语
+ * 入参：{ content, templateId, schedule, familyId }
+ */
+async function saveGreeting(ctx, userId, { content, templateId = 'default', schedule, familyId }) {
+  const db = wx.getDatabase();
+  const now = new Date();
+
+  // 必填校验
+  if (!content || !content.text) return BAD_REQUEST('content.text 必填');
+  if (content.text.length > 200) return BAD_REQUEST('问候语不得超过 200 字符');
+
+  // 模板校验
+  const ALLOWED_TEMPLATES = ['default', 'morning', 'night', 'festival', 'solar', 'family'];
+  if (!ALLOWED_TEMPLATES.includes(templateId)) return BAD_REQUEST('templateId 无效');
+
+  // schedule 校验
+  if (schedule) {
+    if (schedule.time && !/^\d{2}:\d{2}$/.test(schedule.time)) return BAD_REQUEST('schedule.time 格式需 HH:mm');
+    if (schedule.weekdays && (!Array.isArray(schedule.weekdays) || schedule.weekdays.some(d => d < 0 || d > 6))) {
+      return BAD_REQUEST('weekdays 需为 0-6 数组');
+    }
+  }
+
+  const res = await db.collection('greeting_cards').add({
+    userId,
+    familyId: familyId || null,
+    content,
+    templateId,
+    schedule: schedule || { time: '08:00', weekdays: [1,2,3,4,5,6,0], enabled: false },
+    visibility: 'FAMILY',
+    status: 'ACTIVE',
+    createdAt: now,
+    updatedAt: now
+  });
+
+  return OK({ cardId: res._id, message: '问候语已保存' });
+}
+
+/**
+ * R22: profile.greeting.list 列表
+ */
+async function listGreetings(ctx, userId) {
+  const db = wx.getDatabase();
+  const res = await db.collection('greeting_cards').where({ userId }).orderBy('updatedAt', 'desc').limit(20).get();
+  return OK({ cards: res.data || [] });
+}
+
 module.exports = { main: async (params, context) => {
   const { action } = params || {};
   const userId = params.userId || context.openid;
@@ -162,6 +210,10 @@ module.exports = { main: async (params, context) => {
       return await updateIntro(ctx, userId, { greeting: params.greeting, introVideoFileId: params.introVideoFileId });
     case 'updateFamilyInfo':
       return await updateFamilyInfo(ctx, userId, params.familyMotto, params.generationChars);
+    case 'greeting.save':
+      return await saveGreeting(ctx, userId, params);
+    case 'greeting.list':
+      return await listGreetings(ctx, userId);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }

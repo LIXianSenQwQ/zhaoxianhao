@@ -1015,3 +1015,51 @@
 3. **hero 留言板前端**：hero/detail 留言列表 + 发布框 + 审核状态展示（联调 content.sendMessage）
 4. **album 多级相册**（V1.1 E2 剩余）：album.save/uploadBatch/tag（≤20 张批量）
 5. 性能实测（持续等待用户环境）
+
+## 第 R21+R22 轮（Sprint R21/R22 · V1.1 E2-E3 · CI/MPS/留言/相册/天气/问候语）
+
+> 主题：CI/MPS 真实云函数 + secscan 内容安全 + hero 留言板贯通 + album 批量上传 + weather 天气 + greeting 家庭问候语。
+
+### 一、指标回顾
+
+| 维度 | 指标 | R20 | R22 | 变化 |
+|---|---|---|---|---|
+| V1.1 E2 | CI 接入 | triggerCi 占位 | **ci 云函数**（ImageProcessJob 签名占位 + 降级 URL） | ↑ |
+| V1.1 E2 | MPS 接入 | triggerMps 占位 | **mps 云函数**（ProcessMedia + duration≤60s 强校验） | ↑ |
+| V1.1 E2 | 留言板 | content.sendMessage 骨架 | **hero/detail 留言 UI** + listMessages（APPROVED+本人 PENDING） | ↑ |
+| V1.1 E2 | album | 无 | **album.save/uploadBatch/tag/list**（≤20 张、5 级、scope mine/all） | ↑ |
+| V1.1 E3 | weather | 无 | **weather.current/switchCity**（3h 缓存 + 城市记忆） | ↑ |
+| V1.1 E3 | greeting | 无 | **profile.greeting.save/list**（富文本 + 5 模板 + 定时） | ↑ |
+| 质量 | 测试数 | 189 | **210**（+21：ci/mps/secscan/album/weather/greeting/listMessages） | ↑ |
+| 门禁 | verify | 绿 | **绿**（210 用例 · lint 0E） | = |
+
+### 二、本轮交付清单
+
+**新云函数（5 个）：**
+1. **ci**：数据万象 ImageProcessJob 封装（TC3-HMAC 签名占位，未配置降级占位 URL）
+2. **mps**：媒体处理 ProcessMedia 封装（duration>60s 拒收，降级 coverFrame）
+3. **secscan**：内容安全统一入口（detectText/detectImage，敏感词库 + msgSecCheck 占位）
+4. **album**：多级相册（save/uploadBatch/tag/list，≤20 张/批、5 级、三级可见性）
+5. **weather**：天气查询（current/switchCity，3h 缓存、users.weatherCityId 记忆）
+
+**扩展：**
+- profile 新增 **greeting.save / greeting.list**（富文本 ≤200 字、5 模板、HH:mm 定时校验）
+- content 新增 **listMessages**（APPROVED 全员 + 本人 PENDING 合并）
+- hero/detail.vue 留言板 UI（输入框 + 列表 + 待审核标签 + 分页）
+
+**基础设施：**
+- seedDB 扩展 albums/albumPhotos/contentMessages/timeCapsules/greetingCards/weatherCities
+- schema 新增 albums / album_photos / greeting_cards
+
+**修复：**
+- stub doc().get() 空数据返回 data:[]（truthy）→ album.save 父相册校验加固
+- album.list scope 语义：mine 也要查全部再过滤（他人 PUBLIC 需可见）
+
+### 三、风险登记
+
+| 风险 | 等级 | 应对 |
+|---|---|---|
+| CI/MPS/天气 API key 未配 | 中 | 占位降级就绪；真实密钥部署时启用 |
+| secscan 敏感词库过简 | 低 | R23+ 接入 msgSecCheck + 专业词库 |
+| album 断点续传未实现 | 中 | R26 性能收口补分片队列 |
+| 真机性能实测 | 高 | 持续等待微信开发者工具环境 |

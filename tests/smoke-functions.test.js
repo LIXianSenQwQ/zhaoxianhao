@@ -142,7 +142,7 @@ function seedDB({
   worshipLogs = [], tasks = [], taskRecords = [], calendarItems = [], events = [],
   ceremonies = [], entryRecords = [], relations = [],
   settings = [], avatars = [],
-  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = []
+  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = []
 } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
@@ -152,7 +152,7 @@ function seedDB({
       worship_logs: worshipLogs, tasks, task_records: taskRecords,
       calendar_items: calendarItems, events, ceremonies,
       entry_records: entryRecords, relations, avatars,
-      albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules
+      albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules, greeting_cards: greetingCards, weather_cities: weatherCities
     },
     seq: 1000
   };
@@ -1543,3 +1543,62 @@ test('R21 content.listMessages: 缺少 targetMemberId → 400', async () => {
   const res = await FN('content').main({ action: 'listMessages' }, CTX);
   assert.equal(res.code, 400);
 });
+
+// ─── Sprint R22: weather + greeting + album photos list ───
+
+test('R22 weather.current: 默认城市返回数据', async () => {
+  const res = await FN('weather').main({ action: 'current', cityId: '101010100' }, CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(res.data.temperature, 'temperature 存在');
+  assert.ok(res.data.condition, 'condition 存在');
+});
+
+test('R22 weather.switchCity: 切换成功并缓存', async () => {
+  seedDB({ users: [{ _id: 'u-test', openid: 'u-test' }] });
+  const res = await FN('weather').main(
+    { action: 'switchCity', cityId: '101230100', cityName: '石家庄' },
+    CTX
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.cityId, '101230100');
+});
+
+test('R22 greeting.save: 基础校验通过', async () => {
+  seedDB({ greetingCards: [] });
+  const res = await FN('profile').main(
+    { action: 'greeting.save', content: { text: '早安，家人！', size: 16 }, templateId: 'morning' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(res.data.cardId);
+});
+
+test('R22 greeting.save: 文本超长 → 400', async () => {
+  const long = 'A'.repeat(201);
+  const res = await FN('profile').main(
+    { action: 'greeting.save', content: { text: long }, templateId: 'morning' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R22 greeting.save: 无效模板 → 400', async () => {
+  const res = await FN('profile').main(
+    { action: 'greeting.save', content: { text: 'Hi' }, templateId: 'invalid' },
+    CTX_WITH_ROLE('MEMBER')
+  );
+  assert.equal(res.code, 400);
+});
+
+test('R22 greeting.list: 列出本人卡片', async () => {
+  seedDB({
+    greetingCards: [
+      { _id: 'g1', userId: 'u-member', content: { text: 'Hello' }, updatedAt: '2026-09-06T10:00:00Z' }
+    ]
+  });
+  const res = await FN('profile').main({ action: 'greeting.list' }, CTX_WITH_ROLE('MEMBER'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.cards.length, 1);
+});
+
+// ─── Sprint R22: weather + greeting tests completed above ───

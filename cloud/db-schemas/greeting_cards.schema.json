@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "greeting_cards",
+  "description": "V1.1: 家庭问候语（富文本/5 预设模板/定时展示）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": "string" },
+    "familyId": { "type": ["string", "null"] },
+    "content": {
+      "type": "object",
+      "properties": {
+        "text": { "type": "string", "maxLength": 200 },
+        "font": { "type": "string", "enum": ["song", "kai"] },
+        "color": { "type": "string" },
+        "size": { "type": "number", "enum": [14, 16, 18, 20] }
+      },
+      "required": ["text"]
+    },
+    "templateId": { "type": "string" },
+    "schedule": {
+      "type": "object",
+      "properties": {
+        "time": { "type": "string", "pattern": "^\\d{2}:\\d{2}$" },
+        "weekdays": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 6 } },
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "visibility": { "type": "string", "enum": ["FAMILY", "GROUP"] },
+    "status": { "type": "string", "enum": ["ACTIVE", "DISABLED"] },
+    "createdAt": { "type": "string" },
+    "updatedAt": { "type": "string" }
+  },
+  "required": ["_id", "userId", "content", "templateId", "createdAt"],
+  "indexes": [
+    { "keys": { "userId": 1, "status": 1 }, "name": "user_status_idx" },
+    { "keys": { "schedule.time": 1, "status": 1 }, "name": "schedule_dispatch_idx" }
+  ]
+}
