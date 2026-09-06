@@ -2002,3 +2002,50 @@ test('V2 secscan.detectImage: sourceType 校验', async () => {
   const res = await FN('secscan').main({ action: 'detectImage', sourceType: 'ftp' }, CTX);
   assert.equal(res.code, 400);
 });
+
+// ═══════════ F1 合规收口：seed-v2-features 功能开关初始化 ═══════════
+
+test('F1 seed: 五大模块开关键齐备且结构合法', () => {
+  const { INITIAL_FLAGS, REQUIRED_V2_KEYS, validateFlags } = require('../scripts/seed-v2-features.js');
+  for (const key of REQUIRED_V2_KEYS) {
+    assert.ok(key in INITIAL_FLAGS, `缺 V2.0 开关键 ${key}`);
+  }
+  const check = validateFlags(INITIAL_FLAGS);
+  assert.equal(check.valid, true, JSON.stringify(check.errors));
+});
+
+test('F1 seed: 合规版游戏开关 scope 为 global（无独立游戏主体）', () => {
+  const { INITIAL_FLAGS } = require('../scripts/seed-v2-features.js');
+  assert.equal(INITIAL_FLAGS.v20Games.scope, 'global');
+  assert.equal(INITIAL_FLAGS.v20Games.enabled, true);
+});
+
+test('F1 seed: mergeFlags 幂等合并（保留既有、补齐新键）', () => {
+  const { INITIAL_FLAGS, mergeFlags } = require('../scripts/seed-v2-features.js');
+  // 模拟已存在旧开关（如 homeFamilyCard 已开、v20Games 曾被关）
+  const existing = JSON.parse(JSON.stringify(INITIAL_FLAGS));
+  existing.homeFamilyCard = { enabled: false, scope: 'global' };
+  existing.v20Games = { enabled: false, scope: 'global' };
+
+  const merged = mergeFlags(existing);
+  assert.equal(merged.homeFamilyCard.enabled, false, '既有键值不得被覆盖');
+  assert.equal(merged.v20Games.enabled, false, '被关闭的 v20Games 应保留关闭态');
+  assert.ok('v20Content' in merged && 'v20Home' in merged, '新键应补齐');
+});
+
+test('F1 seed: 非法结构校验失败', () => {
+  const { validateFlags } = require('../scripts/seed-v2-features.js');
+  const bad = {
+    v20Content: { enabled: 'yes', scope: 'global' }, // enabled 非布尔
+    v20News: { enabled: true, scope: 'branch' }      // branch 缺 branchIds
+  };
+  const check = validateFlags(bad);
+  assert.equal(check.valid, false);
+  assert.ok(check.errors.length >= 2);
+});
+
+test('F1 seed: 合规红线——新闻开关携带外链合规备注', () => {
+  const { INITIAL_FLAGS } = require('../scripts/seed-v2-features.js');
+  assert.ok(/外链/.test(INITIAL_FLAGS.v20News.note || ''), 'v20News 应标注时政仅外链');
+  assert.ok(/零内购|无内购/.test(INITIAL_FLAGS.v20Home.note || ''), 'v20Home 应标注零内购');
+});

@@ -133,6 +133,49 @@
 					"style": {}
 				}
 			]
+		},
+		{
+			"root": "pkg-content",
+			"name": "content",
+			"pages": [
+				{
+					"path": "pages/content/content",
+					"style": {
+						"navigationBarTitleText": "我的内容库",
+						"navigationStyle": "custom"
+					}
+				},
+				{
+					"path": "pages/content/upload",
+					"style": {
+						"navigationBarTitleText": "上传内容"
+					}
+				},
+				{
+					"path": "pages/content/detail",
+					"style": {
+						"navigationBarTitleText": "内容详情"
+					}
+				},
+				{
+					"path": "pages/content/category",
+					"style": {
+						"navigationBarTitleText": "分类管理"
+					}
+				},
+				{
+					"path": "pages/content/search",
+					"style": {
+						"navigationBarTitleText": "搜索"
+					}
+				},
+				{
+					"path": "pages/content/backup",
+					"style": {
+						"navigationBarTitleText": "备份中心"
+					}
+				}
+			]
 		}
 	],
 	"preloadRule": {

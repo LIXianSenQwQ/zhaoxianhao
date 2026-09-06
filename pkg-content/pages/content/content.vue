@@ -121,15 +121,15 @@ function showUploadMenu() {
   uni.showActionSheet({
     itemList: ['照片 / 视频', '文章 / 记录'],
     success: (r) => {
-      if (r.tapIndex === 0) uni.navigateTo({ url: '/pages/content/upload?type=media' });
-      else uni.navigateTo({ url: '/pages/content/upload?type=article' });
+      if (r.tapIndex === 0) uni.navigateTo({ url: '/pkg-content/pages/content/upload?type=media' });
+      else uni.navigateTo({ url: '/pkg-content/pages/content/upload?type=article' });
     }
   });
 }
 
-function goCategory() { uni.navigateTo({ url: '/pages/content/category' }); }
-function goSearch() { uni.navigateTo({ url: '/pages/content/search' }); }
-function openDetail(item: any) { uni.navigateTo({ url: `/pages/content/detail?id=${item._id}` }); }
+function goCategory() { uni.navigateTo({ url: '/pkg-content/pages/content/category' }); }
+function goSearch() { uni.navigateTo({ url: '/pkg-content/pages/content/search' }); }
+function openDetail(item: any) { uni.navigateTo({ url: `/pkg-content/pages/content/detail?id=${item._id}` }); }
 
 onMounted(() => { loadCats(); load(); });
 </script>
