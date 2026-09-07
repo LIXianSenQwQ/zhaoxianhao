@@ -165,7 +165,7 @@
 | §7.2 方言覆盖 | settings.kindshipDialect 称谓覆盖表（已交付；方言表 UI 配置管理待后续优化） | 移除（已交付） |
 | §7.6 公示期 | entry APPROVED 前 publicityDeadline 流转 + 通知 → entry audit SECOND_PASS→PUBLICITY(publicityDays 可配, 0=直 APPROVED 兼容) + PUBLICITY_PASS 提前结束(≠复审人) + publicityScan timer(每日7点到期自动 APPROVED) + pendingList 公示视图 + schema status/publicityDays/publicityDeadline + 7 smoke 用例 | ✅（445 test verify 全绿） |
 | §7.8 24 节气渐变 | 24 节气全量端点色板 palette + 全量节气笺 + festival 节日字段（族议会年历>内置公历>清明即节日，静默期不下发）→ atmosphere/index.js + 首页/日历页接入 + 4 smoke 用例 → `aeeecbe` | ✅（441 test 基线 → 445 test verify 全绿） |
-| §7.9 订阅消息/公众号 | notify 站内外的订阅/IM 通道适配 | P1 |
+| §7.9 订阅消息/公众号 | notify 站内外的订阅/IM 通道适配 → dispatch 编排 + subscribeMsg.send(settings.subscribeTemplates) + officialAccount.send(settings.officialAccount) + notify/common/channel.js SDK 占位 + 6 smoke 用例(fail-closed/simulated/审计) | ✅（451 test verify 全绿） |
 | 隐私全覆盖扫描 | 敏感 action 逐一点检 privacyCheck/visibilityCheck 遗漏（§7.4 复查）：17 敏感集合×写操作全量门禁扫描 0 真缺口；6 处审计发现逐点 verdict 全部合规（自建/双人审核/EDITOR 门禁）；修复 auth.grantAuth 真实缺口（MEMBER 门禁 + 受权人 ACTIVE 校验 + scope 必填，4 用例）；privacy-coverage.test.js 升级为阻断式门禁（KNOWN_SAFE_WRITES 8 条已审核白名单）；445 test verify 全绿 | ✅（445 test verify 全绿） |
 4. 新闻正文只外链不缓存（时政）；游戏无联机/无内购/无虚拟货币；
 5. 每期结束把增量回写本文档（基线收口），保证「文档即事实」。
