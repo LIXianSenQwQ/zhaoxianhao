@@ -254,11 +254,12 @@ async function recordReadReceipt(db, openid, noticeId) {
   const alreadyRead = (item.readBy || []).some(r => r.userId === openid);
   if (alreadyRead) return OK({ alreadyRead: true });
 
-  // Record read
+  // Record read (client-side array concat, avoid db.command.push for stub compatibility)
   const now = new Date();
+  const entry = { userId: openid, name: '', readAt: now.toISOString() };
   await db.collection('clan_notices').doc(noticeId).update({
     data: {
-      readBy: db.command.push([{ userId: openid, name: '', readAt: now.toISOString() }]),
+      readBy: (item.readBy || []).concat([entry]),
       updatedAt: now.toISOString()
     }
   });

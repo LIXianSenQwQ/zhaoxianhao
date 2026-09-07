@@ -364,6 +364,92 @@ test('R11 plaza.like：原子 +1（family_moments + moment_interactions）', asy
   assert.ok(seed.collections.moment_interactions.some(i => i.type === 'LIKE' && i.userId === 'u-m'), '互动记录写入');
 });
 
+test('F5 plaza.comment: MEMBER 可评论 moment', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    familyMoments: [{ _id: 'm-1', authorId: 'u-x', content: '家族活动', stats: { like: 0, comment: 0 }, status: 'PUBLISHED' }]
+  });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  const res = await FN('plaza').main({ action: 'comment', momentId: 'm-1', content: '好的' }, ctx);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.commented, true);
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.ok(seed.collections.moment_interactions.some(i => i.type === 'COMMENT' && i.momentId === 'm-1'), '评论互动记录');
+  assert.equal(seed.collections.family_moments[0].stats.comment, 1, '评论计数 +1');
+});
+
+test('F5 plaza.publish: 支持 topicTags + mentions', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }]
+  });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  const res = await FN('plaza').main({
+    action: 'publish', type: 'TEXT', content: '家族聚会通知',
+    topicTags: ['族务', '聚会'],
+    mentions: [{ userId: 'u-elder', userName: '郝大伯' }]
+  }, ctx);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(res.data.momentId);
+  const seed = globalThis.__HCS_STUB_SEED__;
+  const saved = seed.collections.family_moments[0];
+  assert.ok(saved.topicTags.includes('族务'), '标签存储');
+  assert.ok(saved.mentions[0].userId === 'u-elder', '提及存储');
+});
+
+test('F5 plaza.announce: CHIEF 可发布公告 / MEMBER 403', async () => {
+  seedDB({ users: [{ openid: 'u-c', role: 'CHIEF' }, { openid: 'u-m', role: 'MEMBER' }] });
+  const memberCtx = { OPENID: 'u-m', openid: 'u-m' };
+  const denied = await FN('plaza').main({ action: 'announce', title: '族祭', content: '十月初一', category: '族务' }, memberCtx);
+  assert.equal(denied.code, 403, 'MEMBER 不能发布公告');
+
+  const chiefCtx = { OPENID: 'u-c', openid: 'u-c' };
+  const ok = await FN('plaza').main({ action: 'announce', title: '族祭通知', content: '十月初一祭祖', category: '族务', priority: 'high', stickingDays: 7 }, chiefCtx);
+  assert.equal(ok.success, true, JSON.stringify(ok));
+  assert.ok(ok.data.noticeId);
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.equal(seed.collections.clan_notices.length, 1);
+  assert.equal(seed.collections.clan_notices[0].priority, 3);
+  assert.ok(seed.collections.audit_logs.some(l => l.action === 'clan_notices.publish'), '公告写审计');
+});
+
+test('F5 plaza.stick + getNotices: 置顶排序与阅读回执', async () => {
+  seedDB({
+    users: [{ openid: 'u-c', role: 'CHIEF' }],
+    clanNotices: [
+      { _id: 'n-1', publisherId: 'u-c', title: '紧急', content: '重要通知', category: '族务', priority: 4, stickingCountdown: 14, requireReadReceipt: true, readBy: [], publishAt: new Date().toISOString(), expireAt: new Date(Date.now() + 30 * 86400000).toISOString(), status: 'PUBLISHED' },
+      { _id: 'n-2', publisherId: 'u-c', title: '一般', content: '日常通知', category: '族务', priority: 2, stickingCountdown: 3, publishAt: new Date().toISOString(), expireAt: new Date(Date.now() + 7 * 86400000).toISOString(), status: 'PUBLISHED' }
+    ]
+  });
+  const ctx = { OPENID: 'u-c', openid: 'u-c' };
+
+  // readReceipt
+  const receipt = await FN('plaza').main({ action: 'readReceipt', noticeId: 'n-1' }, ctx);
+  assert.equal(receipt.success, true, JSON.stringify(receipt));
+  assert.equal(receipt.data.readReceiptAdded, true);
+
+  // Idempotent read receipt
+  const receipt2 = await FN('plaza').main({ action: 'readReceipt', noticeId: 'n-1' }, ctx);
+  assert.equal(receipt2.data.alreadyRead, true);
+
+  // getNotices
+  const list = await FN('plaza').main({ action: 'getNotices', page: 1, pageSize: 10 }, ctx);
+  assert.equal(list.success, true);
+  assert.equal(list.data.notices.length, 2);
+  assert.ok(list.data.notices[0].priority >= list.data.notices[1].priority, '优先级降序');
+});
+
+test('F5 plaza.stick: CHIEF 置顶延长期限', async () => {
+  seedDB({
+    users: [{ openid: 'u-c', role: 'CHIEF' }],
+    clanNotices: [{ _id: 'n-3', publisherId: 'u-c', title: '待置顶', content: '内容', category: '红白事', priority: 1, stickingCountdown: 1, readBy: [], publishAt: new Date().toISOString(), expireAt: new Date().toISOString(), status: 'PUBLISHED' }]
+  });
+  const ctx = { OPENID: 'u-c', openid: 'u-c' };
+  const ok = await FN('plaza').main({ action: 'stick', noticeId: 'n-3', stickyMinutes: 60 }, ctx);
+  assert.equal(ok.success, true, JSON.stringify(ok));
+  assert.equal(ok.data.stuck, true);
+  assert.ok(ok.data.expiredAfter > new Date().toISOString(), 'expireAt 已更新为未来');
+});
+
 test('R11 relation.calc：VISITOR 403 / MEMBER 正向（物化路径共同祖先）', async () => {
   seedDB({
     users: [{ openid: 'u-m', role: 'MEMBER' }],
