@@ -149,7 +149,7 @@
 ### P3 遗留 P1 项（后续冲刺）
 | 蓝图条款 | 待办 | 优先级 |
 | --- | --- | --- |
-| §7.1 Canvas 图视图 | family-tree-layout 接入 tree.vue 图视图切换 + TreeGraph.vue 双指缩放/视口裁剪/直系/时间轴/五服着色 | P1 |
+| §7.1 Canvas 图视图 | TreeGraph.vue 已增强双指缩放/直系过滤/五服着色（P1 进行中：tree.vue 图视图切换按钮待接）| P1 → 算法/组件层已交付 |
 | §7.2 姻亲规则 | `relation.calc` 无共同祖先时经 SPOUSE 边走姻亲称谓表（姐夫/妹夫/嫂子/弟媳/姑父/岳父/大舅子/小姨子等） | ✅ `cloud/functions/relation/index.js` findSpouse + 规则一（A 血亲之配偶）/规则二（A 配偶之血亲）双桥，7 用例 `tests/relation-spouse.test.js` 通过 | 移除（已交付） |
 | §7.2 方言覆盖 | settings.kindshipDialect 称谓覆盖表 | P1 |
 | §7.6 公示期 | entry APPROVED 前 publicityDeadline 流转 + 通知 | P1 |
