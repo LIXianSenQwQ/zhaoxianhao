@@ -11,12 +11,25 @@
     />
 
     <template v-else>
-      <scroll-view
-        class="tree-scroll"
-        scroll-y
-        :enable-back-to-top="true"
-        @scrolltolower="handleLoadMore"
-      >
+      <!-- 工具栏：列表/图谱切换 -->
+      <View class="view-toolbar">
+        <button class="tool-btn" :class="{ active: !isGraphView }" @tap="() => isGraphView.value = false">列表视图</button>
+        <button class="tool-btn" :class="{ active: isGraphView }" @tap="() => isGraphView.value = true">图谱视图</button>
+      </View>
+
+      <!-- 图谱模式（Canvas） -->
+      <template v-if="isGraphView">
+        <TreeGraph
+          :nodes="layoutNodes"
+          :edges="layoutEdges"
+          :focusId="null"
+          :viewMode="'ALL'"
+          ref="graphRef"
+        />
+      </template>
+
+      <!-- 列表模式（DOM scroll） -->
+      <scroll-view v-else class="tree-scroll" scroll-y :enable-back-to-top="true" @scrolltolower="handleLoadMore">
         <!-- 根节点列表 -->
         <view v-for="node in nodes" :key="node.path" class="tree-node">
           <BaseCard @click="toggleCollapseNode(node)">
@@ -87,6 +100,8 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import ErrorPage from '@/components/common/ErrorPage.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
+import TreeGraph from '@/components/common/TreeGraph.vue';
+import { computeLayout } from '@/utils/family-tree-layout.js';
 
 const store = useTreeStore();
 const user = useUserStore();
@@ -96,9 +111,46 @@ const childrenData = ref<any | null>(null);
 const hasMore = ref(false);
 const loadingNext = ref(false);
 
+// View mode: list (DOM) vs graph (Canvas)
+const isGraphView = ref(false);
+
 // 当前根节点路径（始祖）
 const ROOT = '/001/'; // 待 API 返回实际根
 const nodes = computed(() => (store.getPage(ROOT) as any)?.nodes ?? []);
+const graphRef = ref<any>(null);
+
+/** 图视图：平铺所有已加载的页面节点 */
+const flatNodes = computed(() => {
+  const all: any[] = [];
+  store.pages.forEach((page) => {
+    if (Array.isArray(page.nodes)) {
+      for (const n of page.nodes) {
+        all.push({
+          id: n._id || n.path,
+          name: n.name,
+          genealogyName: n.genealogyName,
+          generation: Number(n.generation) || 1,
+          isMale: n.gender === 'MALE',
+          path: n.path,
+          fiveFu: (n as any).fiveFu
+        });
+      }
+    }
+  });
+  return all;
+});
+
+const layoutResult = computed(() => computeLayout(flatNodes.value));
+const layoutNodes = computed(() => layoutResult.value.nodes.map((n: any) => ({
+  id: n._id || n.path,
+  name: n.genealogyName || n.name,
+  generation: n.generation,
+  isMale: n.gender === 'MALE',
+  x: n.x,
+  y: n.y,
+  fiveFabric: n.fiveFu
+})));
+const layoutEdges = computed(() => layoutResult.value.edges);
 
 async function loadRoot() {
   loadError.value = '';
@@ -188,6 +240,37 @@ onMounted(loadRoot);
 
 <style scoped>
 .tree-page { flex: 1; height: 100%; display: flex; flex-direction: column; }
+
+/* 视图切换工具栏 */
+.view-toolbar {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: #FFF;
+  border-bottom: 1px solid #EEE7DA;
+}
+.view-toolbar .tool-btn {
+  flex: 1;
+  min-width: 100px;
+  padding: 8px 0;
+  font-size: 14px;
+  background: #FAF8F2;
+  color: #6E6659;
+  border-radius: 6px;
+}
+.view-toolbar .tool-btn.active {
+  background: #B03A2E;
+  color: #FFF;
+}
+
+/* Canvas 容器 */
+canvas.tree-graph, canvas#treeCanvas {
+  width: 100%;
+  height: calc(100vh - 180px); /* 减去上下工具栏高度 */
+  display: block;
+}
+
+/* DOM 列表模式（保持原有） */
 .tree-scroll { flex: 1; padding-bottom: 60px; }
 
 .tree-node { margin: 12px 0; }
