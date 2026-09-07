@@ -57,44 +57,132 @@ function birthKeyOf(member) {
 }
 
 /**
- * SPOUSE 姻亲称谓映射表（规则一：A 的血亲 X 之配偶 B）
- * 参数：X-blood-title (A calls X), X-gender, A-gender, seniority (A↔X generation/age context)
- * 返回值：姻亲标题或 null (未覆盖则回退到原行为)
+ * 从 relations collection 查询指定成员的配偶（ACTIVE SPOUSE edge）
+ * @param {string} memberId — find spouse of this member (either fromId or toId)
+ * @returns {Promise<{id:string,type:'SPOUSE',otherId:string}|null>}
  */
-const SPICE_BY_BLOOD_X = Object.freeze({
-  // X = A's sister (female, same gen, elder/younger)
-  '姐': { female: { MALE: '姐夫', FEMALE: '妯娌' }, male: { MALE: '哥', FEMALE: '' } }, // partial
-  '妹妹': { female: { MALE: '妹夫', FEMALE: '' } },
-  '哥哥': { female: { MALE: '', FEMALE: '嫂子' } },
-  '弟弟': { female: { MALE: '', FEMALE: '弟媳' } },
-  '女儿': { female: { MALE: '女婿', FEMALE: '' } },
-  '儿子': { female: { MALE: '儿媳', FEMALE: '' } },
-  '姑姑': { female: { MALE: '姑父', FEMALE: '' } },
-  '叔叔': { male: { FEMALE: '婶婶', MALE: '' } },
-  '伯父': { male: { FEMALE: '伯母', MALE: '' } }
-});
+async function findSpouse(db, memberId) {
+  const res = await db.collection('relations')
+    .where({ $or: [{ fromId: memberId }, { toId: memberId }], type: 'SPOUSE', status: 'ACTIVE' })
+    .limit(1).get();
+  if (!res || !res.data.length) return null;
+  const rel = res.data[0];
+  const otherId = rel.fromId === memberId ? rel.toId : rel.fromId;
+  return { id: rel._id, type: 'SPOUSE', otherId };
+}
 
 /**
- * 姻亲映射表（规则二：A 的配偶 X 之血亲 B）
- * 基于 A-gender, X-gender, X→B-title, B-gender
- * 注：仅实现第一层级（spouse 的父母/兄弟姐妹）
+ * 规则一：A 的血亲 X 之配偶 B → A calls B as my [X-title]'s spouse (e.g., 姐夫/妹夫/嫂子/弟媳/姑父/伯母/婶婶/儿媳/女婿)
+ * @param {object} a — member doc
+ * @param {object} b — member doc whose title we want (B = spouse of some blood kin X of A)
+ * @returns {Promise<string|null>}
  */
-const BY_SPOUSES_BLOOD_KIN = Object.freeze({
-  // X=A's wife (X=FEMALES, A=MALE)
-  'wife_parent_MALE': { result: '岳父' },      // wife's father
-  'wife_parent_FEMALE': { result: '岳母' },    // wife's mother
-  'wife_sib_MALE_older': { result: '大舅子' }, // wife's older brother (relative to her age)
-  'wife_sib_MALE_younger': { result: '小舅子' },
-  'wife_sib_FEMALE_older': { result: '大姨子' },
-  'wife_sib_FEMALE_younger': { result: '小姨子' },
-  // X=A's husband (X=MALE, A=FEMALE)
-  'husband_parent_MALE': { result: '公公' },
-  'husband_parent_FEMALE': { result: '婆婆' },
-  'husband_sib_MALE_older': { result: '大伯子' },
-  'husband_sib_MALE_younger': { result: '小叔子' },
-  'husband_sib_FEMALE_older': { result: '大姑子' },
-  'husband_sib_FEMALE_younger': { result: '小姑子' }
-});
+async function spouseOfMyKinTitle(db, a, b) {
+  // Find X = spouse of B (i.e., B is spouse of X, who should be blood kin of A)
+  const spouseRel = await findSpouse(db, b._id);
+  if (!spouseRel) return null;
+  const xRes = await db.collection('members').doc(spouseRel.otherId).get().catch(() => null);
+  const x = pickDoc(xRes);
+  if (!x) return null;
+
+  // Compute blood relation A↔X via path prefixes
+  const as = String(a.path).split('/').filter(Boolean);
+  const xs = String(x.path).split('/').filter(Boolean);
+  let commonAX = 0;
+  while (commonAX < as.length && commonAX < xs.length && as[commonAX] === xs[commonAX]) commonAX++;
+
+  if (commonAX === 0) return null; // no blood link between A and X
+  const nAX = as.length - commonAX;     // A→X up steps
+  const mAX = xs.length - commonAX;     // common ancestor↓X down steps
+
+  // Only compute for certain levels (same gen sibling, parent's sibling, child, niece/nephew)
+  if (!((nAX === 1 && mAX === 1) || (nAX === 2 && mAX === 1) || (nAX === 0 && mAX === 1) || (nAX === 1 && mAX === 2))) {
+    return null;
+  }
+
+  const seniorityKey = `${nAX}-${mAX}`;
+  const xGender = x.gender === 'MALE' ? 'male' : 'female';
+  let title = null;
+
+  if (seniorityKey === '1-1') { // X is A's sibling
+    // Same generation sibling: if X elder than A, seniority='elder'; else 'younger'
+    const ka = birthKeyOf(a);
+    const kx = birthKeyOf(x);
+    const sen = (ka !== null && kx !== null) ? (ka < kx ? 'younger' : 'elder') : (ka === null ? 'elder' : 'younger');
+    if (xGender === 'FEMALE') {
+      title = sen === 'elder' ? '姐夫' : '妹夫'; // X 是姐→B=姐夫；X 是妹→B=妹夫
+    } else { // X male
+      title = sen === 'elder' ? '嫂子' : '弟媳'; // X 兄→B=嫂子; X弟→B=弟媳
+    }
+  } else if (seniorityKey === '2-1') { // X is parent's sibling (叔伯/姑)
+    title = xGender === 'FEMALE' ? '姑父' : '伯母/婶婶'; // simplified generic
+  } else if (seniorityKey === '0-1') { // X is A's child
+    title = xGender === 'MALE' ? '儿媳' : '女婿';
+  } else if (seniorityKey === '1-2') { // X is A's nephew/niece (one gen lower)
+    title = xGender === 'MALE' ? '侄媳妇' : '侄女婿';
+  }
+
+  return title || null;
+}
+
+/**
+ * 规则二：B is blood relative of A's spouse X → A calls B as per Chinese in-law conventions
+ * Covers first-order: spouse's parents & siblings
+ * @param {object} a — member doc
+ * @param {object} b — member doc
+ * @returns {Promise<string|null>}
+ */
+async function mySpouseKinTitle(db, a, b) {
+  // Find X = spouse of A
+  const spouseRel = await findSpouse(db, a._id);
+  if (!spouseRel) return null;
+  const xRes = await db.collection('members').doc(spouseRel.otherId).get().catch(() => null);
+  const x = pickDoc(xRes);
+  if (!x) return null;
+
+  // Compute blood relation X↔B via path prefixes
+  const xs = String(x.path).split('/').filter(Boolean);
+  const bs = String(b.path).split('/').filter(Boolean);
+  let commonXB = 0;
+  while (commonXB < xs.length && commonXB < bs.length && xs[commonXB] === bs[commonXB]) commonXB++;
+
+  if (commonXB === 0) return null; // X and B not blood related
+  const nXB = xs.length - commonXB;     // X→B up
+  const mXB = bs.length - commonXB;     // common ancestor↓B down
+
+  // Only cover parents (1-0) & siblings (1-1), skip deeper generations
+  if (!( (nXB===1 && mXB===0) || (nXB===1 && mXB===1) )) {
+    return null;
+  }
+
+  // Seniority: B relative to X (for sibling case). birthKey 小者年长
+  const kb = birthKeyOf(b);
+  const kx = birthKeyOf(x);
+  const bElderThanX = kb !== null && kx !== null && kb < kx;
+
+  const xGender = x.gender === 'MALE' ? 'male' : 'female';
+
+  let title = null;
+  if (nXB === 1 && mXB === 0) {
+    // B is X's parent
+    if (xGender === 'FEMALE') { // X is wife of A (a is MALE)
+      title = b.gender === 'MALE' ? '岳父' : '岳母';
+    } else { // X is husband (a is FEMALE)
+      title = b.gender === 'MALE' ? '公公' : '婆婆';
+    }
+  } else if (nXB === 1 && mXB === 1) {
+    // B is X's sibling
+    if (xGender === 'FEMALE') { // X is wife
+      if (b.gender === 'MALE') title = bElderThanXCorrect ? '大舅子' : '小舅子';
+      else title = bElderThanXCorrect ? '大姨子' : '小姨子';
+    } else { // X is husband
+      if (b.gender === 'MALE') title = bElderThanXCorrect ? '大伯子' : '小叔子';
+      else title = bElderThanXCorrect ? '大姑子' : '小姑子';
+    }
+  }
+
+  return title || null;
+}
 
 async function calcRelation(db, openid, aId, bId) {
   if (!aId || !bId) return BAD_REQUEST('缺少 aId 或 bId');
@@ -123,6 +211,12 @@ async function calcRelation(db, openid, aId, bId) {
   while (common < as.length && common < bs.length && as[common] === bs[common]) common++;
 
   if (common === 0) {
+    // §7.2 姻亲桥：无血亲共同祖先时尝试通过 SPOUSE 边计算姻亲称谓
+    const spouseTitle = await spouseOfMyKinTitle(db, a, b) || await mySpouseKinTitle(db, a, b);
+    if (spouseTitle) {
+      await writeAudit(db, { userId: openid, action: 'relation.calc', target: `${aId}->${bId}`, detail: `姻亲: ${spouseTitle}` }).catch(() => {});
+      return OK({ related: true, formalTitle: spouseTitle, fiveFu: '姻亲', upSteps: 0, downSteps: 0, path: '', through: 'SPOUSE' });
+    }
     return OK({ related: false, formalTitle: '同宗', fiveFu: '同宗', upSteps: null, downSteps: null, path: '' });
   }
 
