@@ -52,6 +52,7 @@
 | **模块二 收藏分组+离线包** | favorite.group.create/list/rename/remove/move + offline.pack/list/remove/cleanup（合规仅快照）+ 10min 定时触发器 | ✅ F4 |
 | **模块三 自动备份队列** | backup 云函数 backupStatus 状态机（PENDING/DONE/FAIL）+ 重试上限 3 + 配额 10GB + export/restore；album.uploadBatch 写 fileSize/attempts | ✅ F3b |
 | **模块三 2GB 分片上传** | upload 云函数 chunk.init/put/progress/complete/status：断点续传会话 + video 转码骨架 + upload_sessions schema | ✅ F3c |
+| **模块二 secscan 生产化** | secscan 原生 API（openSecurity msgSecCheck/imgSecCheck）+ callFunction 降级 + 敏感词库；连续违规人工复核标记结构 | ✅ F4+ |
 | 模块三 家族动态 | plaza 既有；family_moments 迁移脚本既有 | ⏳ |
 | 模块四 合规游戏 | 待 F6-F8 | ⏳ |
 | 模块五 虚拟家园 | 待 F9-F10 | ⏳ |
@@ -59,12 +60,12 @@
 ### 测试覆盖（开发框架二十三 23.5：覆盖率≥90%）
 | 指标 | 数值 | 状态 |
 | --- | --- | --- |
-| 测试总数 | 315（F3b +7 / F3c +5 / P3 +17：family-tree-layout 16 用例 + entry 谱名冲突 1）| ✅ F3c + P3 |
+| 测试总数 | 327（secscan 生产化 +3：fileId 降级/url 检测/人工复核结构）| ✅ F4+ |
 | 失败 | 0 | ✅ |
 | Lint error | 0 | ✅ |
 | 云函数结构校验 | 25/25（新增 backup）| ✅ |
-| **新增测试项** | F3b: uploadBatch PENDING/fileSize、process DONE/FAIL/重试/封存、retry/stats、quota、export、restore；F3c: policy video、chunk.init 校验+会话、put+progress 续传、complete 缺片拒绝/合并/转码、断点续传复用 | ✅ F3b+F3c |
-| 本次修复 | upload_sessions scene enum 补全（T3 schema 门禁）| ✅ F3c |
+| **新增测试项** | secscan：detectImage fileId 降级 pass / url 检测 / detectText 连续违规标记结构；stub 补 getTempFileURL | ✅ F4+ |
+| 本次修复 | stub 补 wx.cloud.getTempFileURL；escalated 显式字段（undefined→false）| ✅ F4+ |
 
 ---
 
@@ -96,14 +97,14 @@
 ### F3 模块一收尾 + 模块二启动
 - [x] search_index 倒排索引接入（save/update/delete 同步 + index.build + search.index）
 - [x] 模块二：news_sources 5 源配置 + news_items 指纹去重入库 + cronPull + 搜索/收藏
-- [ ] 自动备份队列（album_photos backupStatus 复用）
-- [ ] 2GB 视频分片上传（upload 云函数分片策略）
+- [x] 自动备份队列（album_photos backupStatus 复用）→ F3b
+- [x] 2GB 视频分片上传（upload 云函数分片策略）→ F3c
 
 ### F4 模块二（新闻资讯 + secscan 生产化）
-- [ ] 推荐算法（B.3：三路召回 + 打分排序）
-- [ ] 定时触发器每 10 分钟拉取增量
-- [ ] 收藏/离线包（news_favorites）
-- [ ] secscan：接入真实 msgSecCheck SDK（当前为占位+降级）
+- [x] 推荐算法（B.3：三路召回 + 打分排序）→ F4
+- [x] 定时触发器每 10 分钟拉取增量 → F4
+- [x] 收藏/离线包（news_favorites）→ F4
+- [x] secscan：接入真实 msgSecCheck SDK（openSecurity 原生 API + callFunction 降级 + 敏感词库；连续违规人工复核标记结构）→ secscan 生产化 e502bb4
 
 ### F5-F6 模块三（家族动态）
 - [ ] family_moments 发布/时间线/互动（复用既有 plaza 基础设施）

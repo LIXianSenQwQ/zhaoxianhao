@@ -56,6 +56,46 @@ function birthKeyOf(member) {
   return null;
 }
 
+/**
+ * SPOUSE 姻亲称谓映射表（规则一：A 的血亲 X 之配偶 B）
+ * 参数：X-blood-title (A calls X), X-gender, A-gender, seniority (A↔X generation/age context)
+ * 返回值：姻亲标题或 null (未覆盖则回退到原行为)
+ */
+const SPICE_BY_BLOOD_X = Object.freeze({
+  // X = A's sister (female, same gen, elder/younger)
+  '姐': { female: { MALE: '姐夫', FEMALE: '妯娌' }, male: { MALE: '哥', FEMALE: '' } }, // partial
+  '妹妹': { female: { MALE: '妹夫', FEMALE: '' } },
+  '哥哥': { female: { MALE: '', FEMALE: '嫂子' } },
+  '弟弟': { female: { MALE: '', FEMALE: '弟媳' } },
+  '女儿': { female: { MALE: '女婿', FEMALE: '' } },
+  '儿子': { female: { MALE: '儿媳', FEMALE: '' } },
+  '姑姑': { female: { MALE: '姑父', FEMALE: '' } },
+  '叔叔': { male: { FEMALE: '婶婶', MALE: '' } },
+  '伯父': { male: { FEMALE: '伯母', MALE: '' } }
+});
+
+/**
+ * 姻亲映射表（规则二：A 的配偶 X 之血亲 B）
+ * 基于 A-gender, X-gender, X→B-title, B-gender
+ * 注：仅实现第一层级（spouse 的父母/兄弟姐妹）
+ */
+const BY_SPOUSES_BLOOD_KIN = Object.freeze({
+  // X=A's wife (X=FEMALES, A=MALE)
+  'wife_parent_MALE': { result: '岳父' },      // wife's father
+  'wife_parent_FEMALE': { result: '岳母' },    // wife's mother
+  'wife_sib_MALE_older': { result: '大舅子' }, // wife's older brother (relative to her age)
+  'wife_sib_MALE_younger': { result: '小舅子' },
+  'wife_sib_FEMALE_older': { result: '大姨子' },
+  'wife_sib_FEMALE_younger': { result: '小姨子' },
+  // X=A's husband (X=MALE, A=FEMALE)
+  'husband_parent_MALE': { result: '公公' },
+  'husband_parent_FEMALE': { result: '婆婆' },
+  'husband_sib_MALE_older': { result: '大伯子' },
+  'husband_sib_MALE_younger': { result: '小叔子' },
+  'husband_sib_FEMALE_older': { result: '大姑子' },
+  'husband_sib_FEMALE_younger': { result: '小姑子' }
+});
+
 async function calcRelation(db, openid, aId, bId) {
   if (!aId || !bId) return BAD_REQUEST('缺少 aId 或 bId');
 
