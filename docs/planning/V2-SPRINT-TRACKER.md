@@ -150,7 +150,8 @@
 | --- | --- | --- |
 | §7.1 族谱树布局 | `utils/family-tree-layout.js` 纯函数：世代行 Y/兄弟 birthOrder 排序/父节点居中/家庭单元/直系过滤/时间轴/五服色板 → 16 用例 `tests/family-tree-layout.test.js` | ✅ 算法层交付（Canvas 页接入为 P1） |
 | §7.2 称谓长幼 | `relation.calc` 同代称谓 seniority 改按**实际出生信息**解析（birthOrder/birthDate），无数据保持 elder 默认向后兼容（修复兄呼弟恒得「哥哥」缺陷） | ✅ |
-| §7.2 姻亲规则 | `relation.calc` 无共同祖先时经 SPOUSE 边解析姻亲称谓（规则一：A 血亲 X 之配偶 B→姐夫/妹夫/嫂子/弟媳/姑父/伯母婶婶/女婿儿媳；规则二：A 配偶 X 之血亲 B→岳父/岳母/公公/婆婆/大舅子/小舅子/大姨子/小姨子/大伯子/小叔子/大姑子/小姑子）；未命中回退同宗 fail-closed；7 用例 `tests/relation-spouse.test.js` | ✅（git ee7b397；方言 settings 覆盖仍为 P1） |
+| §7.2 姻亲规则 | `relation.calc` 无共同祖先时经 SPOUSE 边双桥解析（规则一：A 血亲 X 之配偶 B→姐夫/妹夫/嫂子/弟媳/姑父/伯母婶婶/女婿儿媳；规则二：A 配偶 X 之血亲 B→岳父/岳母/公公/婆婆/大舅子/小舅子/大姨子/小姨子/大伯子/小叔子/大姑子/小姑子）；未命中回退同宗 fail-closed；7 用例 `tests/relation-spouse.test.js` | ✅（git ee7b397；方言 settings 覆盖已交付为下方条目） |
+| §7.2 方言覆盖 | `kindship.kinshipTitle(n,m,gender,seniority,dialect)` 返回 `{formal, dialect?}`，`relation.calc` 读取 `settings.kindshipDialect` 并附加 `dialectTitle`（additive 字段，backward compatible）+ 8 单测 | ✅（当前提交） |
 | §7.7 谱名冲突检测 | `entry.submit` 与在库 `members.genealogyName` 查重，命中不阻断、随单返回 `conflict/conflictCount/conflictHint`（F5 冒烟用例） | ✅ |
 | §7.9 忌日提醒定时器 | `cloud/functions/ceremony/config.json`：每日 6:00 timer → `remindScan`（原函数已在，R13 补触发器） | ✅ |
 | §7.10 云迁移预案 | `docs/planning/MIGRATION-CLOUD-TO-SELF.md`（触发条件/双写/灰度/回滚/验收）+ `cloud/functions/common/gateway.js` 转发层预留骨架（`npm run sync:common` 同步） | ✅ 预案与骨架交付（实际迁移待量级触发） |
@@ -160,8 +161,7 @@
 | 蓝图条款 | 待办 | 优先级 |
 | --- | --- | --- |
 | §7.1 Canvas 图视图 | TreeGraph.vue 已增强双指缩放/直系过滤/五服着色；tree.vue 集成图谱视图切换（Computed layout + 列表/图谱 Toggle）→ `181fdc0`| ✅ |
-| §7.2 姻亲规则 | `relation.calc` 无共同祖先时经 SPOUSE 边走姻亲称谓表（姐夫/妹夫/嫂子/弟媳/姑父/岳父/大舅子/小姨子等） | ✅ `cloud/functions/relation/index.js` findSpouse + 规则一（A 血亲之配偶）/规则二（A 配偶之血亲）双桥，7 用例 `tests/relation-spouse.test.js` 通过 | 移除（已交付） |
-| §7.2 方言覆盖 | settings.kindshipDialect 称谓覆盖表 | P1 |
+| §7.2 方言覆盖 | settings.kindshipDialect 称谓覆盖表（已交付；方言表 UI 配置管理待后续优化） | 移除（已交付） |
 | §7.6 公示期 | entry APPROVED 前 publicityDeadline 流转 + 通知 | P1 |
 | §7.8 24 节气渐变 | 全量端点色板（含节日 festival 字段） | P1 |
 | §7.9 订阅消息/公众号 | notify 站内外的订阅/IM 通道适配 | P1 |

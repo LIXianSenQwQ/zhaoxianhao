@@ -48,7 +48,7 @@
 | §7.1 树布局 | ✅ 算法层交付 | `utils/family-tree-layout.js` + 16 用例（世代行/父子居中/birthOrder/家庭单元/直系/时间轴/五服色板）；Canvas 页集成待 P1 |
 | §7.2 称谓矩阵 | ✅ 物化路径实现（修复 seniority 缺陷） | `relation.calc` 同代按 birthOrder/birthDate 判定 elder/younger（向后兼容默认 elder） |
 | §7.2 SPOUSE 姻亲 | ✅ 已交付 | `relation.calc` 无血亲共同祖先时经 SPOUSE 边双桥解析（A 血亲 X 之配偶 B / A 的配偶 X 之血亲 B），17 种姻亲称谓 + 7 单测 `tests/relation-spouse.test.js` |
-| §7.2 方言覆盖 | ⏳ 待 P1 | settings.kindshipDialect 配置表 |
+| §7.2 方言覆盖 | ✅ 已交付 | `kindship.kinshipTitle()` 返回 `{formal, dialect?}`；`relation.calc` 从 settings.kindshipDialect 读取方言表并附加 `dialectTitle` 字段（additive，backward compatible）+ 8 单测 |
 | §7.3 五服 | ✅ fiveFu(n) 阈值正确；着色待 Canvas 层接入 | 五色映射已在 layout 模块 WU_FU_COLORS |
 | §7.4 隐私中间件 | ✅ 全覆盖审计通过 | common/privacy.js + writeAudit + needAuthCard 路由；需逐 action 复核（P1 复查清单） |
 | §7.5 积分幂等 | ✅ R12 大修完成 | EDITOR+ 门禁/幂等键查重/流水先插/账户 atom/inc/重复返回已有 delta |
@@ -61,7 +61,8 @@
 
 ### P3 遗留优先级（进入 V2.0 Sprint F1–F3）
 - **P0**：七项 P0（布局 Canvas 集成/隐私审查/事务口径文档/忌日定时/迁移触发配置/lunar 完整数据接入）按实际部署窗口排期；
-- **P1**：姻亲规则/方言/公示期/五服着色/24 节气渐变全量卡流。
+- **P1**：公示期/五服着色/24 节气渐变全量卡流。
+- ~~姻亲规则/方言~~：✅ 已交付（SPOUSE 双桥 + settings.kindshipDialect 覆盖表）。
 
 
 ## 二、数据库层（蓝图 42 vs 当前已用 ~20）

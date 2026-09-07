@@ -193,7 +193,7 @@ async function calcRelation(db, openid, aId, bId) {
   if (!hasRole(role, 'MEMBER')) return FORBIDDEN('认证族人方可使用称谓计算');
 
   if (aId === bId) {
-    return OK({ related: true, formalTitle: '本人', fiveFu: fiveFu(1), upSteps: 0, downSteps: 0, path: '' });
+    return OK({ related: true, formalTitle: '本人', fiveFu: fiveFu(0), upSteps: 0, downSteps: 0, path: '' });
   }
 
   const [aRes, bRes] = await Promise.all([
@@ -222,6 +222,18 @@ async function calcRelation(db, openid, aId, bId) {
 
   const upSteps = as.length - common;    // A 上溯至共同祖先 n
   const downSteps = bs.length - common;  // 共同祖先下溯至 B m
+  
+  // §7.2 方言：从 settings 读取 kindshipDialect 覆盖表（key 约定见蓝图 42 settings {key,value,scope}）
+  let dialectOverride = null;
+  try {
+    const setRes = await db.collection('settings').where({ key: 'kindshipDialect' }).limit(1).get();
+    const sett = pickDoc(setRes);
+    if (sett && sett.value != null) {
+      const raw = typeof sett.value === 'string' ? (() => { try { return JSON.parse(sett.value); } catch (e) { return null; } })() : sett.value;
+      dialectOverride = (raw && raw.overrides) ? raw.overrides : raw; // value 可为 {overrides:{...}} 或直接 {...}
+    }
+  } catch { /* read failure → no override, safe fallback */ }
+
   /** 同代（up===down）且需 seniority：按实际出生信息决定；无数据则保持确定性默认值 elder（向后兼容） */
   let seniority = 'elder'; // deterministic default
   if (upSteps === downSteps && upSteps > 0) {
@@ -231,13 +243,14 @@ async function calcRelation(db, openid, aId, bId) {
       seniority = ka < kb ? 'younger' : 'elder'; // A 年长 → B 为 younger sibling
     }
   }
-  const title = kinshipTitle(upSteps, downSteps, b.gender === 'FEMALE' ? 'FEMALE' : 'MALE', seniority);
+  const result = kinshipTitle(upSteps, downSteps, b.gender === 'FEMALE' ? 'FEMALE' : 'MALE', seniority, dialectOverride);
 
   await writeAudit(db, { userId: openid, action: 'relation.calc', target: `${aId}->${bId}`, detail: `n=${upSteps} m=${downSteps}` }).catch(() => {});
 
   return OK({
     related: true,
-    formalTitle: title,
+    formalTitle: result.formal,
+    dialectTitle: result.dialect || null, // additive field, optional
     fiveFu: fiveFu(upSteps),
     upSteps,
     downSteps,

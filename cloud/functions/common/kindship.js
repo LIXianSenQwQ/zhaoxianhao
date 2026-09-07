@@ -57,25 +57,49 @@ const MATRIX = Object.freeze({
 });
 
 /**
- * kinshipTitle - 查正式称谓
+ * kinshipTitle - 查正式称谓（方言可叠加）
  * @param {number} n  本人→最近共同祖先 上溯步数
  * @param {number} m  共同祖先→对方   下溯步数
  * @param {'MALE'|'FEMALE'} gender 对方性别
  * @param {'elder'|'younger'|null} seniority 长幼（同代二选一槽位用）
- * @returns {string}
+ * @param {object=} dialect - optional 方言覆盖表，键 n-m 映射 {male:{elder/younger?}|female:{elder/younger?}|sameGender:{elder/younger?}}
+ * @returns {{ formal:string, dialect?:string|null }}
  */
-function kinshipTitle(n, m, gender, seniority) {
-  if (n === 0 && m === 0) return '本人';
+function kinshipTitle(n, m, gender, seniority, dialect) {
+  if (n === 0 && m === 0) return { formal: '本人', dialect: null };
+  
   const key = `${n}-${m}`;
   const node = MATRIX[key];
-  if (!node) return '族亲'; // 矩阵外降级，不报错
+  if (!node) return { formal: '族亲', dialect: null };
+
+  // 尝试从方言覆盖表取词（若存在则返回，否则 fallback formal）
+  let dval = null;
+  if (dialect && dialect[key]) {
+    const dk = dialect[key];
+    const g = gender === 'MALE' ? 'male' : 'female';
+    // 优先按 gender+seniority 匹配，若无 seniority 或该组合不存在，退到 gender
+    if (dk[g] && seniority && dk[g][seniority]) {
+      dval = dk[g][seniority];
+    } else if (dk[g]) {
+      dval = dk[g];
+    } else if (dk.sameGender && seniority) {
+      dval = dk.sameGender[seniority];
+    }
+  }
+  const dia = dval || null;
 
   const g = gender === 'MALE' ? 'male' : 'female';
   const val = node[g];
-  if (typeof val === 'string') return val;
-  if (val && seniority) return val[seniority] || '族亲';
-  if (node.sameGender && seniority) return node.sameGender[seniority] || '族亲';
-  return '族亲';
+  let fmt = '族亲';
+  if (typeof val === 'string') {
+    fmt = val;
+  } else if (val && seniority) {
+    fmt = val[seniority] || '族亲';
+  } else if (node.sameGender && seniority) {
+    fmt = node.sameGender[seniority] || '族亲';
+  }
+
+  return { formal: fmt, dialect: dia };
 }
 
 module.exports = { fiveFu, kinshipTitle, MATRIX };

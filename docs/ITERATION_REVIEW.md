@@ -1129,3 +1129,34 @@
 - **谱名冲突不阻断**：命中冲突仅统计返回（conflict/conflictCount/hint），由族史委在双人审核中裁决，避免误伤同名始祖。
 - **网关骨架不写实**：未达迁移触发量级前 common/gateway.js 仅预留位（shouldProxy/proxy 签名），避免引入线上未用路径。
 - **common/roles.js 增 roleOf 助手**：DB 查角色带回退默认（VISITOR），随 §7.10 网关/鉴权公共层落地（仅 master 副本跟踪；各函数本地 common 副本 gitignore，部署前 sync:common）。
+
+## 第 P3-P1 轮（§7.2 称谓体系收口：SPOUSE 姻亲 + 方言覆盖）
+
+> 主题：蓝图 §7.2 称谓计算器 P1 遗留收口——无血亲共同祖先时的姻亲称谓双桥 + settings.kindshipDialect 方言覆盖表。
+
+### 指标回顾
+
+| 维度 | 指标 | P3 后 | 本轮后 | 变化 |
+|---|---|---|---|---|
+| §7.2 姻亲称谓 | 无共同祖先时如何称呼 | 仅「同宗」降级 | **SPOUSE 边双桥解析**：规则一（A 血亲 X 之配偶 B→姐夫/妹夫/嫂子/弟媳/姑父/伯母婶婶/女婿儿媳）、规则二（A 配偶 X 之血亲 B→岳父/岳母/公公/婆婆/大舅子/小舅子/大姨子/小姨子/大伯子/小叔子/大姑子/小姑子），未命中 fail-closed 同宗 | +17 种称谓 |
+| §7.2 方言覆盖 | 正式称谓能否按地方方言替换 | 无 | **kinshipTitle() 返回 `{formal, dialect?}`**；`relation.calc` 从 `settings.kindshipDialect` 读取覆盖表并附加 `dialectTitle` 字段（additive，backward compatible） | 方言表可配 |
+| 质量 | 测试数 | 381 | **391**（+10：SPOUSE 姻亲 7 + 方言单测 8 + 方言集成 5） | ↑ |
+| 门禁 | verify | 绿 | **绿**（391 用例 · lint 0E · 28/28 函数 · check:gateway ✅） | = |
+
+### 方言覆盖实现要点（本轮）
+1. **纯函数签名扩展（向后兼容）**：`kinship.kinshipTitle(n, m, gender, seniority, dialect?)` 新增可选第 5 参；无方言时返回 `{ formal, dialect: null }`，调用方取 `.formal` 语义不变。全库唯一调用方 relation.calc 同步更新；tree.test.js 端到端断言同步 `.formal`。
+2. **settings 存储约定**：沿用 settings 集合 `{key, value, scope}`（蓝图 42）；key=`kindshipDialect`，value 可为对象或 JSON 字符串，支持 `{overrides: {...}}` 或直接矩阵覆盖两种形态；读取失败/坏 JSON 安全降级为无方言（不报错）。
+3. **覆盖表键格式**：与内置 MATRIX 同键 `${n}-${m}` → `{male:{elder/younger?}|female:{elder/younger?}|sameGender:{elder/younger?}}`；族史委可在后台仅增补本地方言槽位，未覆盖槽位自动回落 formal。
+4. **响应 additive**：`relation.calc` 返回新增 `dialectTitle`（无方言时为 null），不改动既有 `formalTitle/fiveFu/upSteps/downSteps/path` 字段契约 → 前端与接口不变性门禁零破坏。
+5. **同步机制说明**：common/kindship.js 为唯一 master 副本（git 跟踪），各函数本地 common/ 副本 gitignore——本轮已运行 `npm run sync:common` 补同步，部署前仍需执行一次。
+
+### 关键取舍
+- **方言不强破 FORMAL**：方言覆盖与正式称谓并存返回（formalTitle + dialectTitle），UI 可两者择一展示/双语对照，避免覆盖后丢失官方称谓。
+- **设置读取置于 calc 调用内**（非启动缓存）：保证族史委增补后即时生效，无部署/缓存刷新窗口；单次 settings 查询成本可忽略。
+- **SPOUSE 双桥顺序固定**：先查「A 血亲 X 之配偶 B」（更常见的姻亲称呼方向），再查「A 配偶 X 之血亲 B」，避免歧义时方向颠倒。
+
+### 门禁回归
+1. `npm test`：**391 tests 全绿**（含新增 SPOUSE 姻亲 7、方言纯函数 8、方言集成 5）
+2. `npm run lint`：0 errors
+3. `npm run check:functions`：28/28 通过
+4. `npm run check:gateway`：27 文件接口不变性通过

@@ -52,27 +52,27 @@ test('relationSteps × kinshipTitle 端到端（树步数 → 称谓连通）', 
   // 兄弟：up=1 down=1（经父）→ (1,1) elder = 哥哥
   const s1 = relationSteps(self, '/001/003/009/');
   assert.deepEqual([s1.up, s1.down], [1, 1]);
-  assert.equal(kinshipTitle(s1.up, s1.down, 'MALE', 'elder'), '哥哥');
+  assert.equal(kinshipTitle(s1.up, s1.down, 'MALE', 'elder').formal, '哥哥');
   // 侄子：up=1 down=2 → (1,2) = 侄子
   const s2 = relationSteps(self, '/001/003/009/011/');
   assert.deepEqual([s2.up, s2.down], [1, 2]);
-  assert.equal(kinshipTitle(s2.up, s2.down, 'MALE', null), '侄子');
+  assert.equal(kinshipTitle(s2.up, s2.down, 'MALE', null).formal, '侄子');
   // 叔父：up=2 down=1 → (2,1) elder = 伯父/叔叔
   const s3 = relationSteps(self, '/001/005/');
   assert.deepEqual([s3.up, s3.down], [2, 1]);
-  assert.equal(kinshipTitle(s3.up, s3.down, 'MALE', 'elder'), '伯父/叔叔');
+  assert.equal(kinshipTitle(s3.up, s3.down, 'MALE', 'elder').formal, '伯父/叔叔');
   // 儿子：up=0 down=1 → (0,1) = 儿子
   const s4 = relationSteps(self, '/001/003/007/011/');
   assert.deepEqual([s4.up, s4.down], [0, 1]);
-  assert.equal(kinshipTitle(s4.up, s4.down, 'MALE', null), '儿子');
+  assert.equal(kinshipTitle(s4.up, s4.down, 'MALE', null).formal, '儿子');
   // 堂兄弟：up=2 down=2 → (2,2) elder = 堂兄
   const s5 = relationSteps(self, '/001/005/021/');
   assert.deepEqual([s5.up, s5.down], [2, 2]);
-  assert.equal(kinshipTitle(s5.up, s5.down, 'MALE', 'elder'), '堂兄');
+  assert.equal(kinshipTitle(s5.up, s5.down, 'MALE', 'elder').formal, '堂兄');
   // 本人：up=0 down=0
   const s6 = relationSteps(self, self);
   assert.deepEqual([s6.up, s6.down], [0, 0]);
-  assert.equal(kinshipTitle(s6.up, s6.down, 'MALE', null), '本人');
+  assert.equal(kinshipTitle(s6.up, s6.down, 'MALE', null).formal, '本人');
 });
 
 test('paginateTree：预算封顶 + 游标续页', () => {
