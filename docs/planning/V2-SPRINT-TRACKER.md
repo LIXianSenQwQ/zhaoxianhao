@@ -55,12 +55,13 @@
 | **模块二 secscan 生产化** | secscan 原生 API（openSecurity msgSecCheck/imgSecCheck）+ callFunction 降级 + 敏感词库；连续违规人工复核标记结构 | ✅ F4+ |
 | **模块三 家族动态** | plaza 云函数升级 V2.0（listMoments/publishMoment/likeMoment/commentMoment + publishAnnounce/stickAnnouncement/recordReadReceipt/getNotices）+ family_moments 迁移脚本 + clan_notices 集合 | ✅ F5-F6 |
 | **模块四 合规游戏** | 象棋规则引擎 `utils/chess-engine.js`（走法合法性/将军/将杀/困毙）+ 牌局记分板 `utils/scoreboard-engine.js`（记分单/排名/合规声明）| ✅ F7-F8 |
+| **模块五 虚拟家园** | 基础框架纯函数引擎 `utils/home-engine.js`（庭院布局校验/建筑目录/经验升级/互访频控）+ schema `home_avatars/schema.json + home_worlds/schema.json`| ✅ F9 |
 | **模块五 虚拟家园** | 待 F9-F10 | ⏳ |
 
 ### 测试覆盖（开发框架二十三 23.5：覆盖率≥90%）
 | 指标 | 数值 | 状态 |
 | --- | --- | --- |
-| **测试总数** | 362（F5-F6 +12; F7 +13; F8 +8）| ✅ |
+| **测试总数** | 372（F5-F6 +12; F7 +13; F8 +8; F9 +10）| ✅ |
 | 失败 | 0 | ✅ |
 | Lint error | 0 | ✅ |
 | 云函数结构校验 | 25/25（新增 backup）| ✅ |
@@ -116,7 +117,8 @@
 ### F7-F10 模块四/五（游戏合规版 + 家园）
 - [x] 棋谱研习室（象棋规则引擎 — 纯函数 TDD：`utils/chess-engine.js` 中国象棋完整规则：车马炮相士帅兵走法合法性 + 蹩腿/塞象眼/隔山打 + 将军/将帅对面 + 合法走法/将杀/困毙判定 → 13 用例 `tests/chess-engine.test.js`）→ `65ecc08`
 - [x] 牌局记分板（合规版纯函数：`utils/scoreboard-engine.js` 记分单/轮次/排名/玩家统计，零发牌零随机性 + 合规声明）→ 8 用例 `tests/scoreboard-engine.test.js` → `3f4dd12`
-- [ ] 灯谜会 / 百业问学 / 梨园小筑
+- [x] 虚拟成长家园基础框架（`utils/home-engine.js` 等距庭院落位校验/建筑目录/经验升级曲线/每日互访频控；10 用例 `tests/home-engine.test.js`）→ `待 commit`
+- [ ] 灯谜会 / 百业问学 / 梨园小筑 / 任务系统 / 好友互访
 - [ ] 虚拟角色 + 成长体系 + 家园 Canvas
 - [ ] 五模块集成/安全/性能/合规测试 + 灰度上线
 
