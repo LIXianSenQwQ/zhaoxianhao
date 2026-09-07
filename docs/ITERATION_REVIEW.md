@@ -1128,3 +1128,4 @@
 - **树布局算法先行、Canvas 渲染后置**：先交付可单测的纯函数布局引擎（P0），tree.vue 图视图集成与双指缩放/视口裁剪列为 P1（不阻塞算法收口）。
 - **谱名冲突不阻断**：命中冲突仅统计返回（conflict/conflictCount/hint），由族史委在双人审核中裁决，避免误伤同名始祖。
 - **网关骨架不写实**：未达迁移触发量级前 common/gateway.js 仅预留位（shouldProxy/proxy 签名），避免引入线上未用路径。
+- **common/roles.js 增 roleOf 助手**：DB 查角色带回退默认（VISITOR），随 §7.10 网关/鉴权公共层落地（仅 master 副本跟踪；各函数本地 common 副本 gitignore，部署前 sync:common）。
