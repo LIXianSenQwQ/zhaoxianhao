@@ -44,3 +44,5 @@ cloud/functions/*/common/
 
 # 本地 npm 缓存
 .npm-cache/
+
+test-result.txt
