@@ -3154,3 +3154,68 @@ test('F10 member.tree.all：缺省 focusId 回退根房支', async () => {
   assert.equal(res.success, true);
   assert.equal(res.data.total, 1);
 });
+
+// ─── Sprint F11: 梨园小筑 opera ───
+
+const O_CTX = { OPENID: 'u-op', openid: 'u-op' };
+
+test('F11 opera.roster.create：创建票友卡返回行当卡', async () => {
+  seedDB({ users: [{ openid: 'u-op', role: 'MEMBER' }] });
+  const res = await FN('opera').main({ action: 'roster.create', name: '梨园小生', role: '生' }, O_CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.ticket.name, '梨园小生');
+  assert.equal(res.data.ticket.skillLevel, 1);
+  assert.equal(res.data.alreadyCreated, false);
+});
+
+test('F11 opera.roster.create：同名幂等返回已有卡片', async () => {
+  seedDB({ users: [{ openid: 'u-op', role: 'MEMBER' }] });
+  await FN('opera').main({ action: 'roster.create', name: '兰花旦', role: '旦' }, O_CTX);
+  const again = await FN('opera').main({ action: 'roster.create', name: '兰花旦', role: '旦' }, O_CTX);
+  assert.equal(again.success, true);
+  assert.equal(again.data.alreadyCreated, true, '同名应幂等');
+});
+
+test('F11 opera.stage.perform：登台演出落库并成长', async () => {
+  seedDB({ users: [{ openid: 'u-op', role: 'MEMBER' }] });
+  const created = await FN('opera').main({ action: 'roster.create', name: '铁嗓花脸', role: '净' }, O_CTX);
+  const rid = created.data.ticket._id;
+  const res = await FN('opera').main({ action: 'stage.perform', rosterId: rid }, O_CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(res.data.performance.score >= 0, '返回评分');
+  assert.ok(res.data.performance.performedAt, '记录含 performedAt');
+  assert.ok(res.data.growth.gainedExp >= 0, '经验成长返回');
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.equal(seed.collections.opera_performances.length, 1, '演出已落库');
+  assert.equal(seed.collections.opera_performances[0].rosterId, rid);
+});
+
+test('F11 opera.daily.checkin：签到积分入账 + 当日幂等', async () => {
+  seedDB({ users: [{ openid: 'u-op', role: 'MEMBER' }] });
+  const first = await FN('opera').main({ action: 'daily.checkin' }, O_CTX);
+  assert.equal(first.success, true);
+  assert.equal(first.data.alreadyDone, false);
+  assert.ok(first.data.points > 0, `签到应积分: ${JSON.stringify(first)}`);
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.equal(seed.collections.points_logs[0].bizType, 'opera.daily');
+  assert.ok(seed.collections.points_accounts[0].normal >= first.data.points, 'normal 池入账');
+  const again = await FN('opera').main({ action: 'daily.checkin' }, O_CTX);
+  assert.equal(again.data.alreadyDone, true, '当日重复签到幂等拒绝');
+});
+
+test('F11 opera.records.list：按用户返回演出记录', async () => {
+  seedDB({ users: [{ openid: 'u-op', role: 'MEMBER' }] });
+  await FN('opera').main({ action: 'roster.create', name: '青衣玉娘', role: '旦' }, O_CTX);
+  const list = await FN('opera').main({ action: 'roster.list' }, O_CTX);
+  const rid = list.data.tickets[0]._id;
+  await FN('opera').main({ action: 'stage.perform', rosterId: rid }, O_CTX);
+  const recs = await FN('opera').main({ action: 'records.list', page: 1 }, O_CTX);
+  assert.equal(recs.success, true);
+  assert.equal(recs.data.records.length, 1);
+  assert.equal(recs.data.records[0].rosterName, '青衣玉娘');
+});
+
+test('F11 opera 未知 action → BAD_REQUEST', async () => {
+  const res = await FN('opera').main({ action: 'nope' }, O_CTX);
+  assert.equal(res.code, 400);
+});

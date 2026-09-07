@@ -120,6 +120,7 @@ async function stagePerform(db, openid, p) {
     expGain: perf.expGain,
     leveledUp: growth.leveledUp,
     playedDate: today,
+    performedAt: new Date().toISOString(),
     status: 'COMPLETED'
   };
   const recAdd = await db.collection('opera_performances').add(record);

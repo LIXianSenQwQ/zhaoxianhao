@@ -205,6 +205,12 @@
 					"style": {
 						"navigationBarTitleText": "百业问学"
 					}
+				},
+				{
+					"path": "pages/game/opera",
+					"style": {
+						"navigationBarTitleText": "梨园小筑"
+					}
 				}
 			]
 		},

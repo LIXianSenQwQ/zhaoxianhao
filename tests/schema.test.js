@@ -83,7 +83,8 @@ test('T3 enum 类型字段必须声明 enum 数组', () => {
       if (def && def.type === 'string' && /type|status|role|level|pool|visibility|scope|scene|gender|era/i.test(field)) {
         // 排除开放的类型字段（mimeType/bizType/typeLabel 等开放字符串；前缀匹配覆盖复合名）
         const openFields = /^(mime|biz|action|label|typeLabel|desc|detail|comment|note|body|targetRoute|ocrText)/i;
-        if (openFields.test(field)) continue;
+        const openExact = ['roleTitle', 'roleDesc'];
+        if (openFields.test(field) || openExact.includes(field)) continue;
         assert.ok(
           Array.isArray(def.enum),
           `${s.file}: 字段 "${field}" 疑似枚举但未声明 enum`
