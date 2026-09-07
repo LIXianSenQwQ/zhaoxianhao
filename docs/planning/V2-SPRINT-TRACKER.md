@@ -164,7 +164,7 @@
 | §7.1 Canvas 图视图 | TreeGraph.vue 已增强双指缩放/直系过滤/五服着色；tree.vue 集成图谱视图切换（Computed layout + 列表/图谱 Toggle）→ `181fdc0`| ✅ |
 | §7.2 方言覆盖 | settings.kindshipDialect 称谓覆盖表（已交付；方言表 UI 配置管理待后续优化） | 移除（已交付） |
 | §7.6 公示期 | entry APPROVED 前 publicityDeadline 流转 + 通知 | P1 |
-| §7.8 24 节气渐变 | 全量端点色板（含节日 festival 字段） | P1 |
+| §7.8 24 节气渐变 | 24 节气全量端点色板 palette + 全量节气笺 + festival 节日字段（族议会年历>内置公历>清明即节日，静默期不下发）→ atmosphere/index.js + 首页/日历页接入 + 4 smoke 用例 → `aeeecbe` | ✅（441 test verify 全绿） |
 | §7.9 订阅消息/公众号 | notify 站内外的订阅/IM 通道适配 | P1 |
 | 隐私全覆盖扫描 | 敏感 action 逐一点检 privacyCheck/visibilityCheck 遗漏（§7.4 复查） | P1 |
 4. 新闻正文只外链不缓存（时政）；游戏无联机/无内购/无虚拟货币；
