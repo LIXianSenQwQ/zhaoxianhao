@@ -6,9 +6,10 @@
 import { ref, onMounted, watch, nextTick } from 'vue';
 
 const props = defineProps<{
-  nodes: Array<{ id: string; name: string; generation: number; isMale: boolean; x: number; y: number }>;
+  nodes: Array<{ id: string; name: string; generation: number; isMale: boolean; x: number; y: number; fiveFabric?: string }>;
   edges: Array<{ from: { x: number; y: number }; to: { x: number; y: number } }>;
   focusId?: string | null;
+  viewMode?: 'ALL' | 'ANCESTORS' | 'DESCENDANTS' | 'LINEAGE'; // 直系过滤模式
 }>();
 
 const emit = defineEmits<{
@@ -23,6 +24,54 @@ const offsetX = ref(0);
 const offsetY = ref(0);
 const lastX = ref(0);
 const lastY = ref(0);
+const pinchStartDist = ref(0);
+const pinchStartScale = ref(1);
+const minScale = 0.5;
+const maxScale = 3;
+
+// Five-fabric colors (五服色板 P1)
+const FIVE_FABRIC_COLORS = {
+  QIN: '#C98A7C',   // 斩衰
+  ZHOU: '#E3C6B5',  // 齐衰
+  DA: '#F5E6DA',    // 大功
+  XIAO: '#D4A5A5',  // 小功
+  MA: '#B8908C'     // 缌麻
+};
+
+// Filter nodes based on viewMode
+const filteredNodes = ref(props.nodes);
+watch(() => [props.nodes, props.focusId, props.viewMode], () => {
+  applyViewFilter();
+}, { deep: true });
+
+function applyViewFilter() {
+  if (!props.focusId || !props.viewMode || props.viewMode === 'ALL') {
+    filteredNodes.value = props.nodes;
+    return;
+  }
+  const focusedNode = props.nodes.find(n => n.id === props.focusId);
+  if (!focusedNode) {
+    filteredNodes.value = props.nodes;
+    return;
+  }
+  
+  const focusGen = focusedNode.generation;
+  
+  switch (props.viewMode) {
+    case 'ANCESTORS':
+      // Show all ancestors (generation < focused)
+      filteredNodes.value = props.nodes.filter(n => n.generation < focusGen);
+      break;
+    case 'DESCENDANTS':
+      // Show all descendants (generation > focused)
+      filteredNodes.value = props.nodes.filter(n => n.generation > focusGen);
+      break;
+    case 'LINEAGE':
+      // Direct line (siblings + ancestors + descendants in same path) - simplified by generation diff
+      filteredNodes.value = props.nodes.filter(n => Math.abs(n.generation - focusGen) <= 5);
+      break;
+  }
+}
 
 // Colors
 const COLORS = {
@@ -70,13 +119,24 @@ function render() {
   });
 
   // Draw nodes
-  props.nodes.forEach(node => {
+  filteredNodes.value.forEach(node => {
     const x = node.x;
     const y = node.y;
     const isFocus = node.id === props.focusId;
     
-    // Node background
-    ctx.value.fillStyle = isFocus ? COLORS.focus : (node.isMale ? COLORS.male : COLORS.female);
+    // Node background (five fabric color if available)
+    let bgColor = COLORS.bg;
+    if (node.fiveFabric && FIVE_FABRIC_COLORS[node.fiveFabric as keyof typeof FIVE_FABRIC_COLORS]) {
+      bgColor = FIVE_FABRIC_COLORS[node.fiveFabric as keyof typeof FIVE_FABRIC_COLORS];
+    } else if (isFocus) {
+      bgColor = COLORS.focus;
+    } else if (node.isMale) {
+      bgColor = COLORS.male;
+    } else {
+      bgColor = COLORS.female;
+    }
+    
+    ctx.value.fillStyle = bgColor;
     ctx.value.shadowColor = isFocus ? 'rgba(176,58,46,0.15)' : 'rgba(0,0,0,0.04)';
     ctx.value.shadowBlur = 8;
     
@@ -121,7 +181,7 @@ function hitTest(tx: number, ty: number): string | null {
   const ix = (tx - offsetX.value) / scale.value;
   const iy = (ty - offsetY.value) / scale.value;
   
-  for (const node of props.nodes) {
+  for (const node of filteredNodes.value) {
     const b = (node as any).bounds;
     if (b && ix >= b.x && ix <= b.x + b.w && iy >= b.y && iy <= b.y + b.h) {
       return node.id;
@@ -135,23 +195,42 @@ function onTouchStart(e: any) {
   lastX.value = touch.clientX;
   lastY.value = touch.clientY;
   
-  // Hit test on touch end
+  // Handle two-finger pinch
+  if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    pinchStartDist.value = Math.sqrt(dx * dx + dy * dy);
+    pinchStartScale.value = scale.value;
+  }
 }
 
 function onTouchMove(e: any) {
   const touch = e.touches[0];
-  const dx = touch.clientX - lastX.value;
-  const dy = touch.clientY - lastY.value;
-  offsetX.value += dx;
-  offsetY.value += dy;
-  lastX.value = touch.clientX;
-  lastY.value = touch.clientY;
-  render();
+  
+  if (e.touches.length === 2) {
+    // Pinch zoom
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const currentDist = Math.sqrt(dx * dx + dy * dy);
+    const newScale = Math.max(minScale, Math.min(maxScale, pinchStartScale.value * (currentDist / pinchStartDist.value)));
+    scale.value = newScale;
+    render();
+  } else if (e.touches.length === 1) {
+    // Pan
+    const dx = touch.clientX - lastX.value;
+    const dy = touch.clientY - lastY.value;
+    offsetX.value += dx;
+    offsetY.value += dy;
+    lastX.value = touch.clientX;
+    lastY.value = touch.clientY;
+    render();
+  }
 }
 
 function onTouchEnd(e: any) {
   const touch = e.changedTouches[0];
-  if (touch && lastX.value === touch.clientX && lastY.value === touch.clientY) {
+  
+  if (!e.touches.length && touch && lastX.value === touch.clientX && lastY.value === touch.clientY) {
     // No drag, it's a click/tap
     const id = hitTest(touch.clientX, touch.clientY);
     if (id) emit('click', id);
@@ -159,7 +238,7 @@ function onTouchEnd(e: any) {
 }
 
 // Watch for data changes
-watch(() => [props.nodes, props.edges, props.focusId], () => {
+watch(() => [props.nodes, props.edges, props.focusId, props.viewMode], () => {
   nextTick(render);
 }, { deep: true });
 
@@ -177,7 +256,10 @@ onMounted(() => {
 });
 
 // Expose for parent zoom control
-defineExpose({ render, scale: () => scale.value, setScale: (s: number) => { scale.value = s; render(); } });
+defineExpose({ render, scale: () => scale.value, setScale: (s: number) => { 
+  scale.value = Math.max(minScale, Math.min(maxScale, s));
+  render(); 
+}});
 </script>
 
 <style scoped>
