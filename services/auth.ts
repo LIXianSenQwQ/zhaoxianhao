@@ -22,9 +22,9 @@ export function login() {
   });
 }
 
-/** 认证三选一（auth.certify） */
-export function certify(method: 'invite' | 'self' | 'inviteCode', payload: Record<string, any>) {
-  return write('auth', { action: 'certify', method, ...payload }, 'auth', `certify_${Date.now()}`);
+/** 认证三选一（auth.certify）：INVITE_CODE 邀请码 / MANUAL_REVIEW 人工审核 / FAMILY_LINK 房支链接 */
+export function certify(method: 'INVITE_CODE' | 'MANUAL_REVIEW' | 'FAMILY_LINK', payload: Record<string, any>) {
+  return write('auth', { action: 'certify', method, ...payload }, 'auth', `certify_${method}_${Date.now()}`);
 }
 
 /** 审核认证（auth.auditCertify） */

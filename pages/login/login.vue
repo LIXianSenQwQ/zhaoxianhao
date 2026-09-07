@@ -108,6 +108,7 @@
 import { ref, computed } from 'vue';
 import { useUserStore } from '@/stores/user';
 import { navTo } from '@/utils/routes';
+import { certify } from '@/services/auth';
 
 const userStore = useUserStore();
 
@@ -154,18 +155,14 @@ async function submitInviteCode() {
   }
   submitting.value = true;
   try {
-    // @ts-ignore —— wx.cloud 为小程序全局 API
-    const res = await wx.cloud.callFunction({
-      name: 'auth',
-      data: { action: 'certify', method: 'INVITE_CODE', code: inviteCode.value }
-    });
-    if (res.result?.success) {
+    const res = await certify('INVITE_CODE', { code: inviteCode.value });
+    if (res && res.data?.success) {
       uni.showToast({ title: '认证成功！' });
-      userStore.userInfo = res.result.userInfo;
+      userStore.userInfo = res.data.userInfo;
       showCodeModal.value = false;
       enterHome();
     } else {
-      uni.showToast({ title: res.result?.error || '邀请码无效', icon: 'none' });
+      uni.showToast({ title: res?.error?.message || '邀请码无效', icon: 'none' });
     }
   } finally {
     submitting.value = false;
@@ -181,12 +178,8 @@ async function submitManualReview() {
   }
   submitting.value = true;
   try {
-    // @ts-ignore —— wx.cloud 为小程序全局 API
-    const res = await wx.cloud.callFunction({
-      name: 'auth',
-      data: { action: 'certify', method: 'MANUAL_REVIEW', fatherName, branchName, contact }
-    });
-    if (res.result?.success) {
+    const res = await certify('MANUAL_REVIEW', { fatherName, branchName, contact });
+    if (res && res.data?.success) {
       uni.showToast({ title: '已提交，等待双人审核', icon: 'none' });
       showFormModal.value = false;
     }

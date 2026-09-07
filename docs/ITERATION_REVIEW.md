@@ -1101,3 +1101,30 @@
 | V1.1 全部 13 项增强 | CI/MPS/Secscan/Album/Weather/Greeting/委托/反向密码/百年/老皇历 + 前端留言板与老皇历 UI（部署密钥/lunar 库为待办） |
 | V2.0 F1 地基 | secscan + compliance 签字 + 本地内容 + plaza 迁移脚本 |
 | 质量基线 | **241 测试全绿**、lint 0E、check-functions 通过；每轮 feat(RN) 提交（R21 56947ea → R25 7f3b734 → R26 收口） |
+
+## 第 P3 轮（第三部分 §7.1–§7.11 蓝图对齐·增强收口）
+
+> 主题：核心算法与关键实现的蓝图对齐增强（族谱树布局/称谓长幼/谱名冲突/忌日提醒/云迁移预案/老皇历依赖）+ §7.10 接口不变性门禁。
+
+### 指标回顾
+
+| 维度 | 指标 | 前基线 | P3 后 | 变化 |
+|---|---|---|---|---|
+| 核心算法 | §7.1 族谱树布局 | DOM 列表无算法 | **family-tree-layout.js 纯函数**（世代行/父子居中/birthOrder/家庭单元/直系/时间轴/五服色板）| +16 用例 |
+| §7.2 称谓长幼 | seniority 恒 elder | **同代按 birthOrder/birthDate 判定**（兄呼弟不再得「哥哥」）| 修复缺陷 |
+| §7.7 谱名冲突 | 无检测 | **entry.submit 在库查重随单返回 conflict/conflictCount/hint** | +1 用例 |
+| §7.9 忌日提醒 | 函数在、触发器缺 | **ceremony config.json 每日 6:00 timer → remindScan** | 触发器补齐 |
+| §7.10 云迁移 | 仅文案 | **MIGRATION 预案 + common/gateway.js 骨架 + 接口不变性门禁** | 自动化门禁 |
+| §7.11 老皇历 | 公式层占位 | **lunar-javascript@^1.6.12 已装**（npm 缓存 EPERM 绕行 .npm-cache-lunar）| 依赖接入 |
+| 质量 | 测试数 | 298 | **317**（+19：layout 16 + conflict 1 + 接口不变性 2）| ↑ |
+| 门禁 | verify | 绿 | **绿**（317 用例 · lint 0E · 25/25 函数 · check:gateway ✅）| = |
+
+### 本轮修复与迁移动作（§7.10 接口不变性）
+1. **发现并整改直接云调用**：stores/user.ts（login/admin.getFeatureFlags）、utils/feature-flags.ts（admin）、pages/login/login.vue（auth.certify ×2）此前直连 `wx.cloud.callFunction`，绕过统一层 —— 迁移至 services 层（新增 services/admin.ts；store.login 走 services/auth.ts；login.vue 走 auth.certify）。
+2. **auth.ts certify 契约修正**：原封装死代码方法名（'invite'/'self'/'inviteCode'）与云函数真实契约（INVITE_CODE/MANUAL_REVIEW/FAMILY_LINK）不一致，按蓝图对齐改为真实方法名。
+3. **自动化门禁常驻**：scripts/check-interface-invariance.js（check:gateway 入 verify 链尾）+ tests/interface-invariance.test.js（客户端无直接 callFunction / 引用的云函数名均有磁盘实现）——保证「迁移时前端零改动」约束不被后续 sprint 破坏。
+
+### 关键取舍
+- **树布局算法先行、Canvas 渲染后置**：先交付可单测的纯函数布局引擎（P0），tree.vue 图视图集成与双指缩放/视口裁剪列为 P1（不阻塞算法收口）。
+- **谱名冲突不阻断**：命中冲突仅统计返回（conflict/conflictCount/hint），由族史委在双人审核中裁决，避免误伤同名始祖。
+- **网关骨架不写实**：未达迁移触发量级前 common/gateway.js 仅预留位（shouldProxy/proxy 签名），避免引入线上未用路径。

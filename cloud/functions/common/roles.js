@@ -36,4 +36,23 @@ function isChief(role) {
   return role === 'CHIEF';
 }
 
-module.exports = { ROLE_LEVEL, hasRole, canAudit, isHistorian, isChief };
+/**
+ * 从 users 集合查询用户角色（带上下文降级）
+ * @param {object} db - wx.getDatabase() 实例
+ * @param {string} openid
+ * @param {string} [defaultRole='VISITOR'] DB 不可用时的回退角色
+ * @returns {Promise<string>}
+ */
+async function roleOf(db, openid, defaultRole = 'VISITOR') {
+  try {
+    const res = await db.collection('users').where({ openid }).limit(1).get();
+    if (res.data && res.data.length > 0) {
+      return res.data[0].role || defaultRole;
+    }
+  } catch (e) {
+    console.warn('[roles.roleOf] DB query failed:', e.message);
+  }
+  return defaultRole;
+}
+
+module.exports = { ROLE_LEVEL, hasRole, canAudit, isHistorian, isChief, roleOf };

@@ -1,7 +1,8 @@
 /**
  * utils/feature-flags.ts
- * V2.0: 功能开关初始化与加载
+ * V2.0: 功能开关初始化与加载（通过 services/admin.ts 统一层，满足§7.10 接口不变性）
  */
+import { getFeatureFlags } from '../services/admin';
 
 // 默认功能开关表（settings 集合）
 export const defaultFeatureFlags = {
@@ -29,20 +30,15 @@ export const defaultFeatureFlags = {
   "treeFanView": { enabled: false, scope: "global" }
 };
 
+/** 加载功能开关（通过 services/admin.ts 统一层，接口不变性） */
 export async function loadFeatureFlags() {
   try {
-    // 从 settings 集合读取
-    const res = await wx.cloud.callFunction({
-      name: 'admin',
-      data: { action: 'getFeatureFlags' }
-    });
-    
-    if (res.result && res.result.flags) {
-      return res.result.flags;
+    const res = await getFeatureFlags();
+    if (res && res.data?.flags) {
+      return res.data.flags;
     }
-    
   } catch (err) {
-    console.warn('Failed to load feature flags, using defaults:', err);
+    console.warn('Failed to load feature flags via admin service, using defaults:', err);
   }
   
   return defaultFeatureFlags;

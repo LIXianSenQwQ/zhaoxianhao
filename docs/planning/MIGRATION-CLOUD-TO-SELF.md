@@ -1,8 +1,8 @@
 # 云开发 → 自建后端迁移预案（蓝图 7.10 · P3 增强收口）
 
 > **蓝图条款**：第三部分 §7.10「云开发 → 自建后端迁移预案（量级触发）」
-> **收口日期**：2026-09-06 · 基线：npm run verify 全绿（test=298、lint error=0、functions=25/25）
-> **性质**：预案文档 + 转发层预留位（本冲刺不下线云开发，仅建立可执行的迁移路径与验收口径）。
+> **收口日期**：2026-09-06 · 基线：npm run verify 全绿（test=317、lint error=0、functions=25/25、check:gateway ✅）
+> **性质**：预案文档 + 转发层预留位 + 接口不变性自动化门禁（本冲刺不下线云开发，仅建立可执行的迁移路径与验收口径）。
 
 ---
 
@@ -104,13 +104,26 @@ module.exports = { shouldProxy, proxy };
 
 ### 3.3 前端零改动证明（现状核查 ✅）
 
-- `services/request.ts`（188 行）是**唯一**的业务请求入口：
+- `services/request.ts` 是**唯一**的业务请求入口：
   - 调用形态固定为 `wx.cloud.callFunction({ name, data })`；
   - 幂等键由 `request.ts` 统一生成并透传（`idemKey`），云函数侧 `common/idempotency.js` 同口径；
   - 缓存/重试/超时全部收敛在 request.ts，迁移后不变。
-- 各 `services/*.ts`（member/relation/content/news/…）只面向 `request.ts` 的 `read/write` 签名，
-  **不直接依赖云开发 API** → 迁移时零改动。
+- 全部客户端业务代码（`services/*.ts`、`stores/*.ts`、`utils/*.ts`、`pages/**/*.vue`）一律经
+  `services/*.ts → request.ts` 调用，**不直接依赖云开发 API** → 迁移时零改动。
+  - 登录/认证入口（store.login、login.vue certify）同样收敛到 `services/auth.ts`；功能开关经 `services/admin.ts`。
 - 结论：迁移只发生在云函数（网关适配层）与数据库两层，客户端打包产物不变，可灰度升级。
+
+### 3.4 接口不变性自动化门禁（本次交付，随 verify 常驻）
+
+| 门禁 | 位置 | 规则 |
+| --- | --- | --- |
+| `check:gateway` | `scripts/check-interface-invariance.js` | 全库扫描客户端代码，**仅 `services/request.ts` 允许 `wx.cloud.callFunction`**，发现绕层调用即 exit 1 |
+| 单测 | `tests/interface-invariance.test.js` | ① 客户端无直接 callFunction；② 客户端引用的每个云函数名在 `cloud/functions/<name>/index.js` 有磁盘实现 |
+
+- 接入：`npm run verify` 链尾执行 `npm run check:gateway`（package.json scripts）；
+  `npm test` 含 `tests/interface-invariance.test.js`（13 个测试文件）。
+- 作用：任何后续 sprint 若在页面/Store 直接 `wx.cloud.callFunction` 绕层，verify 即红 →
+  保证「迁移时前端零改动」这一不可破约束不被悄悄破坏。
 
 ---
 
@@ -134,7 +147,7 @@ module.exports = { shouldProxy, proxy };
 
 ## 五、验收清单（上线前打钩）
 
-- [ ] `services/request.ts` 与全部 `services/*.ts` 未发生任何改动（零改动证明存档）
+- [x] `services/request.ts` 与全部 `services/*.ts` 未发生任何改动（零改动证明存档 + 3.4 门禁常驻）
 - [ ] `common/gateway.js` 预留位骨架已入仓（本次交付）
 - [ ] `SELF_HOSTED_BASE_URL` 环境变量在云开发控制台配置说明已写入 docs/ENVIRONMENT.md
 - [ ] 迁移决策入口（settings + audit_logs）字段说明已写入 db-schema settings 注释

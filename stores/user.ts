@@ -1,9 +1,11 @@
 /**
  * stores/user.ts
- * Pinia 用户状态管理
+ * Pinia 用户状态管理（通过 services 统一层，满足§7.10 接口不变性校验）
  */
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { login as authLogin } from '../services/auth';
+import { getFeatureFlags, updateFeatureFlag } from '../services/admin';
 
 export const useUserStore = defineStore('user', () => {
   // State
@@ -30,27 +32,26 @@ export const useUserStore = defineStore('user', () => {
 
   // Actions
   async function login() {
-    const { code } = await wx.login();
-    const res = await wx.cloud.callFunction({
-      name: 'login',
-      data: { code }
-    });
-
-    if (res.result?.success) {
-      userInfo.value = res.result.userInfo;
-      uni.setStorageSync('token', res.result.token);
+    try {
+      const { token, userInfo: user } = await authLogin();
+      if (token && user) {
+        userInfo.value = { ...user, status: user.status || 'ACTIVE' };
+        uni.setStorageSync('token', token);
+      }
+    } catch (err) {
+      console.warn('store/login failed:', err);
+      throw err;
     }
   }
 
   async function loadFeatureFlags() {
     try {
-      const res = await wx.cloud.callFunction({
-        name: 'admin',
-        data: { action: 'getFeatureFlags' }
-      });
-      featureFlags.value = res.result?.flags || {};
+      const res = await getFeatureFlags();
+      if (res.data?.flags) {
+        featureFlags.value = res.data.flags;
+      }
     } catch (e) {
-      console.warn('loadFeatureFlags failed:', e);
+      console.warn('loadFeatureFlags via admin service failed:', e);
     }
   }
 
@@ -64,6 +65,10 @@ export const useUserStore = defineStore('user', () => {
 
   function isV20Enabled(feature: string): boolean {
     return isFeatureEnabled(`v20${feature}`);
+  }
+
+  async function updateFlag(key: string, enabled: boolean, scope?: string) {
+    return updateFeatureFlag(key, enabled, scope);
   }
 
   function toggleElderMode() {
@@ -90,6 +95,7 @@ export const useUserStore = defineStore('user', () => {
     isFeatureEnabled,
     isV11Enabled,
     isV20Enabled,
+    updateFlag,
     toggleElderMode,
     logout
   };
