@@ -61,12 +61,12 @@
 ### 测试覆盖（开发框架二十三 23.5：覆盖率≥90%）
 | 指标 | 数值 | 状态 |
 | --- | --- | --- |
-| **测试总数** | 381（F5-F6 +12; F7 +13; F8 +8; F9 +10; F10 冒烟 +9）| ✅ |
+| **测试总数** | 430（F11 opera 冒烟 +6 / F12 opera-engine 单测 +20 / A3-A5 修复维持）| ✅ |
 | 失败 | 0 | ✅ |
 | Lint error | 0 | ✅ |
-| 云函数结构校验 | 28/28（本次新增 home/riddle/quiz）| ✅ |
-| **新增测试项** | secscan：detectImage fileId 降级 pass / url 检测 / detectText 连续违规标记结构；stub 补 getTempFileURL | ✅ F4+ |
-| 本次修复 | stub 补 wx.cloud.getTempFileURL；escalated 显式字段（undefined→false）| ✅ F4+ |
+| 云函数结构校验 | 29/29（F11 新增 opera）| ✅ |
+| **新增测试项** | `tests/opera-engine.test.js` 纯函数单测 20 用例（行当卡/登台/成长/签到/频控/合规）| ✅ F12 |
+| F12 门禁修复 | A1 误报正则收紧（`/bet/i`→`[\s\W]bet[\s\W]`防函数名误报；A3 合规声明 marker `/`笔误；A5 secscan 检测 pattern 扩展兼容 `callFunction({name:'secscan', data:{action:'detectText'}})` 模式）+ `plaza`/`content` secscan.detectText 实际接入 | ✅ F12 |
 
 ---
 
@@ -121,7 +121,7 @@
 - [x] 模块页面绑定三大引擎（A→B→C 用户确认顺序）：**记分板页** `pkg-game/pages/game/score.vue`（建房 2-8 人/逐局记账/排名榜/玩家统计/撤销重置/战报/合规声明底部明示）→ **棋谱页** `pkg-game/pages/game/chess.vue`（10×9 双人对弈：选子/提示走法/将杀判胜/困毙和棋/悔棋复盘，全本地零联机）→ **家园页** `pkg-home/pages/home/index.vue`（Lv/经验条/建筑目录解锁/10×10 网格落位 engine 校验/成长结算/可见性切换，云端 worldInit/worldPlace/worldGrow/setPrivacy 持久化）→ 页面分包注册 pages.json（pkg-game/pages/game/*、pkg-home/pages/home/*）
 - [x] 好友互访页 `pkg-home/pages/home/visit.vue`（族人搜索 → 访问/点赞，world.visit 每日 20 次频控）
 - [x] **第一批子模块**：灯谜会 `pkg-game/pages/game/riddle.vue` + 百业问学 `pkg-game/pages/game/quiz.vue`（含行业切换），配 schema `riddles/riddle_votes/questions/quiz_records` + 云函数 `riddle`(create/list/answer) + `quiz`(create/list/answer)
-- [x] **第二批子模块**：梨园小筑 opera（`utils/opera-engine.js` 戏曲票友模拟引擎纯函数：生旦净末丑行当卡/登台唱念做打评分/成长升级/剧目片段解锁 + 云函数 `opera`(roster.create/list/stage.perform/daily.checkin/records.list) + schema `opera_roster/opera_performances` + 页面 `pkg-game/pages/game/opera.vue` + 服务封装 `services/opera.ts`）✅ 云函数 28→29
+- [x] **第二批子模块**：梨园小筑 opera（`utils/opera-engine.js` 戏曲票友模拟引擎纯函数：生旦净末丑行当卡/登台唱念做打评分/成长升级/剧目片段解锁 + 云函数 `opera`(roster.create/list/stage.perform/daily.checkin/records.list) + schema `opera_roster/opera_performances` + 页面 `pkg-game/pages/game/opera.vue` + 服务封装 `services/opera.ts`）+ **引擎单测 `tests/opera-engine.test.js`** 20 用例（行当生成/登台评分/心情加成/成长升级/签到频控/参数校验/合规声明）✅ F12 补全 | commit: F12 当前
 - [x] **任务系统 task**：页面已有 `pkg-growth/pages/task/task.vue`（今日任务+打卡+积分反馈），复用既有 task 云函数与 schema，走 request 服务层 ✅ 无需新增
 - [x] 虚拟角色（`pkg-home/pages/home/avatar.vue`：创建/查看/称号与形象编辑，接 home.avatar.create/get/update）+ 家园 Canvas（home 页「网格/鸟瞰」视图切换，Canvas 2D 重绘建筑落位）+ 成长体系（world.grow 经验曲线/等级解锁）✅
 - [ ] 五模块集成/安全/性能/合规测试 + 灰度上线

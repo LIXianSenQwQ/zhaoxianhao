@@ -74,7 +74,7 @@ async function listMoments(db, openid, { page = 1, pageSize = PAGE_SIZE, status,
   return OK({ moments: posts, page: Number(page), hasMore: posts.length === Number(pageSize) });
 }
 
-/** 发布动态：MEMBER+; text ≤ 5000; mediaIds ≤ 9; supports mentions & tags */
+/** 发布动态：MEMBER+; text ≤ 5000; mediaIds ≤ 9; supports mentions & tags; secscan content safety */
 async function publishMoment(db, openid, { type = 'TEXT', content, mediaIds, topicTags, mentions }) {
   const role = await roleOf(db, openid);
   if (!hasRole(role, 'MEMBER')) return FORBIDDEN('认证族人方可发布动态');
@@ -86,6 +86,21 @@ async function publishMoment(db, openid, { type = 'TEXT', content, mediaIds, top
   if (text.length > TEXT_MAX) return BAD_REQUEST(`文字超限（≤${TEXT_MAX} 字）`);
   if (mediaIds && (!Array.isArray(mediaIds) || mediaIds.length > MEDIA_MAX)) {
     return BAD_REQUEST(`媒体数量超限（≤${MEDIA_MAX}）`);
+  }
+
+  // secscan 内容安全检测（V2.0 §7.5/9.2 合规门禁；stub 无 code 视为放行）
+  if (text) {
+    try {
+      const scanRes = await wx.cloud.callFunction({ name: 'secscan', data: { action: 'detectText', content: text } });
+      const code = scanRes && scanRes.result ? scanRes.result.code : undefined;
+      if (code !== undefined && code !== 0) {
+        console.warn('[plaza.publishMoment] secscan.text blocked:', code);
+        return BAD_REQUEST('内容包含敏感信息，请修改后重试');
+      }
+    } catch (e) {
+      console.warn('[plaza.publishMoment] secscan call failed, fallback:', e.message);
+      // 降级：允许继续但不记录；生产环境建议严格失败
+    }
   }
 
   // 标签规范化

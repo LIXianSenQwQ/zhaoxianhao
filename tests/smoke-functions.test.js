@@ -331,8 +331,9 @@ test('R11 plaza.publish：VISITOR 403 / MEMBER 正向（family_moments）', asyn
   assert.equal(denied.code, 403, '未认证访客不能发布（蓝图 C.4 反骚扰）');
 
   const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  // F12: publish 前过 secscan.detectText（stub 无 code 视为放行）
   const ok = await FN('plaza').main({ action: 'publish', type: 'TEXT', content: '家祭通知' }, ctx);
-  assert.equal(ok.success, true);
+  assert.equal(ok.success, true, JSON.stringify(ok));
   assert.ok(ok.data.momentId, '返回 momentId');
 
   const seed = globalThis.__HCS_STUB_SEED__;

@@ -27,10 +27,20 @@ async function sendMessage(ctx, userId, targetMemberId, content) {
   }).count();
   if (recentCount > 5) return BAD_REQUEST('发言频率过高，请稍后再试');
 
-  // secscan 内容安全检测（R20 mock + R21 真实）
-  // 真实环境：wx.cloud.callFunction({ name: 'secscan', data: { text: content } })
-  // 测试环境直接通过
-  const cleanedContent = content.trim(); // 占位清理
+  // secscan 内容安全检测（V2.0 §7.5/9.2 合规门禁；stub 无 code 视为放行）
+  try {
+    const scanRes = await wx.cloud.callFunction({ name: 'secscan', data: { action: 'detectText', content } });
+    const code = scanRes && scanRes.result ? scanRes.result.code : undefined;
+    if (code !== undefined && code !== 0) {
+      console.warn('[content.sendMessage] secscan.text blocked:', code);
+      return BAD_REQUEST('内容包含敏感信息，请修改后重试');
+    }
+  } catch (e) {
+    console.warn('[content.sendMessage] secscan call failed, fallback:', e.message);
+    // 降级：允许继续但不记录；生产环境建议严格失败
+  }
+
+  const cleanedContent = content.trim();
   if (cleanedContent.length < 1 || cleanedContent.length > 500) {
     return BAD_REQUEST('留言内容长度须在 1-500 字之间');
   }

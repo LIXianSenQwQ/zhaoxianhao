@@ -84,6 +84,11 @@
     <view class="comp-tip">
       <text class="comp-text">梨园小筑为单机娱乐模拟：零内购 · 无联机对战 · 演出结果随机生成，奖励仅家族积分</text>
     </view>
+
+    <!-- 合规声明 ─── V2.0 F11 -->
+    <view class="section comp-tip">
+      <text class="comp-text">梨园小筑为纯娱乐单机戏曲票友模拟：零内购、无联机对战、无虚拟货币；演出结果为随机模拟，仅作休闲娱乐与家族积分互动。</text>
+    </view>
   </view>
 </template>
 
