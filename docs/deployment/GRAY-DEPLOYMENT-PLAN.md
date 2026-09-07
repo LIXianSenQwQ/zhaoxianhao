@@ -1,7 +1,16 @@
 # V2.0 灰度部署计划（好诚事家风家谱系统）
 
-> 版本：v2.0.0 · 日期：2026-09-07 · commit: `4e952e6`  
+> 版本：v2.0.0 · 日期：2026-09-07 · commit: `bfb9feb`  
 > 适用：微信小程序云开发环境 → 灰度放量 → 全量发布
+
+**本批次功能基线（445 tests ✅ verify 全绿）：**
+
+| P1 收口项 | 交付 | 说明 |
+| --- | --- | --- |
+| §7.6 公示期双人审核 | ✅ `fc94b7a`/`ebde6de` | entry SECOND_PASS→PUBLICITY（settings.publicityDays 可配，0=直生效）+ PUBLICITY_PASS + publicityScan timer |
+| §7.8 24 节气色板 | ✅ `aeeecbe` | 逐节气端点色板 + 全量节气笺 + festival 节日字段 + 首页/日历页接入 |
+| §7.4 隐私全覆盖 | ✅ `bfb9feb` | privacy-coverage 阻断式门禁 + auth.grantAuth 加固（MEMBER+/受权人 ACTIVE/scope 必填） |
+| §7.1/7.2/7.5 历史项 | ✅ 见 RELEASE-NOTES | Canvas 图谱 / 方言覆盖 / 积分原子性 |
 
 ---
 
@@ -16,7 +25,7 @@
 | A3 | 腾讯云短信 | 腾讯控制台 → 短信服务 → 签名（“郝氏族务通知”）+ 模板审核通过 | _______ | ☐ |
 | A4 | 内容安全 | 云开发控制台 → 安全中心 → 图文/文字审核已开启 | _______ | ☐ |
 | A5 | 环境变量 | 云函数配置页 → `login/auth/sms` 等函数的环境变量已填入密钥 | _______ | ☐ |
-| A6 | npm verify | 本地运行 `npm run verify` 确认 437 tests / 29 functions / 0 error | ✅ | ✔️ |
+| A6 | npm verify | 本地运行 `npm run verify` 确认 445 tests / 29 functions / 0 error | ✅ | ✔️ |
 
 ---
 
