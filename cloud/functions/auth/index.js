@@ -11,6 +11,7 @@
 const wx = require('wx-server-sdk');
 const crypto = require('crypto');
 const { OK, BAD_REQUEST, FORBIDDEN } = require('./common/response');
+const { hasRole } = require('./common/roles');
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
 
 // R23: 密码哈希占位（真实生产改 pbkdf2+独立盐；此处 sha256(salt:pwd) 保证可测确定性）
@@ -296,11 +297,25 @@ async function auditCertify(params, context) {
   return { success: true, result: 'APPROVED', userInfo: result.userInfo };
 }
 
-/** 隐私授权（authorizations 集合） */
+/** 隐私授权（authorizations 集合）
+ * 语义：本人对自己的数据发起细粒度授权（grantor=openid 固定，仅影响己方隐私边界）
+ * §7.4 复查加固：MEMBER+ 门禁 + 受权人须为 ACTIVE 族人 + scope 必填，杜绝向陌生 openid 任意授权
+ */
 async function grantAuth(params, context) {
   const db = wx.getDatabase();
   const openid = context.OPENID || context.openid;
   const { grantee, scope, expiresAt } = params;
+
+  const meRes = await db.collection('users').where({ openid }).limit(1).get();
+  const me = meRes.data && meRes.data[0];
+  if (!me || !hasRole(me.role, 'MEMBER')) return FORBIDDEN('仅认证族人可发起隐私授权');
+  if (!grantee) return BAD_REQUEST('grantee 必填（受权人 openid）');
+  if (scope === undefined || scope === null || scope === '') return BAD_REQUEST('scope 必填（如 ALBUM:a1 或 *）');
+
+  // 受权人必须为 ACTIVE 认证族人（防止把隐私边界授予未认证账号）
+  const gRes = await db.collection('users').where({ openid: grantee }).limit(1).get();
+  const g = gRes.data && gRes.data[0];
+  if (!g || g.status !== 'ACTIVE') return BAD_REQUEST('受权人须为已认证族人');
 
   await db.collection('authorizations').add({
     data: {

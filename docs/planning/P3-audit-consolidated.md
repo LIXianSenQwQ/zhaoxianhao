@@ -124,6 +124,12 @@
 - **动作**：运行一次 grep search "privacyCheck(" 统计所有调用点，对比 blueprint 要求列表，补齐遗漏；
 - **文档**：在 docs/GAP-V2.0.md 更新"中间件四步全覆盖”打钩项。
 
+### ✅ 全覆盖扫描（P1 收口，2026-09 复查）
+- `tests/privacy-coverage.test.js` 升级为**阻断式门禁**：17 个敏感集合（members/entry_records/albums/avatars/profiles/authorizations/auth_requests/relations/upload_metas/local_contents/content_messages/plaza_posts/family_moments/clan_notices/home_worlds/home_avatars/opera_roster）× 全部写操作（add/update/delete/remove），逐点校验 privacyCheck/visibilityCheck/角色禁入/owner 归属门控；`KNOWN_SAFE_WRITES` 8 条人工审核白名单（自建/双人审核/EDITOR 门禁创建路径，附理由）。
+- 审计底稿：既有 6 处审计发现 + 加宽扫描 2 处，逐点 verdict 全部合规（auth 激活自建 / certify 自建工单 / entry 终审双人审核 / importRows EDITOR+ / relation 修谱工作流 / content·upload 自建 owner 归属）。
+- **修复真实缺口**：`auth.grantAuth` 原无任何门禁 → 加 MEMBER+ 门禁 + 受权人须 ACTIVE 族人 + scope 必填（4 个冒烟用例 F13）。
+- 结论：技术侧无越权/越可见性缺口；verify 445 test 全绿。
+
 ---
 
 ## §7.5 积分原子性（幂等 + 事务）
@@ -164,6 +170,13 @@
 ### 待办（P1）
 - 24 节气全量图（春梨花白/夏青瓷/秋梨金/冬暖金 各阶段渐变）入 P1；
 - 节日 festival 字段目前空（三期对接家族年历）。
+
+### ✅ 收口（2026-09 P1，commit `aeeecbe` + 445 test）
+- 24 节气**逐节气端点色板**（每节气专属 palette {top,mid,bottom}，浅底暖系色阶微移）替代原 4 季色板；
+- **全量 24 节气笺**（TERM_GREETINGS 由 6 条扩展为 24）；
+- **festival 字段落地**：settings.festivalCalendar（族议会年历，覆盖/追加）→ 内置公历节日 → 节气即节日（清明）；白事静默期不下发节日；
+- 首页 `pages/index/index.vue` 改由服务端 moodTheme 主源（原客户端静态 3 主题仅作骨架兜底）+ festival 展示；日历页 `pkg-calendar/pages/calendar/calendar.vue` 节气头部加节日角标；
+- 4 个 F13 smoke 用例 + 445 test verify 全绿。
 
 ---
 

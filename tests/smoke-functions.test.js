@@ -1762,6 +1762,59 @@ test('R23 auth.setDelegates: ≤3 名 ACTIVE 族人 + 验证码', async () => {
   assert.equal(res.data.delegates.length, 2);
 });
 
+// ─── F13 §7.4 隐私全覆盖复查：auth.grantAuth 加固（MEMBER 门禁 + 受权人 ACTIVE 校验） ───
+
+test('F13 grantAuth：VISITOR 调用 → 403（MEMBER 门禁）', async () => {
+  seedDB({
+    users: [
+      { _id: 'u-visitor', openid: 'u-visitor', role: 'VISITOR', status: 'ACTIVE' },
+      { _id: 'u-me', openid: 'u-me', role: 'MEMBER', status: 'ACTIVE' }
+    ]
+  });
+  const res = await FN('auth').main(
+    { action: 'grantAuth', grantee: 'u-me', scope: 'MEMBER:m1' },
+    { OPENID: 'u-visitor', openid: 'u-visitor' }
+  );
+  assert.equal(res.code, 403, 'VISITOR 不得发起隐私授权');
+});
+
+test('F13 grantAuth：受权人未认证 → 400', async () => {
+  seedDB({
+    users: [
+      { _id: 'u-me', openid: 'u-me', role: 'MEMBER', status: 'ACTIVE' },
+      { _id: 'u-pending', openid: 'u-pending', role: 'VISITOR', status: 'PENDING' }
+    ]
+  });
+  const res = await FN('auth').main(
+    { action: 'grantAuth', grantee: 'u-pending', scope: 'MEMBER:m1' },
+    { OPENID: 'u-me', openid: 'u-me' }
+  );
+  assert.equal(res.code, 400, '受权人须为 ACTIVE 族人');
+});
+
+test('F13 grantAuth：缺 grantee/scope → 400', async () => {
+  seedDB({ users: [{ _id: 'u-me', openid: 'u-me', role: 'MEMBER', status: 'ACTIVE' }] });
+  const res = await FN('auth').main({ action: 'grantAuth', grantee: 'u-me' }, { OPENID: 'u-me', openid: 'u-me' });
+  assert.equal(res.code, 400, 'scope 必填');
+});
+
+test('F13 grantAuth：MEMBER 向 ACTIVE 族人授权 → 成功 + 审计落库', async () => {
+  seedDB({
+    users: [
+      { _id: 'u-me', openid: 'u-me', role: 'MEMBER', status: 'ACTIVE' },
+      { _id: 'u-g', openid: 'u-g', role: 'MEMBER', status: 'ACTIVE' }
+    ]
+  });
+  const res = await FN('auth').main(
+    { action: 'grantAuth', grantee: 'u-g', scope: 'MEMBER:m1' },
+    { OPENID: 'u-me', openid: 'u-me' }
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  const authz = globalThis.__HCS_STUB_SEED__.collections.authorizations || [];
+  assert.equal(authz.length, 1, '授权记录落库');
+  assert.equal(authz[0].grantor, 'u-me', 'grantor 固定为本人');
+});
+
 test('R23 auth.setDelegates: 超过 3 名 → 400', async () => {
   const res = await FN('auth').main(
     {
