@@ -11,12 +11,18 @@
  *   - markRead 补属主校验（旧版任何登录者可标记任意通知已读——水平越权）
  *   - broadcast 移除 wx.cloud.generateObjectId()（不存在的 API，stub/真机均必崩；
  *     _id 由 add 自动生成，与 R12 points / R13 ceremony 同口径修复）
+ * Sprint F13 §7.9（蓝图 7.9 通知编排）：站外通道适配——
+ *   - dispatch 通道抽象（type → 站内/订阅/公众号，EDITOR+ 统一入口）
+ *   - subscribeMsg.send 订阅消息通道（settings.subscribeTemplates）
+ *   - officialAccount.send 公众号模板通道（settings.officialAccount.enabled 门）
+ *   - fail-closed：模板未配置/通道未启用 → 降级静默不报错；stub 环境 simulated 可验证
  */
 const wx = require('wx-server-sdk');
 const { OK, BAD_REQUEST, FORBIDDEN, NOT_FOUND } = require('./common/response');
 const { hasRole } = require('./common/roles');
 const { writeAudit } = require('./common/audit');
 const { buildHomeCards } = require('./common/homecards');
+const { resolveSubscribeTemplate, resolveOfficialTemplate, sendSubscribeMessage, sendOfficialMessage } = require('./common/channel');
 
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
 
@@ -38,8 +44,14 @@ async function main(event, context) {
       return await markRead(db, openid, event.notificationId);
     case 'broadcast':
       return await broadcastToAll(db, openid, event);
+    case 'dispatch':
+      return await dispatchNotify(db, openid, event);
+    case 'subscribeMsg.send':
+      return await sendSubscribe(db, openid, event);
+    case 'officialAccount.send':
+      return await sendOfficial(db, openid, event);
     default:
-      return BAD_REQUEST(`unknown action: ${action}`);
+      return BAD_REQUEST('unknown action: ' + action);
   }
 }
 
@@ -135,6 +147,103 @@ async function broadcastToAll(db, openid, { content, level }) {
 
   await writeAudit(db, { userId: openid, action: 'notify.broadcast', target: broadcastId, detail: level });
   return OK({ broadcastId, notifiedCount });
+}
+
+/** 校验订阅消息参数（thing 字段 ≤20 字、data 最多 6 键，防滥用/截断） */
+function sanitizeSubscribeData(data) {
+  const out = {};
+  if (!data || typeof data !== 'object') return out;
+  for (const [k, v] of Object.entries(data)) {
+    if (Object.keys(out).length >= 6) break;
+    const raw = v && typeof v === 'object' ? String(v.value || '') : String(v || '');
+    out[k] = { value: raw.slice(0, 20) };
+  }
+  return out;
+}
+
+/**
+ * §7.9 订阅消息单发（蓝图 7.9 通道二）：EDITOR+ 触发，settings.subscribeTemplates 配模板。
+ * 模板未配置 → 降级静默（OK + sent:false）；wx.openapi 不可用 → simulated 可验证。
+ */
+async function sendSubscribe(db, openid, { toUser, templateKey, data }) {
+  const role = await roleOf(db, openid);
+  if (!hasRole(role, 'EDITOR')) return FORBIDDEN('仅编辑及以上可发送订阅消息');
+  if (!toUser || !templateKey) return BAD_REQUEST('缺 toUser 或 templateKey');
+
+  const tpl = await resolveSubscribeTemplate(db, templateKey);
+  if (!tpl.ok) return OK({ sent: false, reason: tpl.reason, degraded: tpl.silent === true });
+
+  const payload = sanitizeSubscribeData(data);
+  const sent = await sendSubscribeMessage(db, { toUser, templateId: tpl.templateId, data: payload });
+  await writeAudit(db, { userId: openid, action: 'notify.subscribe.send', target: toUser, detail: templateKey });
+  return OK({ sent: sent.ok, ...(sent.ok ? { channel: sent.channel, simulated: !!sent.simulated } : { reason: sent.reason }) });
+}
+
+/**
+ * §7.9 公众号模板消息（蓝图 7.9 IM/公众号兜底，SDK 占位）：settings.officialAccount.enabled=true 才发。
+ * 未启用 → 降级静默。
+ */
+async function sendOfficial(db, openid, { toUser, templateKey, data, page }) {
+  const role = await roleOf(db, openid);
+  if (!hasRole(role, 'EDITOR')) return FORBIDDEN('仅编辑及以上可发送公众号消息');
+  if (!toUser || !templateKey) return BAD_REQUEST('缺 toUser 或 templateKey');
+
+  const tpl = await resolveOfficialTemplate(db, templateKey);
+  if (!tpl.ok) return OK({ sent: false, reason: tpl.reason, degraded: tpl.silent === true });
+
+  const payload = sanitizeSubscribeData(data);
+  const sent = await sendOfficialMessage(db, { toUser, templateId: tpl.templateId, data: payload, page });
+  await writeAudit(db, { userId: openid, action: 'notify.official.send', target: toUser, detail: templateKey });
+  return OK({ sent: sent.ok, ...(sent.ok ? { channel: sent.channel, simulated: !!sent.simulated } : { reason: sent.reason }) });
+}
+
+/**
+ * §7.9 通知统一编排（蓝图 7.9 通道抽象）：EDITOR+ 入口。
+ * type: INAPP 站内 | SUBSCRIBE 订阅消息 | OFFICIAL 公众号 | ALL 全通道。
+ * 站内 → notifications（scope ALL 广播或个人 userId）；站外按配置 fail-closed。
+ */
+async function dispatchNotify(db, openid, { type, title, body, toUser, templateKey, data }) {
+  const role = await roleOf(db, openid);
+  if (!hasRole(role, 'EDITOR')) return FORBIDDEN('仅编辑及以上可编排通知');
+  if (!type || !body || !String(body).trim()) return BAD_REQUEST('缺 type 或 body');
+  const mode = ['INAPP', 'SUBSCRIBE', 'OFFICIAL', 'ALL'].includes(type) ? type : 'INAPP';
+
+  const results = { inapp: false, subscribe: null, official: null };
+
+  // 站内落库（广播 scope ALL / 个人 userId）
+  if (mode === 'INAPP' || mode === 'ALL') {
+    const addRes = await db.collection('notifications').add({
+      data: {
+        type: title ? 'DISPATCH' : 'SYSTEM',
+        title: title || '通知',
+        body: String(body).trim(),
+        scope: toUser ? 'USER' : 'ALL',
+        ...(toUser ? { userId: toUser } : {}),
+        read: false,
+        createdAt: new Date(),
+        createdBy: openid
+      }
+    });
+    results.inapp = true;
+    results.notificationId = addRes._id;
+  }
+
+  // 站外：SUBSCRIBE / OFFICIAL / ALL 时尝试对应通道（模板缺失自动降级静默）
+  if ((mode === 'SUBSCRIBE' || mode === 'ALL') && toUser && templateKey) {
+    const tpl = await resolveSubscribeTemplate(db, templateKey);
+    results.subscribe = tpl.ok
+      ? await sendSubscribeMessage(db, { toUser, templateId: tpl.templateId, data: sanitizeSubscribeData(data) })
+      : { sent: false, degraded: true, reason: tpl.reason };
+  }
+  if ((mode === 'OFFICIAL' || mode === 'ALL') && toUser && templateKey) {
+    const tpl = await resolveOfficialTemplate(db, templateKey);
+    results.official = tpl.ok
+      ? await sendOfficialMessage(db, { toUser, templateId: tpl.templateId, data: sanitizeSubscribeData(data), page: undefined })
+      : { sent: false, degraded: true, reason: tpl.reason };
+  }
+
+  await writeAudit(db, { userId: openid, action: 'notify.dispatch.' + mode.toLowerCase(), target: toUser || 'ALL', detail: String(body).slice(0, 50) });
+  return OK(results);
 }
 
 module.exports = { main };

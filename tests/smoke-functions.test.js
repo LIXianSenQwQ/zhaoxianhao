@@ -1390,6 +1390,118 @@ test('R18 entry.pendingList：MEMBER 403（鉴权先行）', async () => {
 });
 
 
+// ─── Sprint F13 §7.9：通知编排 — 订阅消息/公众号通道适配（SDK 占位 + fail-closed） ───
+
+test('F13 §7.9 subscribeMsg.send: VISITOR 403；缺参 400', async () => {
+  // 先通过登录门：需 EDITOR+ 角色发送订阅消息
+  seedDB({ users: [
+    { openid: 'u-e', role: 'EDITOR' },
+    { openid: 'u-v', role: 'VISITOR' }
+  ]});
+  const r1 = await FN('notify').main(
+    { action: 'subscribeMsg.send', toUser: 'u-e' }, // no templateKey
+    { OPENID: 'u-e', openid: 'u-e' }
+  );
+  assert.equal(r1.code, 400, 'templateKey 必需');
+  const r2 = await FN('notify').main(
+    { action: 'subscribeMsg.send', toUser: 'u-a', templateKey: 'emergency', data: {} },
+    { OPENID: 'u-v', openid: 'u-v' }
+  );
+  assert.equal(r2.code, 403, 'VISITOR 不可发订阅消息');
+});
+
+test('F13 §7.9 subscribeMsg.send: template 未配置 → 降级静默（OK sent:false, degraded:true），不阻塞主流程', async () => {
+  seedDB({ users: [{ openid: 'u-e', role: 'EDITOR' }] });
+  const res = await FN('notify').main({
+    action: 'subscribeMsg.send',
+    toUser: 'u-member',
+    templateKey: 'emergency',
+    data: { thing1: { value: '紧急通知' } }
+  }, { OPENID: 'u-e', openid: 'u-e' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.sent, false);
+  assert.equal(res.data.degraded, true); // stub/no config → 静默降级，不报错（无审计噪音）
+});
+
+test('F13 §7.9 subscribeMsg.send: 模板已配置 + stub → simulated 模拟发送（channel=WX_SUBSCRIBE）+ 审计', async () => {
+  seedDB({
+    users: [{ openid: 'u-e', role: 'EDITOR' }],
+    settings: [{ key: 'subscribeTemplates', value: { emergency: 'tmpl_emergency_001' } }]
+  });
+  const res = await FN('notify').main({
+    action: 'subscribeMsg.send',
+    toUser: 'u-member',
+    templateKey: 'emergency',
+    data: { thing1: { value: '紧急通知' } }
+  }, { OPENID: 'u-e', openid: 'u-e' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.sent, true, '模板就绪 → 发送成功');
+  assert.equal(res.data.channel, 'WX_SUBSCRIBE');
+  assert.equal(res.data.simulated, true, 'stub 无 wx.openapi → simulated 可验证');
+  assert.ok(globalThis.__HCS_STUB_SEED__.collections.audit_logs.some(l => l.action === 'notify.subscribe.send'), '审计留痕');
+});
+
+test('F13 §7.9 officialAccount.send: enabled=false → 静默降级（模拟 SDK 占位）', async () => {
+  seedDB({ users: [{ openid: 'u-e', role: 'EDITOR' }] });
+  const res = await FN('notify').main({
+    action: 'officialAccount.send',
+    toUser: 'u-member',
+    templateKey: 'reminder',
+    data: { thing1: { value: '生日提醒' } },
+    page: '/'
+  }, { OPENID: 'u-e', openid: 'u-e' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.sent, false);
+  assert.equal(res.data.degraded, true);
+});
+
+test('F13 §7.9 dispatch INAPP-only: 站内广播落库 scope=ALL，不触发站外', async () => {
+  seedDB({ users: [{ openid: 'u-e', role: 'EDITOR' }] });
+  const res = await FN('notify').main({
+    action: 'dispatch',
+    type: 'INAPP',
+    title: '紧急通知',
+    body: '系统维护公告（预留通道测试）',
+    data: { thing1: { value: '维护公告' } }
+  }, { OPENID: 'u-e', openid: 'u-e' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.inapp, true, '站内入谱通知落库');
+  const notes = globalThis.__HCS_STUB_SEED__.collections.notifications;
+  assert.ok(notes.find(n => n.body.includes('维护公告')), '站内记录存在');
+});
+
+test('F13 §7.9 dispatch ALL: 配置齐全 → 站内落库 + 订阅/公众号 simulated 全通道路由 + 审计', async () => {
+  seedDB({
+    users: [
+      { openid: 'u-e', role: 'EDITOR' },
+      { openid: 'u-m', role: 'MEMBER' }
+    ],
+    settings: [
+      { key: 'subscribeTemplates', value: { publicity_start: 'tmpl_pub_001' } },
+      { key: 'officialAccount', value: { enabled: true, appId: 'wx_oa_test', templateMap: { publicity_start: 'oa_tmpl_pub' } } }
+    ]
+  });
+  const res = await FN('notify').main({
+    action: 'dispatch',
+    type: 'ALL',
+    title: '公示期通知',
+    body: '新成员公示开始',
+    toUser: 'u-m',
+    templateKey: 'publicity_start',
+    data: { thing1: { value: '公示开始' } }
+  }, { OPENID: 'u-e', openid: 'u-e' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.inapp, true);
+  assert.equal(res.data.subscribe?.channel, 'WX_SUBSCRIBE', '订阅通道 simulated');
+  assert.equal(res.data.subscribe?.simulated, true);
+  assert.equal(res.data.official?.channel, 'OFFICIAL_ACCOUNT', '公众号通道 simulated');
+  assert.equal(res.data.official?.simulated, true);
+  // 站内记录 scope=USER
+  const note = globalThis.__HCS_STUB_SEED__.collections.notifications.find(n => n.userId === 'u-m');
+  assert.ok(note && note.scope === 'USER', '个人通知 scope USER');
+  assert.ok(globalThis.__HCS_STUB_SEED__.collections.audit_logs.some(l => l.action === 'notify.dispatch.all'), '编排审计留痕');
+});
+
 // ─── Sprint R19：admin.featureFlag 集成 + hero 贯通纯函数 ───
 
 test('R19 featureFlag：CHIEF 设置开关（settings key=featureFlag，含审计）', async () => {
