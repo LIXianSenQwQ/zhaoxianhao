@@ -14,7 +14,7 @@
 | A3 | 腾讯云短信 | 签名+模板审核通过，测试验证码可达 | _______ | ☐ |
 | A4 | 内容安全 msgSecCheck | 云开发控制台安全页面开启 | _______ | ☐ |
 | A5 | 云函数环境变量 | `login` / `auth` / `sms` 等环境变量配置完整 | _______ | ☐ |
-| A6 | npm run verify | **全部通过**（241 tests / lint / 23 云函数） | _______ | ☐ |
+| A6 | npm run verify | **全部通过**（433 tests / lint 0 error / 29 云函数 / §7.10 28 文件，commit 181a60e） | _______ | ☐ |
 
 ## □ B. 合规与法务
 
@@ -78,6 +78,21 @@
 | G3 | 云函数部署 | `npm run build:xxx` 构建后 `tcb deploy` 推送最新云函数 | ☐ |
 | G4 | 小程序审核提交 | 微信公众平台 → 提交审核 → 审核通过 | ☐ |
 | G5 | 回滚预案 | 上次可用版本下相应的 database snapshot 与云函数记录就绪 | ☐ |
+
+## □ V. V2.0 五模块灰度上线增补（F7–F11 游戏/家园/内容安全）
+
+| # | 项 | 通过条件 | 签核 |
+|---|---|---|------|
+| V1 | 记分板合规版 | score.vue 零发牌零随机、合规声明底部明示；scoreboard-engine.test.js ✅ | ☐ |
+| V2 | 棋谱研习室零联机 | chess.vue 全本地双人对弈，无 wss/websocket/matchmaking/queue 代码（A1 扫描）✅ | ☐ |
+| V3 | 灯谜会/百业问学 | riddle/quiz action 校验 + MEMBER 准入 + services/* 封装（§7.10）✅ | ☐ |
+| V4 | 梨园小筑 opera | roster/perform/checkin 权限门禁（匿名/VISITOR→403），opera-engine.test.js 20 用例 ✅ | ☐ |
+| V5 | 家园+虚拟角色 | home 写操作角色门禁（world/avatar 全量 403 for 非 MEMBER），模块集成 IJ3 用户隔离 ✅ | ☐ |
+| V6 | 任务系统复用 | pkg-growth/task 经 services/* 通路、task 云函数 29/29 结构校验 ✅ | ☐ |
+| V7 | 内容安全接入 | plaza/content/news 发布前过 secscan 云函数（A5 审计），msgSecCheck 控制台已开 | ☐ |
+| V8 | 五模块集成测试 | module-integration.test.js IJ1 四角完整性 / IJ2 跨模块旅程 / IJ3 隔离 ✅ 433 tests 全绿 | ☐ |
+| V9 | 性能预算 | 读≤200ms / 写≤500ms / 首屏≤1.5s（灰度压测复核一次） | ☐ |
+| V10 | 灰度放量 | 5 人内测 48h → 10% → 50% → 100%；feature flag 五开关默认开启可随时熔断 | ☐ |
 
 ---
 
