@@ -19,12 +19,30 @@
 
       <!-- 图谱模式（Canvas） -->
       <template v-if="isGraphView">
+        <!-- 图谱二级切换：树形 / 扇形 -->
+        <View class="graph-subbar">
+          <button
+            class="sub-btn"
+            :class="{ active: graphLayout === 'tree' }"
+            @tap="graphLayout = 'tree'"
+          >树形</button>
+          <button
+            class="sub-btn"
+            :class="{ active: graphLayout === 'fan' }"
+            @tap="graphLayout = 'fan'"
+          >扇形</button>
+          <text v-if="graphLayout === 'fan'" class="sub-hint">单指旋转 · 双指缩放 · 点人改圆心</text>
+        </View>
+
         <TreeGraph
-          :nodes="layoutNodes"
-          :edges="layoutEdges"
-          :focusId="null"
+          :nodes="graphLayout === 'fan' ? fanData.nodes : layoutNodes"
+          :edges="graphLayout === 'fan' ? fanData.edges : layoutEdges"
+          :focusId="graphLayout === 'fan' ? fanFocusId : null"
           :viewMode="'ALL'"
+          :layout="graphLayout"
+          :rings="graphLayout === 'fan' ? fanData.rings : []"
           ref="graphRef"
+          @click="onGraphClick"
         />
       </template>
 
@@ -102,6 +120,7 @@ import ErrorPage from '@/components/common/ErrorPage.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import TreeGraph from '@/components/common/TreeGraph.vue';
 import { computeLayout } from '@/utils/family-tree-layout.js';
+import { fanLayout, toGraphData } from '@/utils/fan-tree-layout.js';
 
 const store = useTreeStore();
 const user = useUserStore();
@@ -113,6 +132,10 @@ const loadingNext = ref(false);
 
 // View mode: list (DOM) vs graph (Canvas)
 const isGraphView = ref(false);
+// Graph sub-mode: tree（树形/直系）| fan（扇形 P1 二期）
+const graphLayout = ref<'tree' | 'fan'>('tree');
+// 扇形圆心焦点 path（null → 自动选根/始祖）
+const fanFocusPath = ref<string | null>(null);
 
 // 当前根节点路径（始祖）
 const ROOT = '/001/'; // 待 API 返回实际根
@@ -131,7 +154,10 @@ const flatNodes = computed(() => {
           genealogyName: n.genealogyName,
           generation: Number(n.generation) || 1,
           isMale: n.gender === 'MALE',
+          gender: n.gender,
           path: n.path,
+          spouseId: (n as any).spouseId,
+          birthOrder: (n as any).birthOrder,
           fiveFu: (n as any).fiveFu
         });
       }
@@ -151,6 +177,41 @@ const layoutNodes = computed(() => layoutResult.value.nodes.map((n: any) => ({
   fiveFabric: n.fiveFu
 })));
 const layoutEdges = computed(() => layoutResult.value.edges);
+
+// ─── 扇形（P1 二期）：以焦点为圆心的同心环布局 ───
+const fanData = computed(() => {
+  const ns = flatNodes.value;
+  if (!ns.length) return { focusPath: null, nodes: [], edges: [], rings: [] };
+  // 圆心人选：用户点击指定 > 已加载的根 > 世代最浅的节点
+  let focusPath = fanFocusPath.value;
+  const inSet = (p: string | null) => !!p && ns.some(n => n.path === p);
+  if (!inSet(focusPath)) {
+    if (ns.some(n => n.path === ROOT)) focusPath = ROOT;
+    else focusPath = ns.reduce((a, b) =>
+      (Number(a.generation) || 99) <= (Number(b.generation) || 99) ? a : b).path || null;
+  }
+  if (!focusPath) return { focusPath: null, nodes: [], edges: [], rings: [] };
+  return toGraphData(fanLayout(ns, focusPath));
+});
+const fanFocusId = computed(() => {
+  const p = fanData.value.focusPath;
+  const hit = fanData.value.nodes.find(n => n.path === p);
+  return hit ? hit.id : null;
+});
+
+/** 图谱点击：扇形 = 改圆心重排；树形 = 跳详情 */
+function onGraphClick(id: string) {
+  const hit = flatNodes.value.find(n => n.id === id);
+  if (!hit) return;
+  if (graphLayout.value === 'fan') {
+    if (hit.path) {
+      fanFocusPath.value = hit.path;
+      graphRef.value?.fit();
+    }
+    return;
+  }
+  if (hit.id && hit.id !== ROOT && hit.id !== hit.path) goDetail(hit.id);
+}
 
 async function loadRoot() {
   loadError.value = '';
@@ -266,8 +327,38 @@ onMounted(loadRoot);
 /* Canvas 容器 */
 canvas.tree-graph, canvas#treeCanvas {
   width: 100%;
-  height: calc(100vh - 180px); /* 减去上下工具栏高度 */
+  height: calc(100vh - 226px); /* 减去上下工具栏 + 二级切换高度 */
   display: block;
+}
+
+/* 图谱二级切换（树形 / 扇形） */
+.graph-subbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #FAF8F2;
+  border-bottom: 1px solid #F0EDE4;
+}
+.graph-subbar .sub-btn {
+  min-width: 64px;
+  padding: 4px 0;
+  font-size: 13px;
+  background: #FFF;
+  color: #6E6659;
+  border: 1px solid #E5DFD2;
+  border-radius: 14px;
+  line-height: 1.6;
+}
+.graph-subbar .sub-btn.active {
+  background: #B03A2E;
+  color: #FFF;
+  border-color: #B03A2E;
+}
+.graph-subbar .sub-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: #A89F8F;
 }
 
 /* DOM 列表模式（保持原有） */

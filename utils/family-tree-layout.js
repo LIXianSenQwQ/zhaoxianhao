@@ -247,7 +247,7 @@ function wufuColor(fiveFuLabel) {
   return WU_FU_COLORS[fiveFuLabel] || WU_FU_COLORS['同宗'];
 }
 
-module.exports = {
+export {
   NODE_W, NODE_H, H_GAP, V_GAP,
   parsePath, parentPathOf, generationOf,
   computeLayout, filterDirectLine, timelineFilter,
