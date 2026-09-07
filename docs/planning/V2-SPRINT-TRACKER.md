@@ -131,6 +131,11 @@
 - [x] **member 全树接口 `member.tree.all`**（新增 action）：`buildTreeAll` 按 focusId 房支前缀 + ACTIVE 一次拉取 ≤2000 条（供全树 Canvas），generation/path 排序返回 `{nodes,total,hasMore}` → `services/member.ts treeAll()` 封装
 - [x] riddle/quiz 服务封装 `services/riddle.ts` + `services/quiz.ts`（§7.10 服务层通路：全部页面经 services/* 调用，无直连 wx.cloud.callFunction）
 
+### F1 合规收口补强（少年模式整改 + 引擎回归修复）
+- [x] **三引擎 ESM 双导出回归修复**：chess/home/scoreboard-engine 删除 module.exports 保留 export（Node24 require(esm) 与前端 import 双通）；chess 13 + home 10 + scoreboard 8 = 31/31 → `6f696ff`（全量 473 test）
+- [x] **少年模式合规整改闭环**：`utils/minor-mode.js` 纯函数守卫（normalizeUsage 跨日重置/remainingMs/canPlay/consume 封顶/isExhausted/filterCategories 剔除娱乐体育/dailyLimitFromFlags 族议会可调）+ 20 单测 + `stores/user.ts` childMode 持久化与 toggleChildMode（与 elderMode 互斥）+ mine.vue「少年模式」开关 + 游戏中心接入（预扣 1 分钟/倒计时锁定/watch 实时启停/修复子页 URL）+ pkg-news 分类 chips 过滤 → `a0e2f66`（全量 493 test；v20-compliance-checklist 未成年人 1/3→3/3，总计 20/20 待加强清零）
+- [x] **lint 遗留清理**：`utils/tree-perf.js` truncateName `==` → `??`（eqeqeq 归零）
+
 ---
 
 ## 三、执行纪律（延续开发框架 16/17/26）
