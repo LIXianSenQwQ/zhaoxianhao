@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "openapi": []
+  },
+  "triggers": [
+    {
+      "name": "publicityScanTimer",
+      "type": "timer",
+      "config": "0 0 7 * * * *",
+      "description": "V2.0 F13 §7.6: 每日 7:00 扫描 entry_records 公示期届满工单（status=PUBLICITY 且 publicityDeadline<=now）→ 自动 APPROVED 生效，复用 finalizeApproved"
+    }
+  ],
+  "envVariables": {}
+}
