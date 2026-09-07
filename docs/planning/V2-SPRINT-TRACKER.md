@@ -56,15 +56,15 @@
 | **模块三 家族动态** | plaza 云函数升级 V2.0（listMoments/publishMoment/likeMoment/commentMoment + publishAnnounce/stickAnnouncement/recordReadReceipt/getNotices）+ family_moments 迁移脚本 + clan_notices 集合 | ✅ F5-F6 |
 | **模块四 合规游戏** | 象棋规则引擎 `utils/chess-engine.js`（走法合法性/将军/将杀/困毙）+ 牌局记分板 `utils/scoreboard-engine.js`（记分单/排名/合规声明）| ✅ F7-F8 |
 | **模块五 虚拟家园** | 基础框架纯函数引擎 `utils/home-engine.js`（庭院布局校验/建筑目录/经验升级/互访频控）+ schema `home_avatars/schema.json + home_worlds/schema.json`| ✅ F9 |
-| **模块五 虚拟家园** | 待 F9-F10 | ⏳ |
+| **模块五 虚拟家园** | 家园布局页 + 好友互访页 + home 云函数接口层（world init/place/grow/visit/like/setPrivacy + avatar）+ 服务封装 services/home.ts | ✅ F10 |
 
 ### 测试覆盖（开发框架二十三 23.5：覆盖率≥90%）
 | 指标 | 数值 | 状态 |
 | --- | --- | --- |
-| **测试总数** | 372（F5-F6 +12; F7 +13; F8 +8; F9 +10）| ✅ |
+| **测试总数** | 381（F5-F6 +12; F7 +13; F8 +8; F9 +10; F10 冒烟 +9）| ✅ |
 | 失败 | 0 | ✅ |
 | Lint error | 0 | ✅ |
-| 云函数结构校验 | 25/25（新增 backup）| ✅ |
+| 云函数结构校验 | 28/28（本次新增 home/riddle/quiz）| ✅ |
 | **新增测试项** | secscan：detectImage fileId 降级 pass / url 检测 / detectText 连续违规标记结构；stub 补 getTempFileURL | ✅ F4+ |
 | 本次修复 | stub 补 wx.cloud.getTempFileURL；escalated 显式字段（undefined→false）| ✅ F4+ |
 
@@ -117,10 +117,18 @@
 ### F7-F10 模块四/五（游戏合规版 + 家园）
 - [x] 棋谱研习室（象棋规则引擎 — 纯函数 TDD：`utils/chess-engine.js` 中国象棋完整规则：车马炮相士帅兵走法合法性 + 蹩腿/塞象眼/隔山打 + 将军/将帅对面 + 合法走法/将杀/困毙判定 → 13 用例 `tests/chess-engine.test.js`）→ `65ecc08`
 - [x] 牌局记分板（合规版纯函数：`utils/scoreboard-engine.js` 记分单/轮次/排名/玩家统计，零发牌零随机性 + 合规声明）→ 8 用例 `tests/scoreboard-engine.test.js` → `3f4dd12`
-- [x] 虚拟成长家园基础框架（`utils/home-engine.js` 等距庭院落位校验/建筑目录/经验升级曲线/每日互访频控；10 用例 `tests/home-engine.test.js`）→ `待 commit`
-- [ ] 灯谜会 / 百业问学 / 梨园小筑 / 任务系统 / 好友互访
+- [x] 虚拟成长家园基础框架（`utils/home-engine.js` 等距庭院落位校验/建筑目录/经验升级曲线/每日互访频控；10 用例 `tests/home-engine.test.js`）→ `d06cfd8`
+- [x] 模块页面绑定三大引擎（A→B→C 用户确认顺序）：**记分板页** `pkg-game/pages/game/score.vue`（建房 2-8 人/逐局记账/排名榜/玩家统计/撤销重置/战报/合规声明底部明示）→ **棋谱页** `pkg-game/pages/game/chess.vue`（10×9 双人对弈：选子/提示走法/将杀判胜/困毙和棋/悔棋复盘，全本地零联机）→ **家园页** `pkg-home/pages/home/index.vue`（Lv/经验条/建筑目录解锁/10×10 网格落位 engine 校验/成长结算/可见性切换，云端 worldInit/worldPlace/worldGrow/setPrivacy 持久化）→ 页面分包注册 pages.json（pkg-game/pages/game/*、pkg-home/pages/home/*）
+- [x] 好友互访页 `pkg-home/pages/home/visit.vue`（族人搜索 → 访问/点赞，world.visit 每日 20 次频控）
+- [x] **第一批子模块**：灯谜会 `pkg-game/pages/game/riddle.vue` + 百业问学 `pkg-game/pages/game/quiz.vue`（含行业切换），配 schema `riddles/riddle_votes/questions/quiz_records` + 云函数 `riddle`(create/list/answer) + `quiz`(create/list/answer)
+- [ ] **第二批子模块**：梨园小筑 simulate / 任务系统 task（复用既有 task 函数）
 - [ ] 虚拟角色 + 成长体系 + 家园 Canvas
 - [ ] 五模块集成/安全/性能/合规测试 + 灰度上线
+
+### F10 家园云接口层 + member 全树接口
+- [x] **家园云函数 `cloud/functions/home/index.js`**（新增，云函数 25→28）：world.init/get/place/grow/visit/like/setPrivacy + avatar.create/get/update（place 走引擎落位校验 + 建筑解锁，visit 每日 20 次频控，grow 经验曲线自动升级，含 DB schema home_worlds/home_avatars 已有对接）→ 服务封装 `services/home.ts`
+- [x] **member 全树接口 `member.tree.all`**（新增 action）：`buildTreeAll` 按 focusId 房支前缀 + ACTIVE 一次拉取 ≤2000 条（供全树 Canvas），generation/path 排序返回 `{nodes,total,hasMore}` → `services/member.ts treeAll()` 封装
+- [x] riddle/quiz 服务封装 `services/riddle.ts` + `services/quiz.ts`（§7.10 服务层通路：全部页面经 services/* 调用，无直连 wx.cloud.callFunction）
 
 ---
 

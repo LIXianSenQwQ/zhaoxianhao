@@ -76,6 +76,10 @@ module.exports = {
         }
         const leaf = parts[parts.length - 1];
         if (v && typeof v === 'object' && '__inc' in v) cur[leaf] = (cur[leaf] || 0) + v.__inc;
+        else if (v && typeof v === 'object' && '__push' in v) {
+          if (!Array.isArray(cur[leaf])) cur[leaf] = [];
+          cur[leaf].push(v.__push);
+        }
         else cur[leaf] = v;
       }
     };
@@ -156,7 +160,7 @@ module.exports = {
       collection: chain,
       RegExp: (opts) => new RegExp(opts.regexp, opts.options),
       command: {
-        eq: (v) => v, in: (arr) => ({ __in: arr }), inc: (n) => ({ __inc: n }), neq: (v) => ({ __neq: v }),
+        eq: (v) => v, in: (arr) => ({ __in: arr }), inc: (n) => ({ __inc: n }), neq: (v) => ({ __neq: v }), push: (v) => ({ __push: v }),
         gte: (v) => ({ __op: 'gte', v }), lte: (v) => ({ __op: 'lte', v }),
         and: (other) => ({ __and: [other] })
       }

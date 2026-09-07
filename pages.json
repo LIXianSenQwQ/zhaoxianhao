@@ -176,6 +176,56 @@
 					}
 				}
 			]
+		},
+		{
+			"root": "pkg-game",
+			"name": "game",
+			"pages": [
+				{
+					"path": "pages/game/score",
+					"style": {
+						"navigationBarTitleText": "牌局记分板",
+						"navigationStyle": "custom"
+					}
+				},
+				{
+					"path": "pages/game/chess",
+					"style": {
+						"navigationBarTitleText": "棋谱研习室"
+					}
+				},
+				{
+					"path": "pages/game/riddle",
+					"style": {
+						"navigationBarTitleText": "灯谜会"
+					}
+				},
+				{
+					"path": "pages/game/quiz",
+					"style": {
+						"navigationBarTitleText": "百业问学"
+					}
+				}
+			]
+		},
+		{
+			"root": "pkg-home",
+			"name": "home",
+			"pages": [
+				{
+					"path": "pages/home/index",
+					"style": {
+						"navigationBarTitleText": "我的家园",
+						"navigationStyle": "custom"
+					}
+				},
+				{
+					"path": "pages/home/visit",
+					"style": {
+						"navigationBarTitleText": "好友家园"
+					}
+				}
+			]
 		}
 	],
 	"preloadRule": {

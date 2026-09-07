@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "quiz_records",
+  "description": "V2.0 百业问学 — 用户答题记录",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "openid": { "type": "string" },
+    "questionId": { "type": "string" },
+    "selectedIndex": { "type": "integer" },
+    "correct": { "type": "boolean" },
+    "score": { "type": "integer" },
+    "industry": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["openid", "questionId", "createdAt"],
+  "indexes": [
+    { "keys": { "openid": 1, "industry": 1 }, "name": "user_quiz_idx" },
+    { "keys": { "questionId": 1 }, "name": "question_stat_idx" }
+  ]
+}

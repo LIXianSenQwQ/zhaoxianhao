@@ -33,3 +33,8 @@ export function heroList() {
 export function applyAuth(targetMemberId: string, reason: string) {
   return write('member', { action: 'applyAuth', targetMemberId, reason }, 'member', `apply_${targetMemberId}`);
 }
+
+/** 全树成员（Canvas 全树渲染，单次 ≤2000 条；focusId 缺省=根房支） */
+export function treeAll(focusId?: string) {
+  return call('member', { action: 'tree.all', focusId }, `treeAll_${focusId || 'root'}`, 60000);
+}

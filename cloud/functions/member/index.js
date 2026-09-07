@@ -33,6 +33,8 @@ async function main(event, context) {
       return await getDetail(db, openid, event.memberId);
     case 'tree':
       return await buildTree(db, openid, event.focusId, event.page, event.cursor);
+    case 'tree.all':
+      return await buildTreeAll(db, openid, event.focusId);
     case 'export':
       return await exportCsv(db, openid, event);
     case 'exportFile':
@@ -449,6 +451,22 @@ async function buildTree(db, openid, focusId, page, cursor = '') {
     hasMore: paged.hasMore,
     total: paged.total
   });
+}
+
+/**
+ * 族谱全树（完整子树导出，无分页预算限制）
+ * 按指定路径前缀查询全部子孙节点（≤2000），用于批量导入/离线备份
+ */
+async function buildTreeAll(db, openid, focusId) {
+  const TREE_BUDGET = 2000;
+  const rootSegs = (focusId || '/001/').replace(/^\/+|\/+$/g, '').split('/');
+  const subtreeRoot = rootSegs.length ? `/${rootSegs.join('/')}/` : '/';
+  const res = await db.collection('members').where({
+    path: db.RegExp({ regexp: subtreeRegex(subtreeRoot).source, options: 'i' }),
+    status: 'ACTIVE'
+  }).limit(TREE_BUDGET).get();
+  const sorted = (res.data || []).sort((a, b) => a.generation - b.generation || a.path.localeCompare(b.path));
+  return OK({ nodes: sorted, total: sorted.length, hasMore: sorted.length >= TREE_BUDGET });
 }
 
 /**

@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "questions",
+  "description": "V2.0 百业问学 — 行业知识题库",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "type": { "type": "string", "enum": ["question", "question_set"] },
+    "question": { "type": "string" },
+    "choices": { "type": "array", "items": { "type": "object", "properties": { "label": { "type": "string" }, "text": { "type": "string" } } } },
+    "correctIndex": { "type": "integer" },
+    "industry": { "type": "string", "description": "行业：农业/商贾/文教/医道/工造/蚕桑/渔业/茶艺/百家" },
+    "difficulty": { "type": "integer", "minimum": 1, "maximum": 5 },
+    "explanation": { "type": "string" },
+    "authorOpenid": { "type": "string" },
+    "status": { "type": "string", "enum": ["PENDING", "ACTIVE", "DISABLED"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["question", "choices", "correctIndex", "industry", "status", "createdAt"],
+  "indexes": [
+    { "keys": { "industry": 1, "difficulty": 1, "status": 1 }, "name": "industry_quiz_idx" }
+  ]
+}

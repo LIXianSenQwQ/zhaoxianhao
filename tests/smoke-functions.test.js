@@ -143,7 +143,8 @@ function seedDB({
   ceremonies = [], entryRecords = [], relations = [],
   settings = [], avatars = [],
   albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = [], complianceSigns = [], localContents = [], contentCategories = [], searchIndex = [], newsItems = [], newsSources = [], userInterests = [], newsFavorites = [],
-  familyMoments = [], momentInteractions = [], clanNotices = []
+  familyMoments = [], momentInteractions = [], clanNotices = [],
+  homeWorlds = [], homeAvatars = [], riddles = [], riddleVotes = [], questions = [], quizRecords = []
 } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
@@ -155,7 +156,8 @@ function seedDB({
       entry_records: entryRecords, relations, avatars,
       albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules, greeting_cards: greetingCards, weather_cities: weatherCities, compliance_signs: complianceSigns, local_contents: localContents, content_categories: contentCategories, search_index: searchIndex,
       news_items: newsItems, news_sources: newsSources, user_interests: userInterests, news_favorites: newsFavorites,
-      family_moments: familyMoments, moment_interactions: momentInteractions, clan_notices: clanNotices
+      family_moments: familyMoments, moment_interactions: momentInteractions, clan_notices: clanNotices,
+      home_worlds: homeWorlds, home_avatars: homeAvatars, riddles, riddle_votes: riddleVotes, questions, quiz_records: quizRecords
     },
     seq: 1000
   };
@@ -2981,4 +2983,95 @@ test('F5 entry.submit：谱名冲突检测（在库成员同名，statistic retu
   assert.equal(res.data.conflict, true, '应检出同谱名');
   assert.equal(res.data.conflictCount, 1, '命中 1 位');
   assert.ok(res.data.conflictHint.includes('在库已有'), '返回提示');
+});
+
+// ─── Sprint F10: 家园/灯谜/问学 云函数冒烟 ───
+
+test('F10 home.world.init：首次调用创建家园（空 seed）', async () => {
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  const res = await FN('home').main({ action: 'world.init' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.isNew, true);
+  assert.equal(res.data.world.ownerOpenid, 'u-m');
+  assert.equal(res.data.world.level, 1);
+});
+
+test('F10 home.world.init：重复调用幂等返回现有家园', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    homeWorlds: [{ _id: 'w-1', ownerOpenid: 'u-m', level: 3, buildings: [], decorations: [], privacy: 'FAMILY' }]
+  });
+  const res = await FN('home').main({ action: 'world.init' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.isNew, false, '已有家园应幂等');
+  assert.equal(res.data.world.level, 3);
+});
+
+test('F10 home.world.place：越界/重叠被 engine 拒绝', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    homeWorlds: [{
+      _id: 'w-1', ownerOpenid: 'u-m', level: 5,
+      buildings: [{ type: 'mainHall', x: 0, y: 0, w: 3, h: 2 }], decorations: [], privacy: 'FAMILY'
+    }]
+  });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  const overlap = await FN('home').main({ action: 'world.place', type: 'wingRoom', x: 1, y: 0 }, ctx);
+  assert.equal(overlap.code, 400, '与已有建筑重叠应拒绝');
+  const out = await FN('home').main({ action: 'world.place', type: 'wingRoom', x: 9, y: 0 }, ctx);
+  assert.equal(out.code, 400, '越界应拒绝');
+  const ok = await FN('home').main({ action: 'world.place', type: 'wingRoom', x: 5, y: 0 }, ctx);
+  assert.equal(ok.success, true, '合法落位应成功');
+});
+
+test('F10 home.world.grow：经验累加自动升级', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    homeWorlds: [{ _id: 'w-1', ownerOpenid: 'u-m', level: 1, experience: 0, buildings: [], decorations: [], privacy: 'FAMILY' }]
+  });
+  const res = await FN('home').main({ action: 'world.grow', gain: 300 }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true);
+  assert.ok(res.data.level >= 2, '300 经验应至少升到 2 级');
+});
+
+test('F10 home.world.visit：自访拒绝 / 每日 20 次上限', async () => {
+  seedDB({
+    users: [{ openid: 'u-a', role: 'MEMBER' }, { openid: 'u-b', role: 'MEMBER' }],
+    homeWorlds: [{ _id: 'w-b', ownerOpenid: 'u-b', level: 1, buildings: [], decorations: [], privacy: 'FAMILY', visits: 0, visitedBy: {} }]
+  });
+  const self = await FN('home').main({ action: 'world.visit', targetOpenid: 'u-a' }, { OPENID: 'u-a', openid: 'u-a' });
+  assert.equal(self.code, 400, '自访应拒绝');
+  const ok = await FN('home').main({ action: 'world.visit', targetOpenid: 'u-b' }, { OPENID: 'u-a', openid: 'u-a' });
+  assert.equal(ok.success, true);
+  assert.equal(ok.data.visits, 1);
+  // 已满 20
+  const full = { _id: 'w-b', ownerOpenid: 'u-b', level: 1, buildings: [], decorations: [], privacy: 'FAMILY', visits: 20, visitedBy: { [new Date().toISOString().slice(0, 10)]: 20 } };
+  const dbg = globalThis.__HCS_STUB_SEED__.collections;
+  dbg.home_worlds = [full];
+  const over = await FN('home').main({ action: 'world.visit', targetOpenid: 'u-b' }, { OPENID: 'u-a', openid: 'u-a' });
+  assert.equal(over.code, 400, '超过每日上限应拒绝');
+});
+
+test('F10 riddle 未知 action → BAD_REQUEST', async () => {
+  const res = await FN('riddle').main({ action: 'nope' }, CTX);
+  assert.equal(res.code, 400);
+});
+
+test('F10 riddle.list：空题库返回空数组（不崩溃）', async () => {
+  seedDB({ users: [], riddles: [] });
+  const res = await FN('riddle').main({ action: 'riddle.list' }, CTX);
+  assert.equal(res.success, true);
+  assert.ok(Array.isArray(res.data.riddles));
+});
+
+test('F10 quiz 未知 action → BAD_REQUEST', async () => {
+  const res = await FN('quiz').main({ action: 'nope' }, CTX);
+  assert.equal(res.code, 400);
+});
+
+test('F10 quiz.list：空题库返回空数组（不崩溃）', async () => {
+  seedDB({ users: [], questions: [] });
+  const res = await FN('quiz').main({ action: 'quiz.list', industry: '百家' }, CTX);
+  assert.equal(res.success, true);
+  assert.ok(Array.isArray(res.data.questions));
 });

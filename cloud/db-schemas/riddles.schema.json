@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "riddles",
+  "description": "V2.0 家族灯谜会（合规版：题库/擂台/节庆）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "type": { "type": "string", "enum": ["riddle", "riddle_hint", "riddle_answer", "riddle_challenge"] },
+    "question": { "type": "string" },
+    "answerHash": { "type": "string" },
+    "hint": { "type": "string" },
+    "category": { "type": "string" },
+    "difficulty": { "type": "integer", "minimum": 1, "maximum": 5 },
+    "authorOpenid": { "type": "string" },
+    "challengeId": { "type": "string" },
+    "solvedBy": { "type": "array", "items": { "type": "string" } },
+    "solvedCount": { "type": "integer" },
+    "status": { "type": "string", "enum": ["PENDING", "ACTIVE", "CLOSED"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["question", "authorOpenid", "status", "createdAt"],
+  "indexes": [
+    { "keys": { "status": 1, "category": 1 }, "name": "riddle_active_idx" },
+    { "keys": { "challengeId": 1 }, "name": "challenge_idx" }
+  ]
+}
