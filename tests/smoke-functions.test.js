@@ -3216,6 +3216,32 @@ test('F11 opera.records.list：按用户返回演出记录', async () => {
   assert.equal(recs.data.records[0].rosterName, '青衣玉娘');
 });
 
+// ─── 五模块集成/安全收口：home 写操作 MEMBER+ 门禁（IJ3 安全回归） ───
+test('S1 home 写操作：VISITOR 403 / 读操作可见性隔离 / MEMBER 通过', async () => {
+  // VISITOR（无 users 记录 → 默认 VISITOR）写操作应 403
+  seedDB({ users: [] });
+  const V = { OPENID: 'u-v', openid: 'u-v' };
+  const denied = await FN('home').main({ action: 'avatar.create', name: '未认证' }, V);
+  assert.equal(denied.success, false, JSON.stringify(denied));
+  assert.equal(denied.code, 403, 'VISITOR avatar.create 应 403');
+  const deniedWorld = await FN('home').main({ action: 'world.init' }, V);
+  assert.equal(deniedWorld.code, 403, 'VISITOR world.init 应 403');
+
+  // MEMBER 读操作正常（world.get 无家园 → 404/400；avatar.get → null）
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  const M = { OPENID: 'u-m', openid: 'u-m' };
+  const noWorld = await FN('home').main({ action: 'world.get' }, M);
+  assert.ok(noWorld.code === 404 || noWorld.code === 400, 'MEMBER 无家园时读操作给 404/400');
+  const av = await FN('home').main({ action: 'avatar.get' }, M);
+  assert.equal(av.data.avatar, null);
+
+  // MEMBER 写操作通过
+  const init = await FN('home').main({ action: 'world.init' }, M);
+  assert.equal(init.success, true, JSON.stringify(init));
+  const created = await FN('home').main({ action: 'avatar.create', name: '认证族人' }, M);
+  assert.equal(created.success, true, JSON.stringify(created));
+});
+
 test('F11 opera 未知 action → BAD_REQUEST', async () => {
   const res = await FN('opera').main({ action: 'nope' }, O_CTX);
   assert.equal(res.code, 400);

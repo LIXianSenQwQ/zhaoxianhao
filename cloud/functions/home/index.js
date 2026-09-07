@@ -10,7 +10,8 @@
  *   world.like | world.setPrivacy | avatar.create | avatar.get | avatar.update
  */
 const wx = require('wx-server-sdk');
-const { OK, BAD_REQUEST } = require('./common/response');
+const { OK, BAD_REQUEST, FORBIDDEN } = require('./common/response');
+const { hasRole, roleOf } = require('./common/roles');
 
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
 
@@ -172,6 +173,13 @@ module.exports = { main: async (params, context) => {
   const action = (params && params.action) || '';
   const db = wx.getDatabase();
   const openid = (context && (context.OPENID || context.openid)) || 'stub';
+
+  // 权限门禁（IJ3 五模块安全）：写操作须 MEMBER+（含 BRANCH_HEAD/EDITOR/HISTORIAN/CHIEF）
+  const WRITE_ACTIONS = new Set(['world.init', 'world.place', 'world.grow', 'world.visit', 'world.like', 'world.setPrivacy', 'avatar.create', 'avatar.update']);
+  if (WRITE_ACTIONS.has(action)) {
+    const role = await roleOf(db, openid);
+    if (!hasRole(role, 'MEMBER')) return FORBIDDEN('仅认证族人可操作家园/角色');
+  }
 
   try {
     switch (action) {

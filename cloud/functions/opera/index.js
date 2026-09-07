@@ -10,7 +10,8 @@
  */
 
 const wx = require('wx-server-sdk');
-const { OK, BAD_REQUEST } = require('./common/response');
+const { OK, BAD_REQUEST, FORBIDDEN } = require('./common/response');
+const { hasRole, roleOf } = require('./common/roles');
 const { idempotencyKey } = require('./common/idempotency');
 const { writeAudit } = require('./common/audit');
 const { awardSystemPoints } = require('./common/points');
@@ -28,6 +29,11 @@ async function main(event, context) {
   const action = event.action || '';
   try {
     if (!openid) return BAD_REQUEST('请先登录');
+    // 五模块安全门禁（IJ3 对齐）：写操作须 MEMBER+
+    if (['roster.create', 'stage.perform', 'daily.checkin'].includes(action)) {
+      const role = await roleOf(db, openid);
+      if (!hasRole(role, 'MEMBER')) return FORBIDDEN('仅认证族人可体验梨园小筑');
+    }
     switch (action) {
       case 'roster.create':  return await rosterCreate(db, openid, event);
       case 'roster.list':    return await rosterList(db, openid);
