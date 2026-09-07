@@ -1984,6 +1984,32 @@ test('R25 migrate-plaza.migrateItem: 缺必填字段报错', async () => {
   assert.ok(out.error, '应返回 error');
 });
 
+test('F5 migrate-family-moments: 旧 plaza_posts 归一化为 family_moments 格式', () => {
+  const { migrateLegacyPost } = require('../scripts/migrate-family-moments.js');
+  const out = migrateLegacyPost({
+    _id: 'p-old-1', authorId: 'u-1', authorName: '郝大伯', type: 'moment',
+    content: '家族聚会合影', mediaIds: ['f1', 'f2'], stats: { like: 3, comment: 1 },
+    visibility: 'PUBLIC', publishAt: new Date('2024-01-01T00:00:00Z'), status: 'PUBLISHED'
+  }, true);
+  assert.ok(!out.error, JSON.stringify(out.error || ''));
+  const m = out.migrated;
+  assert.equal(m.type, 'TEXT', '旧 moment → TEXT');
+  assert.equal(m.publishAt, '2024-01-01T00:00:00.000Z', 'publishAt ISO 归一化');
+  assert.equal(m.stats.like, 3);
+  assert.equal(m.stats.share, 0, '缺 share 补 0');
+  assert.equal(m.status, 'PUBLISHED');
+  assert.deepEqual(m.topicTags, [], '默认 topicTags');
+});
+
+test('F5 migrate-family-moments: 类型推断与状态映射', () => {
+  const { migrateLegacyPost } = require('../scripts/migrate-family-moments.js');
+  const img = migrateLegacyPost({ _id: 'p2', authorId: 'u2', type: 'image', content: '', mediaIds: ['x'], publishAt: '2024-05-01', status: 'HIDDEN' }, true);
+  assert.equal(img.migrated.type, 'IMAGE', 'image → IMAGE');
+  assert.equal(img.migrated.status, 'DELETED', 'HIDDEN → DELETED');
+  const missing = migrateLegacyPost({ _id: 'p3', type: 'text' }, true);
+  assert.ok(missing.error === 'missing_authorId', '缺 authorId 报错');
+});
+
 // ═══════════════════════ V2.0 模块一：本地内容/分类/安全 ═══════════════════════
 
 test('V2 content.save: 正常保存含三级分类', async () => {
