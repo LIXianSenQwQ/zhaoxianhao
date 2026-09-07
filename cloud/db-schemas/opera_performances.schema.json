@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "opera_performances",
+  "description": "V2.0 F11: 梨园小筑 演出记录集合（单机登台表演记录，非实时对战；字段含 userId/performanceId/playName/score/feedback/performedAt/status）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": "string" },
+    "rosterId": { "type": "string" },
+    "rosterName": { "type": "string" },
+    "performanceId": { "type": "string" },
+    "playName": { "type": "string" },
+    "snippet": { "type": "string" },
+    "primarySkill": { "type": "string", "enum": ["唱", "念", "做", "打"] },
+    "actDetail": {
+      "type": "object",
+      "additionalProperties": { "type": "integer" }
+    },
+    "score": { "type": "integer" },
+    "grade": { "type": "string" },
+    "feedback": { "type": "string" },
+    "suggestions": { "type": "array", "items": { "type": "string" } },
+    "expGain": { "type": "integer" },
+    "leveledUp": { "type": "boolean" },
+    "playedDate": { "type": "string" },
+    "playedBy": { "type": "string", "enum": ["self", "family", "clan"] },
+    "performedAt": { "type": "string", "format": "date-time" },
+    "status": { "type": "string", "enum": ["COMPLETED", "ABANDONED"] }
+  },
+  "required": ["userId", "performanceId", "playName", "score", "feedback", "performedAt", "status"],
+  "indexes": [
+    { "keys": { "userId": 1, "performedAt": -1 }, "name": "user_perf_idx" },
+    { "keys": { "userId": 1, "playedDate": 1 }, "name": "user_daily_idx" },
+    { "keys": { "rosterId": 1, "performedAt": -1 }, "name": "roster_perf_idx" }
+  ]
+}

@@ -7,11 +7,6 @@
  *   - 统一响应格式 + 权限门禁 + 幂等提交
  *   - 双人审核：复审人 ≠ 初审人 ≠ 提交人（对齐族内双人审核文化 W2 口径）
  *   - finalize 真实入库：common/linkage 挂接校验 + 世代互指 + path 写入
- * P3 §7.6 公示期完整链（蓝图 730：初审→复审→公示 7 天→APPROVED）：
- *   - SECOND_PASS 不再直接 APPROVED，进入 PUBLICITY（publicityDeadline = now + 公示天数）
- *   - 公示天数 settings.publicityDays 可配（默认 7 天，蓝图 42 settings 含「公示期天数」）
- *   - publicityScan 定时扫描：公示期满自动 APPROVED（复用入谱/关系 finalize）
- *   - PUBLICITY_PASS 族史委提前结束公示（公示无异议可提前生效）
  */
 const wx = require('wx-server-sdk');
 const { OK, BAD_REQUEST, FORBIDDEN, NOT_FOUND } = require('./common/response');
@@ -23,7 +18,6 @@ const { finalizePatch } = require('./common/linkage');
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
 
 const LIST_LIMIT = 50;
-const DEFAULT_PUBLICITY_DAYS = 7;
 
 async function main(event, context) {
   const openid = context.OPENID || context.openid;
@@ -42,9 +36,6 @@ async function main(event, context) {
       return await mySubmissions(db, openid);
     case 'pendingList':
       return await pendingList(db, openid);
-    case 'publicityScan':
-      // 系统定时入口（每天 config.json timer 触发），无用户上下文；扫描公示期满工单自动 APPROVED
-      return await publicityScan(db);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }
@@ -54,21 +45,6 @@ async function main(event, context) {
 async function roleOf(db, openid) {
   const res = await db.collection('users').where({ openid }).limit(1).get();
   return (res.data[0] && res.data[0].role) || 'VISITOR';
-}
-
-/** 公示天数：settings.publicityDays 可配（蓝图 42 settings 含「公示期天数」），默认 7 天 */
-async function publicityDays(db) {
-  try {
-    const res = await db.collection('settings').where({ key: 'publicityDays' }).limit(1).get();
-    const raw = res.data && res.data[0] && res.data[0].value;
-    let n = NaN;
-    if (raw !== null && raw !== undefined && typeof raw === 'object') n = Number(raw.days);
-    if (Number.isNaN(n)) n = Number(raw);
-    if (Number.isInteger(n) && n >= 0) return n;
-  } catch (e) {
-    console.warn('[entry] publicityDays settings read failed:', e.message);
-  }
-  return DEFAULT_PUBLICITY_DAYS;
 }
 
 /** 校验必填 + 生成谱名（generations 集合字辈字） */
@@ -145,28 +121,21 @@ async function auditEntry(db, openid, { recordId, auditAction, comment }) {
   const role = await roleOf(db, openid);
   if (!hasRole(role, 'BRANCH_HEAD')) return FORBIDDEN('仅房长及以上可执行审核');
 
-  if (!recordId || !['FIRST_PASS', 'SECOND_PASS', 'PUBLICITY_PASS', 'REJECT'].includes(auditAction)) {
+  if (!recordId || !['FIRST_PASS', 'SECOND_PASS', 'REJECT'].includes(auditAction)) {
     return BAD_REQUEST('缺少 recordId 或 auditAction 非法');
   }
 
   const res = await db.collection('entry_records').doc(recordId).get().catch(() => null);
   const record = res && res.data && !Array.isArray(res.data) ? res.data : (res && res.data && res.data[0]);
   if (!record) return NOT_FOUND('工单不存在');
-
-  // §7.6 状态机：仅允许合法迁移
-  const legal = {
-    SUBMITTED: ['FIRST_PASS', 'REJECT'],
-    FIRST_PASS: ['SECOND_PASS', 'REJECT'],
-    PUBLICITY: ['PUBLICITY_PASS', 'REJECT']
-  };
-  if (!(legal[record.status] || []).includes(auditAction)) {
-    return BAD_REQUEST(`工单状态 ${record.status} 不可执行 ${auditAction}`);
+  if (record.status !== 'SUBMITTED' && record.status !== 'FIRST_PASS') {
+    return BAD_REQUEST(`工单状态 ${record.status} 不可审核`);
   }
 
-  // 细门禁（蓝图 7.6）：已入审工单（初审后/公示中）的复审与提前通过须 HISTORIAN+（族史委）
-  const needHistorian = record.status === 'FIRST_PASS' || auditAction === 'SECOND_PASS' || auditAction === 'PUBLICITY_PASS';
+  // 细门禁（蓝图 7.6）：复审/驳回已入审的工单须 HISTORIAN+（族史委）
+  const needHistorian = record.status === 'FIRST_PASS' || auditAction === 'SECOND_PASS';
   if (needHistorian && !hasRole(role, 'HISTORIAN')) {
-    return FORBIDDEN('仅族史委可执行复审/公示操作');
+    return FORBIDDEN('仅族史委可执行复审');
   }
 
   // 蓝图 11：通过/驳回必填意见（驳回强制留痕）
@@ -191,99 +160,35 @@ async function auditEntry(db, openid, { recordId, auditAction, comment }) {
     if (firstPass.userId === openid) return BAD_REQUEST('复审人不得与初审人相同（双人审核）');
     if (submitter === openid) return BAD_REQUEST('提交人不得自审（复审）');
 
-    // §7.6：复审通过 → 公示期（SECOND_PASS 不再直接 APPROVED）
-    const days = await publicityDays(db);
-    const deadline = new Date(Date.now() + days * 24 * 3600 * 1000);
-    const stepChain = [
-      ...(record.auditChain || []),
-      step,
-      { step: 'PUBLICITY', userId: openid, action: 'PUBLICITY', time: new Date(), comment: `进入公示，${days}天后（${deadline.toISOString().slice(0, 10)}）自动生效` }
-    ];
-    await db.collection('entry_records').doc(recordId).update({
-      data: {
-        status: 'PUBLICITY',
-        publicityDays: days,
-        publicityDeadline: deadline,
-        auditChain: stepChain
-      }
-    });
-    await writeAudit(db, { userId: openid, action: 'entry.publicity.start', target: recordId, detail: `${days}天@${deadline.toISOString()}` });
-    return OK({ status: 'PUBLICITY', publicityDays: days, publicityDeadline: deadline });
-  }
-
-  if (auditAction === 'PUBLICITY_PASS') {
-    // 族史委提前结束公示：须另一位族史委见证（≠ 复审人），防自审闭环
-    const secondPass = (record.auditChain || []).find(s => s.step === 'SECOND_PASS');
-    if (!secondPass) return BAD_REQUEST('无复审记录，无法结束公示');
-    if (secondPass.userId === openid) return BAD_REQUEST('复审人不得自行提前结束公示（须另一位族史委见证）');
-    if (submitter === openid) return BAD_REQUEST('提交人不得自审（提前通过）');
-
     const stepChain = [...(record.auditChain || []), step];
-    const fin = await finalizeApproved(db, record, stepChain, openid);
-    if (!fin.ok) return BAD_REQUEST(`公示生效失败: ${fin.reason}`);
-    return OK(fin.data);
+
+    // R17：关系变更工单（R16 relation.edit 产物）→ APPROVED 后 relations 生效（蓝图 7.7）
+    if (record.payload && record.payload.changeType === 'RELATION') {
+      const fin = await finalizeApprovedRelation(db, record, [firstPass.userId, openid]);
+      if (!fin.ok) return BAD_REQUEST(`关系生效失败: ${fin.reasons.join('；')}`);
+      await db.collection('entry_records').doc(recordId).update({
+        data: { status: 'APPROVED', relationId: fin.relationId, auditChain: stepChain }
+      });
+      await writeAudit(db, { userId: openid, action: 'entry.approve.relation', target: recordId, detail: fin.relationId });
+      return OK({ status: 'APPROVED', relationId: fin.relationId });
+    }
+
+    // 入谱工单：挂接校验 + 正式写入 members
+    const fin = await finalizeApprovedMember(db, record);
+    if (!fin.ok) return BAD_REQUEST(`入库挂接失败: ${fin.reasons.join('；')}`);
+
+    await db.collection('entry_records').doc(recordId).update({
+      data: { status: 'APPROVED', memberId: fin.memberId, auditChain: stepChain }
+    });
+    await writeAudit(db, { userId: openid, action: 'entry.approve', target: recordId, detail: fin.memberId });
+    return OK({ status: 'APPROVED', memberId: fin.memberId });
   }
 
-  // REJECT（SUBMITTED/FIRST_PASS/PUBLICITY 均可驳回；公示中驳回 = 撤回）
+  // REJECT
   await db.collection('entry_records').doc(recordId).update({
     data: { status: 'REJECTED', auditChain: [...(record.auditChain || []), step] }
   });
-  if (record.status === 'PUBLICITY') {
-    await writeAudit(db, { userId: openid, action: 'entry.publicity.withdraw', target: recordId, detail: comment });
-  }
   return OK({ status: 'REJECTED' });
-}
-
-/**
- * §7.6：公示期满/提前通过后的统一入库（入谱 → finalizeApprovedMember；关系变更 → finalizeApprovedRelation）
- * 复用 R17 逻辑：CHANGE(RELATION) → relations ACTIVE（verifiedBy=[初审人，复审人]）；否则 members 物化挂接
- */
-async function finalizeApproved(db, record, stepChain, actor) {
-  const firstPass = (record.auditChain || []).find(s => s.step === 'FIRST_PASS');
-  const secondPass = (record.auditChain || []).find(s => s.step === 'SECOND_PASS');
-
-  if (record.payload && record.payload.changeType === 'RELATION') {
-    const verifiedBy = [firstPass && firstPass.userId, secondPass && secondPass.userId].filter(Boolean);
-    const fin = await finalizeApprovedRelation(db, record, verifiedBy);
-    if (!fin.ok) return { ok: false, reason: `关系生效失败: ${fin.reasons.join('；')}` };
-    await db.collection('entry_records').doc(record._id).update({
-      data: { status: 'APPROVED', relationId: fin.relationId, auditChain: stepChain }
-    });
-    await writeAudit(db, { userId: actor, action: 'entry.approve.relation', target: record._id, detail: fin.relationId });
-    return { ok: true, data: { status: 'APPROVED', relationId: fin.relationId } };
-  }
-
-  // 入谱工单：挂接校验 + 正式写入 members
-  const fin = await finalizeApprovedMember(db, record);
-  if (!fin.ok) return { ok: false, reason: `入库挂接失败: ${fin.reasons.join('；')}` };
-  await db.collection('entry_records').doc(record._id).update({
-    data: { status: 'APPROVED', memberId: fin.memberId, auditChain: stepChain }
-  });
-  await writeAudit(db, { userId: actor, action: 'entry.approve', target: record._id, detail: fin.memberId });
-  return { ok: true, data: { status: 'APPROVED', memberId: fin.memberId } };
-}
-
-/**
- * §7.6：定时扫描（config.json timer 每日触发）——公示期届满工单自动 APPROVED 生效
- * 与 ceremony.remindScan 同模式：系统入口无需用户鉴权
- */
-async function publicityScan(db) {
-  const now = new Date();
-  const res = await db.collection('entry_records')
-    .where({ status: 'PUBLICITY', publicityDeadline: db.command.lte(now) })
-    .limit(LIST_LIMIT)
-    .get();
-
-  const promoted = [];
-  const failed = [];
-  for (const record of (res.data || [])) {
-    const step = { step: 'APPROVED', userId: 'system:timer', action: 'PUBLICITY_EXPIRE', time: now, comment: '公示期满自动生效（蓝图 7.6）' };
-    const stepChain = [...(record.auditChain || []), step];
-    const fin = await finalizeApproved(db, record, stepChain, 'system:timer');
-    if (fin.ok) promoted.push({ recordId: record._id, status: 'APPROVED', ...fin.data });
-    else failed.push({ recordId: record._id, reason: fin.reason });
-  }
-  return OK({ scanned: (res.data || []).length, promoted, failed });
 }
 
 /** R17：CHANGE(RELATION) 工单 APPROVED → relations 落库生效（蓝图 5.3 边结构 + 双审核人 verifiedBy） */

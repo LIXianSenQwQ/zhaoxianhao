@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "opera_roster",
+  "description": "V2.0 F11: 梨园小筑 票友卡片集合（角色卡池持久化：生旦净末丑行当卡，随登台成长）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": "string" },
+    "name": { "type": "string" },
+    "role": { "type": "string", "enum": ["生", "旦", "净", "末", "丑"] },
+    "roleTitle": { "type": "string" },
+    "roleDesc": { "type": "string" },
+    "skillLevel": { "type": "integer" },
+    "experience": { "type": "integer" },
+    "mood": { "type": "string" },
+    "favorItems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "id": { "type": "string" }, "playName": { "type": "string" } }
+      }
+    },
+    "unlockedFragments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "id": { "type": "string" }, "playName": { "type": "string" } }
+      }
+    },
+    "stageCount": { "type": "integer" },
+    "totalScore": { "type": "integer" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["userId", "name", "role", "skillLevel", "createdAt"],
+  "indexes": [
+    { "keys": { "userId": 1, "createdAt": -1 }, "name": "user_roster_idx" },
+    { "keys": { "userId": 1, "name": 1 }, "name": "user_name_uniq_idx" }
+  ]
+}

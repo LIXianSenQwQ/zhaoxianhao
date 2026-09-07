@@ -3122,3 +3122,35 @@ test('F11 home.avatar.get：无角色返回空 avatar 字段', async () => {
   assert.equal(res.success, true);
   assert.equal(res.data.avatar, null);
 });
+
+// ─── Sprint F10: member.tree.all 全树接口 ───
+
+test('F10 member.tree.all：房支前缀拉取 ≤2000 条并排序', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    members: [
+      { _id: 'r1', name: '一世祖', path: '/001/', generation: 1, status: 'ACTIVE' },
+      { _id: 'r2', name: '二世甲', path: '/001/002/', generation: 2, status: 'ACTIVE' },
+      { _id: 'r3', name: '二世乙', path: '/003/', generation: 2, status: 'ACTIVE' },
+      { _id: 'r4', name: '三世甲', path: '/001/002/003/', generation: 3, status: 'DECEASED' }
+    ]
+  });
+  const res = await FN('member').main({ action: 'tree.all', focusId: '/001/' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true, JSON.stringify(res));
+  const nodes = res.data.nodes;
+  assert.equal(nodes.length, 2, '仅取 focus 房支下 ACTIVE 成员');
+  assert.equal(nodes[0].generation <= nodes[1].generation, true, '按世代排序');
+  assert.equal(res.data.total, 2);
+});
+
+test('F10 member.tree.all：缺省 focusId 回退根房支', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    members: [
+      { _id: 'r1', name: '一世祖', path: '/001/', generation: 1, status: 'ACTIVE' }
+    ]
+  });
+  const res = await FN('member').main({ action: 'tree.all' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.total, 1);
+});
