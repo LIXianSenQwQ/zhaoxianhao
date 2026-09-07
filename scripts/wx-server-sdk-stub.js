@@ -163,6 +163,15 @@ module.exports = {
     };
   },
   getOpenData: async () => ({}),
-  cloud: { callFunction: async () => ({ result: { success: true, data: null } }) },
+  cloud: {
+    callFunction: async () => ({ result: { success: true, data: null } }),
+    getTempFileURL: async ({ fileList }) => ({
+      fileList: (fileList || []).map(fid => ({
+        fileId: fid,
+        tempFileURL: `https://dummy-cdn.example.com/${encodeURIComponent(fid)}`,
+        status: 0
+      }))
+    })
+  },
   updateConfig: () => {}
 };
