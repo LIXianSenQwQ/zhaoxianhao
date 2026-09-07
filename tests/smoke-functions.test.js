@@ -826,6 +826,46 @@ test('R13 atmosphere：24 节气表完整 + 圆环匹配（跨年回卷冬至段
   assert.equal(atm.resolveTerm(new Date('2025-12-25T04:00:00Z')).name, '冬至');
 });
 
+test('F13 §7.8：24 节气全量端点色板 + 全量节气笺（P1 收口）', async () => {
+  const atm = FN('atmosphere');
+  assert.equal(atm.SOLAR_TERMS.length, 24, '24 节气齐备');
+  const hex = /^#[0-9A-F]{6}$/i;
+  for (const t of atm.SOLAR_TERMS) {
+    assert.ok(t.palette && hex.test(t.palette.top) && hex.test(t.palette.mid) && hex.test(t.palette.bottom),
+      `${t.name} 缺合法端点色板`);
+    assert.ok(atm.TERM_GREETINGS[t.name] && atm.TERM_GREETINGS[t.name].length >= 4,
+      `${t.name} 缺节气笺`);
+  }
+  assert.equal(Object.keys(atm.TERM_GREETINGS).length, 24, '节气笺全量 24（由 6 条扩展）');
+  assert.equal(atm.SOLAR_TERMS[6].name, '清明', '清明带独立梨花青端点色板');
+});
+
+test('F13 §7.8：resolveFestival 节日解析（内置公历/节气即节日/年历覆盖/非节日空）', () => {
+  const atm = FN('atmosphere');
+  assert.equal(atm.resolveFestival(new Date('2025-01-01T04:00:00Z'), '小寒'), '元旦', '公历节日命中');
+  assert.equal(atm.resolveFestival(new Date('2025-10-01T04:00:00Z'), '秋分'), '国庆节', '公历节日命中');
+  assert.equal(atm.resolveFestival(new Date('2025-04-05T04:00:00Z'), '清明'), '清明节', '节气即节日（清明）');
+  assert.equal(atm.resolveFestival(new Date('2025-03-15T04:00:00Z'), '惊蛰'), '', '非节日为空');
+  assert.equal(atm.resolveFestival(new Date('2025-05-05T04:00:00Z'), '立夏', [{ month: 5, day: 5, name: '族庆日' }]), '族庆日', '族议会年历覆盖内置');
+  assert.equal(atm.resolveFestival(new Date('2025-05-05T04:00:00Z'), '立夏'), '', '内置表无 5/5 → 空');
+});
+
+test('F13 §7.8：today festival 字段下发 + 族议会年历覆盖', async () => {
+  const now = new Date();
+  seedDB({ settings: [{ _id: 'fc', key: 'festivalCalendar', value: [{ month: now.getMonth() + 1, day: now.getDate(), name: '族庆日' }] }] });
+  const res = await FN('atmosphere').main({ action: 'today' }, {});
+  assert.equal(res.data.festival, '族庆日', 'settings.festivalCalendar 今日条目下发到 festival 字段');
+  assert.equal(res.data.muted, false, '无讣告不静默');
+});
+
+test('F13 §7.8：白事静默覆盖节日（festival 空 + 素色）', async () => {
+  seedDB({ settings: [{ _id: 'fc', key: 'festivalCalendar', value: [{ month: new Date().getMonth() + 1, day: new Date().getDate(), name: '族庆日' }] }], events: [{ _id: 'e-1', type: 'funeral', status: 'ACTIVE' }] });
+  const res = await FN('atmosphere').main({ action: 'today' }, {});
+  assert.equal(res.data.muted, true, '讣告触发静默');
+  assert.equal(res.data.festival, '', '静默期不下发节日');
+  assert.equal(res.data.moodTheme.top, '#F7F5F0', '素色令牌覆盖节气/节日令牌');
+});
+
 // ─── Sprint R14：notify 大修（卡流/合并列表/越权封堵）+ atmosphere.homeCards 真数据 ───
 
 const NOW = Date.now();

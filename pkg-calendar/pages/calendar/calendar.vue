@@ -5,6 +5,7 @@
     <view class="header" :style="{ background: headerBg }">
       <view class="term-row">
         <text class="term-name">{{ term }}</text>
+        <text v-if="festival && !muted" class="term-festival">{{ festival }}</text>
         <text v-if="muted" class="term-muted">静默期</text>
       </view>
       <text class="term-greeting">{{ greeting }}</text>
@@ -85,6 +86,7 @@ const month = ref(today.getMonth());
 const selectedStr = ref('');
 const term = ref('');
 const greeting = ref('');
+const festival = ref('');
 const muted = ref(false);
 const theme = ref<{ top: string; mid: string; bottom: string } | null>(null);
 // R24: 老皇历切换
@@ -168,6 +170,7 @@ read('atmosphere', { action: 'today' }, 'atmosphere.today', 600000).then(res => 
     term.value = res.data.solarTerm || '';
     greeting.value = res.data.greeting || '';
     muted.value = !!res.data.muted;
+    festival.value = res.data.festival || '';
     if (res.data.moodTheme && res.data.moodTheme.top) theme.value = res.data.moodTheme;
   }
 });
@@ -180,6 +183,7 @@ read('atmosphere', { action: 'today' }, 'atmosphere.today', 600000).then(res => 
 .term-row { display: flex; align-items: center; gap: 8px; }
 .term-name { font-size: 24px; font-weight: 700; color: #2B2723; }
 .term-muted { font-size: 11px; color: #6E6659; background: #F0EEE8; border-radius: 4px; padding: 2px 6px; }
+.term-festival { font-size: 11px; color: #7A4A2B; background: #F6E9DC; border-radius: 4px; padding: 2px 6px; }
 .term-greeting { font-size: 14px; color: #6E6659; margin-top: 6px; display: block; }
 
 .calendar-card { margin: 12px 16px 0; background: #FFFFFF; border-radius: 12px; padding: 12px; box-shadow: 0 2px 12px rgba(38, 34, 30, 0.06); }

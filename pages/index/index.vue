@@ -10,7 +10,7 @@
     >
       <text class="home-greeting">{{ greeting }}</text>
       <text class="home-greeting-sub" v-if="loaded">
-        {{ solarTerm }} · {{ weatherInfo }}
+        {{ festival ? festival + ' · ' : '' }}{{ solarTerm }} · {{ weatherInfo }}
       </text>
     </view>
 
@@ -76,19 +76,25 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ErrorPage from '@/components/common/ErrorPage.vue';
-import { resolveTheme } from '@/utils/home-atmosphere';
+import { resolveTheme, MUTED_THEME } from '@/utils/home-atmosphere';
 
 const userStore = useUserStore();
 
-// 问候区渐变主题：白事静默 → 素色；节气/节日 → 换端点色；否则晨光默认
-// computed 绑定，atmosphere 数据到达 muted=true 后自动切换素色（蓝图 0.2.2）
+// 问候区渐变主题：服务端 24 节气端点色（atmosphere.moodTheme）优先；
+// 数据未到/失败前用客户端晨光默认（resolveTheme）；白事静默 → 素色令牌总优先
+// computed 绑定，atmosphere 数据到达 muted=true 后自动切换素色（蓝图 0.2.2 / 7.8）
 const greeting = ref('您好');
 const solarTerm = ref('');
+const festival = ref('');
 const weatherInfo = ref('');
 const isMutedPeriod = ref(false);
 const loaded = ref(false);
+const themeOverride = ref<{ top: string; mid: string; bottom: string } | null>(null);
 
-const theme = computed(() => resolveTheme(isMutedPeriod.value));
+const theme = computed(() => {
+  if (isMutedPeriod.value) return MUTED_THEME;
+  return themeOverride.value || resolveTheme(false);
+});
 
 const loading = ref(true);
 const loadError = ref<{ message: string } | null>(null);
@@ -157,9 +163,11 @@ async function loadTodayCards() {
   if (atm.data) {
     const d = atm.data.data ?? atm.data;
     solarTerm.value = d.solarTerm || '';
+    festival.value = d.festival || '';
     isMutedPeriod.value = !!d.muted; // R13 atmosphere 字段口径：muted
     weatherInfo.value = d.weather || '晴'; // V1.1 weather.current 接入后替换
     loaded.value = true;
+    themeOverride.value = d.moodTheme || null; // §7.8 服务端 24 节气端点色板为主源
   }
 
   // 2. 要事卡流（缓存优先，短 TTL）
