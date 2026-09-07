@@ -21,7 +21,9 @@ test('A1 游戏模块无禁止代码（对局/发牌/下注）', () => {
   const candidates = [
     'utils/chess-engine.js',
     'utils/scoreboard-engine.js',
-    'utils/opera-engine.js' // 梨园小筑模拟引擎
+    'utils/opera-engine.js', // 梨园小筑模拟引擎
+    'cloud/functions/asyncgame/index.js', // F7 异步对弈（一手传书，禁实时匹配类词）
+    'cloud/functions/asyncgame/engine.js' // 象棋引擎 CJS 部署副本（与 utils 同源）
   ].map(f => rootDir + f);
   for (const file of candidates) {
     if (!fs.existsSync(file)) continue;

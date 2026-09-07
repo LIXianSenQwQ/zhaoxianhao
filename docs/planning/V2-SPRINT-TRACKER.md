@@ -54,7 +54,7 @@
 | **模块三 2GB 分片上传** | upload 云函数 chunk.init/put/progress/complete/status：断点续传会话 + video 转码骨架 + upload_sessions schema | ✅ F3c |
 | **模块二 secscan 生产化** | secscan 原生 API（openSecurity msgSecCheck/imgSecCheck）+ callFunction 降级 + 敏感词库；连续违规人工复核标记结构 | ✅ F4+ |
 | **模块三 家族动态** | plaza 云函数升级 V2.0（listMoments/publishMoment/likeMoment/commentMoment + publishAnnounce/stickAnnouncement/recordReadReceipt/getNotices）+ family_moments 迁移脚本 + clan_notices 集合 | ✅ F5-F6 |
-| **模块四 合规游戏** | 象棋规则引擎 `utils/chess-engine.js`（走法合法性/将军/将杀/困毙）+ 牌局记分板 `utils/scoreboard-engine.js`（记分单/排名/合规声明）| ✅ F7-F8 |
+| **模块四 合规游戏** | 象棋规则引擎 `utils/chess-engine.js`（走法合法性/将军/将杀/困毙）+ `cloud/functions/asyncgame/` 异步对弈完整实现（一手传书，24h 回合制；MEMBER+ 门禁；审计/幂等/超时判负）+ `services/asyncgame.ts` + `pkg-game/pages/game/async.vue`（族人选对手/棋盘交互）+记分板 `utils/scoreboard-engine.js`（记分单/排名/合规声明）; ✅ F7 |
 | **模块五 虚拟家园** | 基础框架纯函数引擎 `utils/home-engine.js`（庭院布局校验/建筑目录/经验升级/互访频控）+ schema `home_avatars/schema.json + home_worlds/schema.json`| ✅ F9 |
 | **模块五 虚拟家园** | 家园布局页 + 好友互访页 + home 云函数接口层（world init/place/grow/visit/like/setPrivacy + avatar）+ 服务封装 services/home.ts | ✅ F10 |
 
@@ -128,6 +128,7 @@
 
 ### F10 家园云接口层 + member 全树接口
 - [x] **家园云函数 `cloud/functions/home/index.js`**（新增，云函数 25→28）：world.init/get/place/grow/visit/like/setPrivacy + avatar.create/get/update（place 走引擎落位校验 + 建筑解锁，visit 每日 20 次频控，grow 经验曲线自动升级，含 DB schema home_worlds/home_avatars 已有对接）→ 服务封装 `services/home.ts`
+- [x] **asyncgame (F7) 异步对弈**（本批次 R3/R4）：schema `async_games`, cloud 云函数 `cloud/functions/asyncgame/index.js+engine.js` CJS 副本，service `services/asyncgame.ts`, page `pkg-game/pages/game/async.vue`（族人选对手/发起挑战/棋盘交互），smoke 6 用例（MEMBER+、member未关联openid拒绝、create→accept→move(resign)/duplicate 幂等），一致性对拍 4 用例；lint 0E, smoke 267✅, full test 503✅ → `a0248f9`(R3)+`26c6197`(R4)
 - [x] **member 全树接口 `member.tree.all`**（新增 action）：`buildTreeAll` 按 focusId 房支前缀 + ACTIVE 一次拉取 ≤2000 条（供全树 Canvas），generation/path 排序返回 `{nodes,total,hasMore}` → `services/member.ts treeAll()` 封装
 - [x] riddle/quiz 服务封装 `services/riddle.ts` + `services/quiz.ts`（§7.10 服务层通路：全部页面经 services/* 调用，无直连 wx.cloud.callFunction）
 

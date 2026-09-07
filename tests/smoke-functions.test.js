@@ -3476,3 +3476,95 @@ test('F11 opera 未知 action → BAD_REQUEST', async () => {
   const res = await FN('opera').main({ action: 'nope' }, O_CTX);
   assert.equal(res.code, 400);
 });
+
+// ─── Sprint F7: asyncgame 异步对弈（一手传书 · 非实时匹配）冒烟 ───
+
+test('F7 asyncgame.game.create：MEMBER 挑战已关联成员 → WAITING 对局', async () => {
+  seedDB({
+    users: [{ openid: 'u-red', role: 'MEMBER' }, { openid: 'u-black', role: 'MEMBER' }],
+    members: [
+      { _id: 'm-red', name: '红', genealogyName: '郝某甲', linkedOpenid: 'u-red' },
+      { _id: 'm-black', name: '黑', genealogyName: '郝某乙', linkedOpenid: 'u-black' }
+    ]
+  });
+  const RED = { OPENID: 'u-red', openid: 'u-red' };
+  const res = await FN('asyncgame').main({ action: 'game.create', blackMemberId: 'm-black', redMemberId: 'm-red' }, RED);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.game.status, 'WAITING');
+  assert.equal(res.data.game.redName, '我');
+  assert.equal(res.data.game.blackName, '郝某乙');
+  assert.ok(res.data.game.board && res.data.game.board.length === 10, '棋盘 10 行');
+});
+
+test('F7 asyncgame：VISITOR 创建 → 403（MEMBER 门禁）', async () => {
+  seedDB({ users: [] });
+  const res = await FN('asyncgame').main({ action: 'game.create', blackMemberId: 'm-black' }, CTX);
+  assert.equal(res.code, 403);
+});
+
+test('F7 asyncgame：被挑战成员未关联账号 → 400 拒绝', async () => {
+  seedDB({ users: [{ openid: 'u-red', role: 'MEMBER' }], members: [{ _id: 'm-x', name: '未关联', genealogyName: '郝某丙' }] });
+  const RED = { OPENID: 'u-red', openid: 'u-red' };
+  const res = await FN('asyncgame').main({ action: 'game.create', blackMemberId: 'm-x' }, RED);
+  assert.equal(res.code, 400);
+  assert.match(res.message, /关联账号/);
+});
+
+test('F7 asyncgame 全流程：create → accept → 轮到红 → 红走车 → 黑被将杀判定', async () => {
+  seedDB({
+    users: [
+      { openid: 'u-red', role: 'MEMBER' }, { openid: 'u-black', role: 'MEMBER' },
+      { openid: 'u-chi', role: 'CHIEF' }
+    ],
+    members: [
+      { _id: 'm-red', genealogyName: '郝甲', linkedOpenid: 'u-red' },
+      { _id: 'm-black', genealogyName: '郝乙', linkedOpenid: 'u-black' }
+    ]
+  });
+  const RED = { OPENID: 'u-red', openid: 'u-red' };
+  const BLACK = { OPENID: 'u-black', openid: 'u-black' };
+
+  // 1. 红创建挑战黑
+  const created = await FN('asyncgame').main({ action: 'game.create', blackMemberId: 'm-black', redMemberId: 'm-red' }, RED);
+  assert.equal(created.success, true);
+  const gameId = created.data.game.gameId;
+
+  // 2. 非黑方应战 → 403
+  const stranger = await FN('asyncgame').main({ action: 'game.accept', gameId }, { OPENID: 'u-chi', openid: 'u-chi' });
+  assert.equal(stranger.code, 403);
+
+  // 3. 黑应战 → ONGOING，轮到红
+  const accepted = await FN('asyncgame').main({ action: 'game.accept', gameId }, BLACK);
+  assert.equal(accepted.success, true, JSON.stringify(accepted));
+  assert.equal(accepted.data.game.status, 'ONGOING');
+  assert.equal(accepted.data.game.turn, 'red');
+
+  // 4. 黑抢先走（未轮到他）→ 403
+  const blackEarly = await FN('asyncgame').main(
+    { action: 'game.move', gameId, from: { row: 9, col: 0 }, to: { row: 8, col: 0 } }, BLACK);
+  assert.equal(blackEarly.code, 403);
+
+  // 5. 红走非法步（车越兵）→ 400 引擎校验拒绝
+  const illegal = await FN('asyncgame').main(
+    { action: 'game.move', gameId, from: { row: 0, col: 0 }, to: { row: 8, col: 0 } }, RED);
+  assert.equal(illegal.code, 400, JSON.stringify(illegal));
+
+  // 6. 红走合法步：炮二平五（[7][7] -> [7][4]，有兵架）
+  const valid = await FN('asyncgame').main(
+    { action: 'game.move', gameId, from: { row: 7, col: 7 }, to: { row: 7, col: 4 } }, RED);
+  assert.equal(valid.success, true, JSON.stringify(valid));
+  assert.equal(valid.data.game.turn, 'black', '轮到黑方');
+  assert.equal(valid.data.game.moveLog.length, 1);
+
+  // 7. 重复提交同一步（幂等）→ success 且不重复入账
+  const dup = await FN('asyncgame').main(
+    { action: 'game.move', gameId, from: { row: 7, col: 7 }, to: { row: 7, col: 4 } }, RED);
+  assert.equal(dup.success, true);
+  assert.equal(dup.data.duplicate, true);
+
+  // 8. list：黑方可见待其行棋的对局
+  const list = await FN('asyncgame').main({ action: 'game.list' }, BLACK);
+  assert.equal(list.success, true);
+  assert.ok(list.data.games.length >= 1);
+  assert.equal(list.data.ongoing, 1);
+});

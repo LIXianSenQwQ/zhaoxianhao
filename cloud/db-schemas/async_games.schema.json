@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "async_games",
+  "description": "F7 异步对弈（一手传书 · 非实时匹配）：24h 回合制象棋对局存储。红黑双方为认证族人（MEMBER+），每步 24h 内有效，超时判负。零联机匹配、零积分赌博化。",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "gameId": { "type": "string", "description": "短码对局号（展示/查询用）" },
+    "redId": { "type": "string", "description": "红方 userId(openid)" },
+    "blackId": { "type": "string", "description": "黑方 userId(openid)" },
+    "redMemberId": { "type": "string", "description": "红方族谱成员 id（展示/查询）" },
+    "blackMemberId": { "type": "string", "description": "黑方族谱成员 id" },
+    "redName": { "type": "string", "description": "红方谱名快照" },
+    "blackName": { "type": "string", "description": "黑方谱名快照" },
+    "status": { "type": "string", "enum": ["WAITING", "ONGOING", "FINISHED", "EXPIRED"] },
+    "turn": { "type": "string", "enum": ["red", "black"] },
+    "board": { "type": "array", "description": "10×9 棋盘序列化（服务端引擎维护）" },
+    "moveLog": { "type": "array", "items": { "type": "string" }, "description": "走法日志 UCI 文本（audit 可追）" },
+    "lastMoveAt": { "type": "string", "format": "date-time" },
+    "deadlineAt": { "type": "string", "format": "date-time", "description": "当前回合 24h 截止（超时判该方负）" },
+    "result": {
+      "type": "object",
+      "properties": {
+        "winner": { "type": "string", "enum": ["red", "black", "draw", ""] },
+        "reason": { "type": "string", "enum": ["CHECKMATE", "STALEMATE", "RESIGN", "TIMEOUT", "ABANDON"] }
+      }
+    },
+    "createdBy": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["gameId", "redId", "blackId", "status", "createdBy", "createdAt", "updatedAt"],
+  "indexes": [
+    { "keys": { "redId": 1, "status": 1 }, "name": "red_games_idx" },
+    { "keys": { "blackId": 1, "status": 1 }, "name": "black_games_idx" },
+    { "keys": { "status": 1, "deadlineAt": 1 }, "name": "deadline_scan_idx" }
+  ]
+}
