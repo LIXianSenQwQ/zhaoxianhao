@@ -9,7 +9,7 @@
     <text class="sub">合规版 · 无内购 · 零虚拟货币兑换</text>
     <view v-if="childMode && remainingSec <= 0" class="locked"><text>⏰ 时间已到</text></view>
     <template v-else>
-      <BaseCard v-if="flags.chess" title="棋谱研习室" @click="enter('chess')"><text class="card-sub">象棋/围棋/五子棋 · 人机对战 · 残局挑战</text><text class="tag">单机合规</text></BaseCard>
+      <BaseCard v-if="flags.chess" title="棋谱研习室" @click="enter('chess')"><text class="card-sub">象棋 · 双人对弈 · 残局挑战（红先一步将死）</text><text class="tag">单机合规</text></BaseCard>
       <BaseCard v-if="flags.score" title="牌局记分板" @click="enter('score')"><text class="card-sub">斗地主/掼蛋/麻将 · 线下战绩记录工具</text><text class="tag">非游戏玩法</text></BaseCard>
       <BaseCard v-if="flags.riddle" title="家族灯谜会" @click="enter('riddle')"><text class="card-sub">题库管理 · 擂台赛 · 节庆专题 · 每日一谜</text><text class="tag">文化益智</text></BaseCard>
       <BaseCard v-if="flags.quiz" title="百业问学" @click="enter('quiz')"><text class="card-sub">10+ 行业题库 · 闯关排位 · 行业专场</text><text class="tag">知识传承</text></BaseCard>

@@ -215,6 +215,12 @@
 					}
 				},
 				{
+					"path": "pages/game/async",
+					"style": {
+						"navigationBarTitleText": "异步对弈（Beta）"
+					}
+				},
+				{
 					"path": "pages/game/riddle",
 					"style": {
 						"navigationBarTitleText": "灯谜会"
