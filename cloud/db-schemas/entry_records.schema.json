@@ -9,7 +9,9 @@
  *   ocrConfidence: number (0~1)
  *   payload: object { branchId, generation, name, parentIds?, notes? }
  *   auditChain: array[{ step, userId, time }]
- *   status: enum [SUBMITTED, AUDITING, APPROVED, REJECTED]
+ *   status: enum [SUBMITTED, AUDITING, FIRST_PASS, PUBLICITY, APPROVED, REJECTED]
+ *   publicityDays: number (公示天数，0=不公示直生效；settings.publicityDays 可配)
+ *   publicityDeadline: Date (公示截止日，仅 PUBLICITY 状态有意义)
  *   createdAt: Date
  *   createdBy: string
  *   reviewedBy: string (可选)
@@ -35,8 +37,10 @@
     "auditChain": { "type": "array", "items": { "type": "object" } },
     "status": {
       "type": "string",
-      "enum": ["SUBMITTED", "AUDITING", "APPROVED", "REJECTED"]
+      "enum": ["SUBMITTED", "AUDITING", "FIRST_PASS", "PUBLICITY", "APPROVED", "REJECTED"]
     },
+    "publicityDays": { "type": "number", "minimum": 0, "maximum": 30 },
+    "publicityDeadline": { "type": "string", "format": "date-time" },
     "createdAt": { "type": "string", "format": "date-time" },
     "createdBy": { "type": "string" },
     "reviewedBy": { "type": "string" },
@@ -46,6 +50,7 @@
   "indexes": [
     { "keys": { "idemKey": 1 }, "options": { "unique": true, "name": "idem_unique" } },
     { "keys": { "status": 1 }, "name": "status_idx" },
+    { "keys": { "status": 1, "publicityDeadline": 1 }, "name": "status_deadline_idx" },
     { "keys": { "createdBy": 1, "createdAt": -1 }, "name": "creator_created_desc_idx" }
   ]
 }
