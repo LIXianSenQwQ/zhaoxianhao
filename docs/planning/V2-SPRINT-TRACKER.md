@@ -61,11 +61,11 @@
 ### 测试覆盖（开发框架二十三 23.5：覆盖率≥90%）
 | 指标 | 数值 | 状态 |
 | --- | --- | --- |
-| **测试总数** | 430（F11 opera 冒烟 +6 / F12 opera-engine 单测 +20 / A3-A5 修复维持）| ✅ |
+| **测试总数** | 437（F12 opera-engine +20 / A1-A5 + module-integration + collections-audit 新增；基线 403）| ✅ |
 | 失败 | 0 | ✅ |
 | Lint error | 0 | ✅ |
 | 云函数结构校验 | 29/29（F11 新增 opera）| ✅ |
-| **新增测试项** | `tests/opera-engine.test.js` 纯函数单测 20 用例（行当卡/登台/成长/签到/频控/合规）| ✅ F12 |
+| **新增测试项** | `tests/opera-engine.test.js` 20 用例 / `tests/module-integration.test.js` 3 用例 (IJ1 四角完整性/IJ2 跨模块旅程/IJ3 隔离) / `tests/collections-audit.test.js` 4 用例 (K1~K4 12 集合审计) | ✅ F12/F11/F1 |
 | F12 门禁修复 | A1 误报正则收紧（`/bet/i`→`[\s\W]bet[\s\W]`防函数名误报；A3 合规声明 marker `/`笔误；A5 secscan 检测 pattern 扩展兼容 `callFunction({name:'secscan', data:{action:'detectText'}})` 模式）+ `plaza`/`content` secscan.detectText 实际接入 | ✅ F12 |
 
 ---
