@@ -133,7 +133,14 @@ async function detectText(ctx, content) {
     }).catch(() => {});
     // 连续违规检测
     const repeat = await checkRepeatedViolation(db, ctx.openid);
-    return OK({ status: 'block', reason: blockResult.reason, flaggedWords: blockResult.flaggedWords, source: 'dictionary', ...(repeat.escalation ? { escalated: true, escalationDetail: repeat } : {}) });
+    return OK({ 
+      status: 'block', 
+      reason: blockResult.reason, 
+      flaggedWords: blockResult.flaggedWords, 
+      source: 'dictionary',
+      escalated: repeat.escalation, 
+      escalationDetail: repeat.escalation ? repeat : null 
+    });
   }
 
   // ② msgSecCheck 在线检测（生产环境 openSecurity → 降级 callFunction → 降级敏感词库）
@@ -144,7 +151,13 @@ async function detectText(ctx, content) {
       detail: JSON.stringify(apiResult), time: new Date()
     }).catch(() => {});
     const repeat = await checkRepeatedViolation(db, ctx.openid);
-    return OK({ status: 'block', reason: apiResult.reason, source: 'msgSecCheck', ...(repeat.escalation ? { escalated: true, escalationDetail: repeat } : {}) });
+    return OK({ 
+      status: 'block', 
+      reason: apiResult.reason, 
+      source: 'msgSecCheck',
+      escalated: repeat.escalation, 
+      escalationDetail: repeat.escalation ? repeat : null 
+    });
   }
 
   return OK({ status: 'pass', source: apiResult.pass === null ? 'fallback' : 'msgSecCheck', time: new Date() });
@@ -169,7 +182,13 @@ async function detectImage(ctx, sourceType, fileIdOrUrl) {
       detail: JSON.stringify(result), time: new Date()
     }).catch(() => {});
     const repeat = await checkRepeatedViolation(db, ctx.openid);
-    return OK({ status: 'block', reason: result.reason, source: 'imgSecCheck', ...(repeat.escalation ? { escalated: true, escalationDetail: repeat } : {}) });
+    return OK({ 
+      status: 'block', 
+      reason: result.reason, 
+      source: 'imgSecCheck',
+      escalated: repeat.escalation, 
+      escalationDetail: repeat.escalation ? repeat : null 
+    });
   }
 
   return OK({ status: 'pass', source: result.pass === null ? 'fallback' : 'imgSecCheck', time: new Date() });
