@@ -24,6 +24,12 @@ export const useUserStore = defineStore('user', () => {
   const childMode = ref(false); // 少年模式
   const featureFlags = ref<Record<string, any>>({});
 
+  // 从本地存储恢复模式开关（避免每次启动重置）
+  try {
+    elderMode.value = !!uni.getStorageSync('elderMode');
+    childMode.value = !!uni.getStorageSync('childMode');
+  } catch (e) { /* 存储不可用时保持默认 */ }
+
   // Getters
   const isLoggedIn = computed(() => !!userInfo.value);
   const isMember = computed(() => userInfo.value?.role === 'MEMBER' || ['EDITOR', 'CHIEF'].includes(userInfo.value?.role || ''));
@@ -74,6 +80,21 @@ export const useUserStore = defineStore('user', () => {
   function toggleElderMode() {
     elderMode.value = !elderMode.value;
     uni.setStorageSync('elderMode', elderMode.value);
+    // 年长与少年互斥：开启年长时关闭少年
+    if (elderMode.value && childMode.value) {
+      childMode.value = false;
+      uni.setStorageSync('childMode', false);
+    }
+  }
+
+  function toggleChildMode() {
+    childMode.value = !childMode.value;
+    uni.setStorageSync('childMode', childMode.value);
+    // 少年与年长互斥：开启少年时关闭年长
+    if (childMode.value && elderMode.value) {
+      elderMode.value = false;
+      uni.setStorageSync('elderMode', false);
+    }
   }
 
   function logout() {
@@ -97,6 +118,7 @@ export const useUserStore = defineStore('user', () => {
     isV20Enabled,
     updateFlag,
     toggleElderMode,
+    toggleChildMode,
     logout
   };
 });

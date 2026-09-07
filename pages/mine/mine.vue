@@ -28,11 +28,17 @@
         </view>
       </BaseCard>
 
-      <!-- 无障碍 / 年长模式 -->
+      <!-- 无障碍 / 显示模式 -->
       <BaseCard title="显示设置">
         <view class="switch-row" @tap="store.toggleElderMode()">
           <text class="row-label" :class="{ 'elder-text': store.elderMode }">年长模式（字号 ×1.4）</text>
           <view class="switch-ui" :class="{ on: store.elderMode }">
+            <view class="knob" />
+          </view>
+        </view>
+        <view class="switch-row" @tap="store.toggleChildMode()">
+          <text class="row-label" :class="{ 'elder-text': store.childMode }">少年模式（游戏限时 · 内容净网）</text>
+          <view class="switch-ui" :class="{ on: store.childMode }">
             <view class="knob" />
           </view>
         </view>
@@ -91,9 +97,17 @@ const privacyDesc = computed(() =>
 const entries = computed(() => {
   const base = [
     { key: 'tree', label: '我的族谱树', url: '/pkg-family/pages/tree/tree' },
+    { key: 'profile', label: '个人档案（V1.1）', url: '/pkg-profile/pages/profile/index' },
     { key: 'task', label: '成长任务', url: '/pkg-growth/pages/task/task' },
-    { key: 'notify', label: '我的消息', url: '/pkg-notify/pages/list/list' }
+    { key: 'notify', label: '我的消息', url: '/pkg-calendar/pages/notification/index' }
   ];
+  // 家族专区入口（V2.0）
+  if (window._featureFlags?.v20News?.enabled) {
+    base.push({ key: 'news', label: '家族新闻', url: '/pkg-news/pages/news/index' });
+  }
+  if (window._featureFlags?.v20Moment?.enabled) {
+    base.push({ key: 'moment', label: '家族动态', url: '/pkg-moment/pages/moment/index' });
+  }
   // 族史委及以上显示审核入口
   if (store.isAdmin) {
     base.push({ key: 'audit', label: '入谱审核', url: '/pkg-growth/pages/audit/audit' });
