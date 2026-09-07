@@ -10,8 +10,11 @@
     >
       <text class="home-greeting">{{ greeting }}</text>
       <text class="home-greeting-sub" v-if="loaded">
-        {{ festival ? festival + ' · ' : '' }}{{ solarTerm }} · {{ weatherInfo }}
+        {{ festival ? festival + ' · ' : '' }}{{ solarTerm }}
       </text>
+      <view class="weather-widget-wrap" @click="goWeatherDetail">
+        <WeatherWidget @detail="goWeatherDetail" />
+      </view>
     </view>
 
     <!-- ② 快捷工具条（固定 5 键） -->
@@ -77,6 +80,7 @@ import Skeleton from '@/components/common/Skeleton.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ErrorPage from '@/components/common/ErrorPage.vue';
 import { resolveTheme, MUTED_THEME } from '@/utils/home-atmosphere';
+import WeatherWidget from '@/components/weather/WeatherWidget.vue';
 
 const userStore = useUserStore();
 
@@ -86,7 +90,6 @@ const userStore = useUserStore();
 const greeting = ref('您好');
 const solarTerm = ref('');
 const festival = ref('');
-const weatherInfo = ref('');
 const isMutedPeriod = ref(false);
 const loaded = ref(false);
 const themeOverride = ref<{ top: string; mid: string; bottom: string } | null>(null);
@@ -160,15 +163,16 @@ async function loadTodayCards() {
     cacheKey: 'atmosphere:today',
     cacheTTL: 10 * 60 * 1000
   });
+
   if (atm.data) {
     const d = atm.data.data ?? atm.data;
     solarTerm.value = d.solarTerm || '';
     festival.value = d.festival || '';
     isMutedPeriod.value = !!d.muted; // R13 atmosphere 字段口径：muted
-    weatherInfo.value = d.weather || '晴'; // V1.1 weather.current 接入后替换
     loaded.value = true;
     themeOverride.value = d.moodTheme || null; // §7.8 服务端 24 节气端点色板为主源
   }
+  // 注：天气由 <WeatherWidget> 组件独立承载（含 3h 缓存），避免双请求
 
   // 2. 要事卡流（缓存优先，短 TTL）
   const digest = await call('notify', { action: 'digest' }, {
@@ -216,6 +220,12 @@ function openCard(card: { id: string; type: string }) {
     uni.navigateTo({ url: '/pkg-family/pages/plaza/plaza', fail: () => {} });
   }
 }
+
+function goWeatherDetail() {
+  uni.navigateTo({ url: '/pkg-home/pages/home/weather', fail: () => {
+    uni.showToast({ title: '天气详情页未就绪', icon: 'none' });
+  } });
+}
 </script>
 
 <style lang="scss" scoped>
@@ -228,5 +238,147 @@ function openCard(card: { id: string; type: string }) {
   .home-quickbar-label { font-size: calc(12px * 1.4); }
   .home-overview-num { font-size: calc(20px * 1.4); }
   .home-overview-label { font-size: calc(12px * 1.4); }
+}
+
+/* ─── 晨光问候区优化（蓝图 0.3.2 ①） ─── */
+.home-header {
+  min-height: 120px; /* 固定高度确保首屏稳定 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  position: relative;
+  padding-top: 24px;
+  padding-bottom: 24px;
+  
+  &.muted {
+    background: var(--home-header-muted) !important; /* 强制覆盖 inline style */
+  }
+}
+
+.home-greeting {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.home-greeting-sub {
+  font-size: 14px;
+  color: var(--home-text-2);
+  padding-right: 180px; /* 为右下角天气小件预留空间，防止文字重叠 */
+}
+
+/* 天气小件：右下角对齐，白底胶囊悬浮（着色纪律：清新点缀） */
+.weather-widget-wrap {
+  position: absolute;
+  right: 16px;
+  bottom: 24px;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 20px;
+  padding: 6px 12px;
+  box-shadow: 0 2px 12px rgba(38, 34, 30, 0.08);
+}
+
+/* ─── 快捷工具条（蓝图 0.3.2 ②） ─── */
+.home-quickbar {
+  margin: -8px 0 12px 0; /* 向上偏移抵消部分间距 */
+  box-shadow: 0 2px 12px rgba(38, 34, 30, 0.06);
+  
+  &-item {
+    min-width: 44px;
+    min-height: 44px; /* 最小触控热区 */
+    cursor: pointer;
+    
+    &:active .qb-icon {
+      transform: scale(0.92); /* 按压反馈 ≤200ms */
+    }
+  }
+  
+  &-label {
+    font-size: 12px;
+  }
+}
+
+.qb-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 50%;
+  background: var(--home-card-2);
+  transition: transform 120ms ease-out;
+  
+  &.gild {
+    background: linear-gradient(135deg, #D4B06A 0%, #C9A063 50%, #B8924F 100%);
+  }
+}
+
+/* ─── 今日要事卡流（蓝图 0.3.2 ③） ─── */
+.today-section {
+  margin-top: 12px;
+  
+  .fade-in {
+    animation: fadeIn 200ms ease-out;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── 家族速览横滑数据卡（蓝图 0.3.2 ④） ─── */
+.home-overview {
+  margin-top: 12px;
+  height: 72px; /* 固定高度避免跳动 */
+  overflow-x: auto;
+  scrollbar-width: none;
+  
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.home-overview-item {
+  flex-shrink: 0;
+  min-width: 120px;
+  background: var(--home-card);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-shadow: 0 2px 12px rgba(38, 34, 30, 0.06);
+  cursor: pointer;
+  
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.home-overview-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: #C9A063; /* 直接写琉璃金 hex，不依赖 CSS 变量兼容问题 */
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.home-overview-label {
+  font-size: 12px;
+  color: var(--home-text-2);
+}
+
+/* ─── BaseCard 类型边条增强 ─── */
+:deep(.base-card.ceremony) {
+  border-left: 4px solid var(--home-accent);
+}
+
+:deep(.base-card.motto) {
+  background: var(--home-card-2);
 }
 </style>

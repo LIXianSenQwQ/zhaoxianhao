@@ -202,14 +202,19 @@ async function listGreetings(ctx, userId) {
 
 /**
  * profile.capsule.create 创建百年胶囊
- * 入参：{ targetType, targetId, unlockDate: 'YYYY-MM-DD' }
+ * 入参：{ targetType, targetId, unlockDate: 'YYYY-MM-DD', message? }
+ *   message 为可选书信文本（≤2000 字）：向本人可见存明文；生产建议升级为
+ *   服务端加密（encryptedPayload），当前 stub 环境保持占位可测。
  */
-async function capsuleCreate(ctx, userId, { targetType, targetId, unlockDate }) {
+async function capsuleCreate(ctx, userId, { targetType, targetId, unlockDate, message }) {
   const db = wx.getDatabase();
   const now = new Date();
 
   if (!targetType || !targetId) return BAD_REQUEST('targetType/targetId 必填');
   if (!unlockDate || !/^\d{4}-\d{2}-\d{2}$/.test(unlockDate)) return BAD_REQUEST('unlockDate 需为 YYYY-MM-DD');
+  if (message !== undefined && message !== null && String(message).length > 2000) {
+    return BAD_REQUEST('书信内容不得超过 2000 字');
+  }
 
   // unlockDate 必须晚于今天
   const today = new Date();
@@ -221,6 +226,7 @@ async function capsuleCreate(ctx, userId, { targetType, targetId, unlockDate }) 
     targetType,
     targetId,
     unlockDate,
+    message: message || '',
     status: 'SEALED',
     unlockLog: [],
     encryptedPayload: `sealed:${targetId}`,
@@ -274,6 +280,68 @@ async function capsuleList(ctx, userId) {
   return OK({ capsules: res.data || [] });
 }
 
+// ─── 只读查询组（对齐 services/profile.ts 与蓝图 V1.1 语义） ───
+
+/** settings 读取工具（key → value，不存在返回 null） */
+async function readSetting(db, key) {
+  const res = await db.collection('settings').where({ key }).limit(1).get();
+  const row = res.data && res.data[0];
+  return row ? row.value : null;
+}
+
+/**
+ * profile.motto.get：当前家风家训（settings.family_motto，EDITOR+ 可编辑）
+ */
+async function getMotto(ctx, userId) {
+  const db = wx.getDatabase();
+  const value = await readSetting(db, 'family_motto');
+  return OK({ motto: value || '', canEdit: hasRole(ctx.role, 'EDITOR'), source: 'family_settings' });
+}
+
+/**
+ * profile.generation.list：字辈序列 + 我的成员定位
+ * - chars: settings.generation_chars（数组）或空
+ * - member: 当前登录用户绑定的成员 { memberId, name, generation } | null
+ */
+async function generationList(ctx, userId, branchId) {
+  const db = wx.getDatabase();
+  const chars = await readSetting(db, 'generation_chars');
+  let member = null;
+  try {
+    const me = await db.collection('users').where({ openid: userId }).limit(1).get();
+    const u = me.data && me.data[0];
+    if (u && u.memberId) {
+      const mres = await db.collection('members').doc(u.memberId).get().catch(() => null);
+      const m = mres && mres.data && !Array.isArray(mres.data) ? mres.data : (mres && mres.data && mres.data[0]);
+      if (m) {
+        member = {
+          memberId: u.memberId,
+          name: m.genealogyName || m.name || '',
+          generation: typeof m.generation === 'number' ? m.generation : null,
+          isMale: m.gender !== 'FEMALE'
+        };
+      }
+    }
+  } catch (e) { /* 未绑定成员时 member=null，页面显示"尚未入谱" */ }
+  return OK({
+    chars: Array.isArray(chars) ? chars : [],
+    total: Array.isArray(chars) ? chars.length : 0,
+    member,
+    canEdit: hasRole(ctx.role, 'EDITOR')
+  });
+}
+
+/**
+ * profile.greeting.active：当前展示问候语（本人最近一条 ACTIVE）
+ */
+async function greetingActive(ctx, userId) {
+  const db = wx.getDatabase();
+  const res = await db.collection('greeting_cards')
+    .where({ userId, status: 'ACTIVE' })
+    .orderBy('updatedAt', 'desc').limit(1).get();
+  return OK({ card: (res.data && res.data[0]) || null });
+}
+
 module.exports = { main: async (params, context) => {
   const { action } = params || {};
   const userId = params.userId || context.openid;
@@ -290,6 +358,12 @@ module.exports = { main: async (params, context) => {
       return await saveGreeting(ctx, userId, params);
     case 'greeting.list':
       return await listGreetings(ctx, userId);
+    case 'greeting.active':
+      return await greetingActive(ctx, userId);
+    case 'motto.get':
+      return await getMotto(ctx, userId);
+    case 'generation.list':
+      return await generationList(ctx, userId, params.branchId);
     case 'capsule.create':
       return await capsuleCreate(ctx, userId, params);
     case 'capsule.scan':

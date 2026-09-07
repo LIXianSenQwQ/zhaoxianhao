@@ -248,11 +248,14 @@ async function listSources(ctx) {
   return OK({ sources: res.data || [] });
 }
 
-/** 分页列出新闻项（F4 将扩展分类/推荐排序；此处为分页骨架） */
-async function listItems(ctx, userId, { page = 1, pageSize = 20 }) {
+/** 分页列出新闻项（支持按 category 过滤，兼容原无参调用） */
+async function listItems(ctx, userId, { page = 1, pageSize = 20, category }) {
   const db = wx.getDatabase();
   const skip = (Math.max(1, Number(page) || 1) - 1) * pageSize;
+  const where = {};
+  if (category) where.category = String(category).trim();
   const res = await db.collection('news_items')
+    .where(where)
     .orderBy('publishAt', 'desc').skip(skip).limit(pageSize).get();
   return OK({ items: res.data || [], page, hasMore: (res.data || []).length === pageSize });
 }

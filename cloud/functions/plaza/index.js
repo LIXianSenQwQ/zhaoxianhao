@@ -30,6 +30,8 @@ async function main(event, context) {
   switch (action) {
     case 'list':
       return await listMoments(db, openid, event);
+    case 'detail':
+      return await detailMoment(db, openid, event);
     case 'publish':
       return await publishMoment(db, openid, event);
     case 'updateHotScore':
@@ -72,6 +74,31 @@ async function listMoments(db, openid, { page = 1, pageSize = PAGE_SIZE, status,
 
   const posts = (res && res.data) || [];
   return OK({ moments: posts, page: Number(page), hasMore: posts.length === Number(pageSize) });
+}
+
+/** 动态详情：单条 + 评论列表（COMMENT asc）+ 我是否已点赞（供详情页渲染） */
+async function detailMoment(db, openid, { momentId }) {
+  const role = await roleOf(db, openid);
+  if (!hasRole(role, 'MEMBER')) return FORBIDDEN('认证族人方可浏览动态');
+  if (!momentId) return BAD_REQUEST('缺少 momentId');
+
+  const [mRes, cRes, lRes] = await Promise.all([
+    db.collection('family_moments').doc(momentId).get(),
+    db.collection('moment_interactions')
+      .where({ momentId, type: 'COMMENT' })
+      .orderBy('createdAt', 'asc').limit(200).get(),
+    db.collection('moment_interactions')
+      .where({ momentId, type: 'LIKE', userId: openid }).limit(1).get()
+  ]);
+
+  const moment = (mRes && mRes.data && !Array.isArray(mRes.data))
+    ? mRes.data : (mRes && mRes.data && mRes.data[0]);
+  if (!moment) return BAD_REQUEST('动态不存在或已删除');
+
+  const comments = ((cRes && cRes.data) || []).map(c => ({
+    _id: c._id, userId: c.userId, userName: c.userName, content: c.content, createdAt: c.createdAt
+  }));
+  return OK({ moment, comments, likedByMe: !!(lRes && lRes.data && lRes.data.length) });
 }
 
 /** 发布动态：MEMBER+; text ≤ 5000; mediaIds ≤ 9; supports mentions & tags; secscan content safety */

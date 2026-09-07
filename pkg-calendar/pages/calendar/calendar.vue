@@ -156,7 +156,9 @@ async function loadAlmanac(dateStr: string) {
   almanac.value = null;
   try {
     const res = await read('calendar', { action: 'almanac', date: dateStr }, '', 0);
-    if (res.success && res.data) almanac.value = res.data;
+    // align with request.ts CallResult: no success field, data = body.data (already unpacked)
+    const payload = res.data?.data ?? res.data;
+    if (payload) almanac.value = payload;
   } catch (e) {
     almanac.value = null;
   } finally {
@@ -166,12 +168,14 @@ async function loadAlmanac(dateStr: string) {
 
 /** 氛围缓存优先渲染（蓝图 0.6.3：atmosphere.today 缓存 10 分钟静默刷新） */
 read('atmosphere', { action: 'today' }, 'atmosphere.today', 600000).then(res => {
-  if (res.success && res.data) {
-    term.value = res.data.solarTerm || '';
-    greeting.value = res.data.greeting || '';
-    muted.value = !!res.data.muted;
-    festival.value = res.data.festival || '';
-    if (res.data.moodTheme && res.data.moodTheme.top) theme.value = res.data.moodTheme;
+  // align with request.ts CallResult: no success field, data = body.data (already unpacked)
+  const t = res.data?.data ?? res.data;
+  if (t) {
+    term.value = t.solarTerm || '';
+    greeting.value = t.greeting || '';
+    muted.value = !!t.muted;
+    festival.value = t.festival || '';
+    if (t.moodTheme && t.moodTheme.top) theme.value = t.moodTheme;
   }
 });
 </script>

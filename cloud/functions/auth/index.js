@@ -45,6 +45,8 @@ async function main(params, context) {
       return await setDelegates(params, context);
     case 'revokeDelegate':
       return await revokeDelegate(params, context);
+    case 'delegate.list':
+      return await listDelegates(params, context);
     case 'setReversePassword':
       return await setReversePassword(params, context);
     case 'verifyReverse':
@@ -399,7 +401,6 @@ async function revokeDelegate(params, context) {
 }
 
 // ─── R23: 反向密码（蓝图 24.4：独立第二密码，仅敏感操作二次验证） ───
-
 /**
  * auth.setReversePassword 设置反向密码
  * 入参：{ newReversePwd }（≥8 位含大小写+数字；与主密码不同的校验由前端+服务端占位）
@@ -445,4 +446,29 @@ async function verifyReverse(params, context) {
   // 短时效令牌占位（真实：JWT/签名 + 5 分钟过期）
   const token = simpleHash(`${openid}:${Date.now()}`, 'relax-token');
   return OK({ token, expiresIn: 300, message: '二次验证通过' });
+}
+
+/**
+ * auth.delegate.list 我的代理人列表（只读本人，蓝图 24.3）
+ * 入参：无（或 { includeGranted?: boolean }）
+ */
+async function listDelegates(params, context) {
+  const db = wx.getDatabase();
+  const openid = context.OPENID || context.openid;
+  const me = await db.collection('users').where({ openid }).limit(1).get();
+  const row = me.data && me.data[0];
+  const delegates = (row && Array.isArray(row.delegates) && row.delegates) || [];
+  // 回填代理人公开昵称（仅昵称，不外泄敏感字段）
+  const detailed = [];
+  for (const d of delegates) {
+    const u = await db.collection('users').where({ openid: d.userId }).limit(1).get();
+    const urow = u.data && u.data[0];
+    detailed.push({
+      userId: d.userId,
+      scopes: d.scopes || [],
+      nickName: (urow && urow.nickName) || (urow && urow.name) || '',
+      status: (urow && urow.status) || 'UNKNOWN'
+    });
+  }
+  return OK({ delegates: detailed, count: detailed.length, smsRequired: true });
 }

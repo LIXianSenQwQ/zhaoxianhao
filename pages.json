@@ -131,6 +131,26 @@
 				{
 					"path": "pages/calendar/calendar",
 					"style": {}
+				},
+				{
+					"path": "pages/detail/detail",
+					"style": {
+						"navigationBarTitleText": "提醒详情"
+					}
+				},
+				{
+					"path": "pages/notification/index",
+					"style": {
+						"navigationBarTitleText": "通知中心",
+						"enablePullDownRefresh": true,
+						"backgroundTextStyle": "dark"
+					}
+				},
+				{
+					"path": "pages/almanac/index",
+					"style": {
+						"navigationBarTitleText": "老皇历"
+					}
 				}
 			]
 		},
@@ -236,6 +256,150 @@
 					"style": {
 						"navigationBarTitleText": "虚拟角色"
 					}
+				},
+				{
+					"path": "pages/home/weather",
+					"style": {
+						"navigationBarTitleText": "天气详情",
+						"navigationBarBackgroundColor": "#FAF8F2",
+						"navigationBarTextStyle": "black"
+					}
+				}
+			]
+		},
+		{
+			"root": "pkg-profile",
+			"name": "profile",
+			"pages": [
+				{
+					"path": "pages/profile/index",
+					"style": {
+						"navigationBarTitleText": "个人档案"
+					}
+				},
+				{
+					"path": "pages/greeting/index",
+					"style": {
+						"navigationBarTitleText": "家庭问候语"
+					}
+				},
+				{
+					"path": "pages/motto/index",
+					"style": {
+						"navigationBarTitleText": "家风家训"
+					}
+				},
+				{
+					"path": "pages/generation/index",
+					"style": {
+						"navigationBarTitleText": "字辈"
+					}
+				},
+				{
+					"path": "pages/capsule/index",
+					"style": {
+						"navigationBarTitleText": "百年家书"
+					}
+				},
+				{
+					"path": "pages/photomgr/index",
+					"style": {
+						"navigationBarTitleText": "我的相册"
+					}
+				},
+				{
+					"path": "pages/delegate/index",
+					"style": {
+						"navigationBarTitleText": "私密委托"
+					}
+				},
+				{
+					"path": "pages/security/index",
+					"style": {
+						"navigationBarTitleText": "账号与安全"
+					}
+				}
+			]
+		},
+		{
+			"root": "pkg-news",
+			"name": "news",
+			"pages": [
+				{
+					"path": "pages/news/index",
+					"style": {
+						"navigationBarTitleText": "家族资讯",
+						"enablePullDownRefresh": true,
+						"backgroundTextStyle": "dark"
+					}
+				},
+				{
+					"path": "pages/news/category",
+					"style": {
+						"navigationBarTitleText": "分类浏览"
+					}
+				},
+				{
+					"path": "pages/news/detail",
+					"style": {
+						"navigationBarTitleText": "文章详情"
+					}
+				},
+				{
+					"path": "pages/news/search",
+					"style": {
+						"navigationBarTitleText": "资讯搜索"
+					}
+				},
+				{
+					"path": "pages/news/favorites",
+					"style": {
+						"navigationBarTitleText": "我的收藏"
+					}
+				},
+				{
+					"path": "pages/news/offline",
+					"style": {
+						"navigationBarTitleText": "离线阅读"
+					}
+				},
+				{
+					"path": "pages/news/push",
+					"style": {
+						"navigationBarTitleText": "推送设置"
+					}
+				}
+			]
+		},
+		{
+			"root": "pkg-moment",
+			"name": "moment",
+			"pages": [
+				{
+					"path": "pages/moment/index",
+					"style": {
+						"navigationBarTitleText": "家族动态",
+						"enablePullDownRefresh": true,
+						"backgroundTextStyle": "dark"
+					}
+				},
+				{
+					"path": "pages/moment/publish",
+					"style": {
+						"navigationBarTitleText": "发布动态"
+					}
+				},
+				{
+					"path": "pages/moment/detail",
+					"style": {
+						"navigationBarTitleText": "动态详情"
+					}
+				},
+				{
+					"path": "pages/moment/notice",
+					"style": {
+						"navigationBarTitleText": "家族公告"
+					}
 				}
 			]
 		}
@@ -247,7 +411,7 @@
 		},
 		"pages/mine/mine": {
 			"network": "all",
-			"packages": ["family", "growth"]
+			"packages": ["family", "growth", "news", "moment"]
 		},
 		"pages/search/search": {
 			"network": "all",

@@ -1809,6 +1809,31 @@ test('R22 weather.switchCity: 切换成功并缓存', async () => {
   assert.equal(res.data.cityId, '101230100');
 });
 
+test('R22 weather.forecast7: 返回 7 日预报列表', async () => {
+  const res = await FN('weather').main({ action: 'forecast7', cityId: '101010100' }, CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(Array.isArray(res.data.list), 'list 为数组');
+  assert.equal(res.data.list.length, 7, '恰好 7 天');
+  assert.ok(res.data.list[0].tempMax != null && res.data.list[0].tempMin != null, '温度齐全');
+});
+
+test('R22 weather.cities: 返回可切换城市清单', async () => {
+  const res = await FN('weather').main({ action: 'cities' }, CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.ok(Array.isArray(res.data.cities), 'cities 为数组');
+  assert.ok(res.data.cities.length >= 5, '城市不少于 5 个');
+  // 蓝本属地赵县必须在列
+  const zx = res.data.cities.find(c => c.name === '赵县');
+  assert.ok(zx, '包含赵县（蓝本属地）');
+  assert.equal(zx.id, '101090102');
+});
+
+test('R22 weather.cities: current 返回 cityName 中文', async () => {
+  const res = await FN('weather').main({ action: 'current', cityId: '101090102' }, CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.cityName, '赵县');
+});
+
 test('R22 greeting.save: 基础校验通过', async () => {
   seedDB({ greetingCards: [] });
   const res = await FN('profile').main(
