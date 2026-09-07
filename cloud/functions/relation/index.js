@@ -101,14 +101,14 @@ async function spouseOfMyKinTitle(db, a, b) {
   }
 
   const seniorityKey = `${nAX}-${mAX}`;
-  const xGender = x.gender === 'MALE' ? 'male' : 'female';
+  const xGender = x.gender; // 'MALE'|'FEMALE'
   let title = null;
 
   if (seniorityKey === '1-1') { // X is A's sibling
-    // Same generation sibling: if X elder than A, seniority='elder'; else 'younger'
+    // Same generation sibling: seniority = X is elder than A → 'elder'，否则 'younger'
     const ka = birthKeyOf(a);
     const kx = birthKeyOf(x);
-    const sen = (ka !== null && kx !== null) ? (ka < kx ? 'younger' : 'elder') : (ka === null ? 'elder' : 'younger');
+    const sen = (ka !== null && kx !== null) ? (ka < kx ? 'younger' : 'elder') : 'elder';
     if (xGender === 'FEMALE') {
       title = sen === 'elder' ? '姐夫' : '妹夫'; // X 是姐→B=姐夫；X 是妹→B=妹夫
     } else { // X male
@@ -160,7 +160,7 @@ async function mySpouseKinTitle(db, a, b) {
   const kx = birthKeyOf(x);
   const bElderThanX = kb !== null && kx !== null && kb < kx;
 
-  const xGender = x.gender === 'MALE' ? 'male' : 'female';
+  const xGender = x.gender; // 'MALE'|'FEMALE'
 
   let title = null;
   if (nXB === 1 && mXB === 0) {
@@ -173,11 +173,11 @@ async function mySpouseKinTitle(db, a, b) {
   } else if (nXB === 1 && mXB === 1) {
     // B is X's sibling
     if (xGender === 'FEMALE') { // X is wife
-      if (b.gender === 'MALE') title = bElderThanXCorrect ? '大舅子' : '小舅子';
-      else title = bElderThanXCorrect ? '大姨子' : '小姨子';
+      if (b.gender === 'MALE') title = bElderThanX ? '大舅子' : '小舅子';
+      else title = bElderThanX ? '大姨子' : '小姨子';
     } else { // X is husband
-      if (b.gender === 'MALE') title = bElderThanXCorrect ? '大伯子' : '小叔子';
-      else title = bElderThanXCorrect ? '大姑子' : '小姑子';
+      if (b.gender === 'MALE') title = bElderThanX ? '大伯子' : '小叔子';
+      else title = bElderThanX ? '大姑子' : '小姑子';
     }
   }
 

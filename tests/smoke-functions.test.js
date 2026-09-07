@@ -142,7 +142,8 @@ function seedDB({
   worshipLogs = [], tasks = [], taskRecords = [], calendarItems = [], events = [],
   ceremonies = [], entryRecords = [], relations = [],
   settings = [], avatars = [],
-  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = [], complianceSigns = [], localContents = [], contentCategories = [], searchIndex = [], newsItems = [], newsSources = [], userInterests = [], newsFavorites = []
+  albums = [], albumPhotos = [], contentMessages = [], timeCapsules = [], greetingCards = [], weatherCities = [], complianceSigns = [], localContents = [], contentCategories = [], searchIndex = [], newsItems = [], newsSources = [], userInterests = [], newsFavorites = [],
+  familyMoments = [], momentInteractions = [], clanNotices = []
 } = {}) {
   globalThis.__HCS_STUB_SEED__ = {
     collections: {
@@ -153,7 +154,8 @@ function seedDB({
       calendar_items: calendarItems, events, ceremonies,
       entry_records: entryRecords, relations, avatars,
       albums, album_photos: albumPhotos, content_messages: contentMessages, time_capsules: timeCapsules, greeting_cards: greetingCards, weather_cities: weatherCities, compliance_signs: complianceSigns, local_contents: localContents, content_categories: contentCategories, search_index: searchIndex,
-      news_items: newsItems, news_sources: newsSources, user_interests: userInterests, news_favorites: newsFavorites
+      news_items: newsItems, news_sources: newsSources, user_interests: userInterests, news_favorites: newsFavorites,
+      family_moments: familyMoments, moment_interactions: momentInteractions, clan_notices: clanNotices
     },
     seq: 1000
   };
@@ -319,22 +321,22 @@ test('R11 admin.auditList：HISTORIAN 正向 + userId 筛选 + 分页字段', as
   assert.ok(filtered.data.logs.every(l => l.userId === 'u-a'));
 });
 
-test('R11 plaza.publish：VISITOR 403 / MEMBER 正向（审计留痕 plaza.publish）', async () => {
-  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }], plazaPosts: [] });
+test('R11 plaza.publish：VISITOR 403 / MEMBER 正向（family_moments）', async () => {
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }] });
 
   const denied = await FN('plaza').main({ action: 'publish', content: '大家好' }, {});
   assert.equal(denied.success, false);
   assert.equal(denied.code, 403, '未认证访客不能发布（蓝图 C.4 反骚扰）');
 
   const ctx = { OPENID: 'u-m', openid: 'u-m' };
-  const ok = await FN('plaza').main({ action: 'publish', type: 'text', content: '家祭通知' }, ctx);
+  const ok = await FN('plaza').main({ action: 'publish', type: 'TEXT', content: '家祭通知' }, ctx);
   assert.equal(ok.success, true);
-  assert.ok(ok.data.postId);
+  assert.ok(ok.data.momentId, '返回 momentId');
 
   const seed = globalThis.__HCS_STUB_SEED__;
-  assert.equal(seed.collections.plaza_posts.length, 1);
-  assert.equal(seed.collections.plaza_posts[0].stats.like, 0);
-  assert.ok(seed.collections.audit_logs.some(l => l.action === 'plaza.publish'), '发布写审计');
+  assert.equal(seed.collections.family_moments.length, 1);
+  assert.equal(seed.collections.family_moments[0].stats.like, 0);
+  assert.ok(seed.collections.audit_logs.some(l => l.action === 'family_moments.publish'), '发布写审计');
 });
 
 test('R11 plaza.publish：文字超限 400 + 空内容 400', async () => {
@@ -348,16 +350,18 @@ test('R11 plaza.publish：文字超限 400 + 空内容 400', async () => {
   assert.equal(empty.code, 400, '文字与媒体不可同时为空');
 });
 
-test('R11 plaza.like：原子 +1（db.command.inc + 点路径，stub 兼容）', async () => {
+test('R11 plaza.like：原子 +1（family_moments + moment_interactions）', async () => {
   seedDB({
     users: [{ openid: 'u-m', role: 'MEMBER' }],
-    plazaPosts: [{ _id: 'p-1', authorId: 'u-x', content: 'hi', stats: { like: 2, comment: 0 } }]
+    familyMoments: [{ _id: 'p-1', authorId: 'u-x', content: 'hi', stats: { like: 2, comment: 0 }, status: 'PUBLISHED' }]
   });
   const ctx = { OPENID: 'u-m', openid: 'u-m' };
-  const res = await FN('plaza').main({ action: 'like', postId: 'p-1' }, ctx);
+  const res = await FN('plaza').main({ action: 'like', momentId: 'p-1' }, ctx);
   assert.equal(res.success, true);
   assert.equal(res.data.like, 3);
-  assert.equal(globalThis.__HCS_STUB_SEED__.collections.plaza_posts[0].stats.like, 3, '深层路径 +1 生效');
+  const seed = globalThis.__HCS_STUB_SEED__;
+  assert.equal(seed.collections.family_moments[0].stats.like, 3, '深层路径 +1 生效');
+  assert.ok(seed.collections.moment_interactions.some(i => i.type === 'LIKE' && i.userId === 'u-m'), '互动记录写入');
 });
 
 test('R11 relation.calc：VISITOR 403 / MEMBER 正向（物化路径共同祖先）', async () => {
