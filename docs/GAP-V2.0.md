@@ -47,7 +47,7 @@
 | --- | --- | --- |
 | §7.1 树布局 | ✅ 算法层交付 | `utils/family-tree-layout.js` + 16 用例（世代行/父子居中/birthOrder/家庭单元/直系/时间轴/五服色板）；Canvas 页集成待 P1 |
 | §7.2 称谓矩阵 | ✅ 物化路径实现（修复 seniority 缺陷） | `relation.calc` 同代按 birthOrder/birthDate 判定 elder/younger（向后兼容默认 elder） |
-| §7.2 SPOUSE 姻亲 | ⏳ 待 P1 | 经配偶走姻亲称谓表（姐夫/婶婶） |
+| §7.2 SPOUSE 姻亲 | ✅ 已交付 | `relation.calc` 无血亲共同祖先时经 SPOUSE 边双桥解析（A 血亲 X 之配偶 B / A 的配偶 X 之血亲 B），17 种姻亲称谓 + 7 单测 `tests/relation-spouse.test.js` |
 | §7.2 方言覆盖 | ⏳ 待 P1 | settings.kindshipDialect 配置表 |
 | §7.3 五服 | ✅ fiveFu(n) 阈值正确；着色待 Canvas 层接入 | 五色映射已在 layout 模块 WU_FU_COLORS |
 | §7.4 隐私中间件 | ✅ 全覆盖审计通过 | common/privacy.js + writeAudit + needAuthCard 路由；需逐 action 复核（P1 复查清单） |
