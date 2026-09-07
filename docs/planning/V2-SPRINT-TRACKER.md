@@ -53,14 +53,14 @@
 | **模块三 自动备份队列** | backup 云函数 backupStatus 状态机（PENDING/DONE/FAIL）+ 重试上限 3 + 配额 10GB + export/restore；album.uploadBatch 写 fileSize/attempts | ✅ F3b |
 | **模块三 2GB 分片上传** | upload 云函数 chunk.init/put/progress/complete/status：断点续传会话 + video 转码骨架 + upload_sessions schema | ✅ F3c |
 | **模块二 secscan 生产化** | secscan 原生 API（openSecurity msgSecCheck/imgSecCheck）+ callFunction 降级 + 敏感词库；连续违规人工复核标记结构 | ✅ F4+ |
-| 模块三 家族动态 | plaza 既有；family_moments 迁移脚本既有 | ⏳ |
-| 模块四 合规游戏 | 待 F6-F8 | ⏳ |
-| 模块五 虚拟家园 | 待 F9-F10 | ⏳ |
+| **模块三 家族动态** | plaza 云函数升级 V2.0（listMoments/publishMoment/likeMoment/commentMoment + publishAnnounce/stickAnnouncement/recordReadReceipt/getNotices）+ family_moments 迁移脚本 + clan_notices 集合 | ✅ F5-F6 |
+| **模块四 合规游戏** | 象棋规则引擎 `utils/chess-engine.js`（走法合法性/将军/将杀/困毙）+ 13 单测 | ✅ F7 |
+| **模块五 虚拟家园** | 待 F9-F10 | ⏳ |
 
 ### 测试覆盖（开发框架二十三 23.5：覆盖率≥90%）
 | 指标 | 数值 | 状态 |
 | --- | --- | --- |
-| 测试总数 | 327（secscan 生产化 +3：fileId 降级/url 检测/人工复核结构）| ✅ F4+ |
+| **测试总数** | 354（F5-F6 +12; F7 +13）| ✅ |
 | 失败 | 0 | ✅ |
 | Lint error | 0 | ✅ |
 | 云函数结构校验 | 25/25（新增 backup）| ✅ |
@@ -107,12 +107,14 @@
 - [x] secscan：接入真实 msgSecCheck SDK（openSecurity 原生 API + callFunction 降级 + 敏感词库；连续违规人工复核标记结构）→ secscan 生产化 e502bb4
 
 ### F5-F6 模块三（家族动态）
-- [ ] family_moments 发布/时间线/互动（复用既有 plaza 基础设施）
-- [ ] 公告置顶/已阅回执
-- [ ] 动态@提及 + 称谓自动带出
+- [x] family_moments 发布/时间线/互动（plaza 云函数升级：listMoments/publishMoment/likeMoment/commentMoment → family_moments 集合 + moment_interactions 互动记录）→ `8b8b9ba`
+- [x] 公告置顶/已阅回执（publishAnnounce / stickAnnouncement / recordReadReceipt / getNotices → clan_notices 集合 + priority/stickingCountdown/readBy）
+- [x] 动态@提及 + tags（publishMoment 支持 topicTags + mentions 数组）
+- [x] 种子库扩展 familyMoments/momentInteractions/clanNotices → seedDB 参数
+- [x] plaza 测试 339（原有 327 + 新增 12：comment/tags/mentions/announce/stick/readReceipt/getNotices）
 
 ### F7-F10 模块四/五（游戏合规版 + 家园）
-- [ ] 棋谱研习室（象棋规则引擎 — 本地纯函数可先行 TDD）
+- [x] 棋谱研习室（象棋规则引擎 — 纯函数 TDD：`utils/chess-engine.js` 中国象棋完整规则：车马炮相士帅兵走法合法性 + 蹩腿/塞象眼/隔山打 + 将军/将帅对面 + 合法走法/将杀/困毙判定 → 13 用例 `tests/chess-engine.test.js`）→ `65ecc08`
 - [ ] 牌局记分板 / 灯谜会 / 百业问学 / 梨园小筑
 - [ ] 虚拟角色 + 成长体系 + 家园 Canvas
 - [ ] 五模块集成/安全/性能/合规测试 + 灰度上线
