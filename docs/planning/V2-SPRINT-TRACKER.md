@@ -128,7 +128,8 @@
 
 ### F10 家园云接口层 + member 全树接口
 - [x] **家园云函数 `cloud/functions/home/index.js`**（新增，云函数 25→28）：world.init/get/place/grow/visit/like/setPrivacy + avatar.create/get/update（place 走引擎落位校验 + 建筑解锁，visit 每日 20 次频控，grow 经验曲线自动升级，含 DB schema home_worlds/home_avatars 已有对接）→ 服务封装 `services/home.ts`
-- [x] **asyncgame (F7) 异步对弈**（本批次 R3/R4）：schema `async_games`, cloud 云函数 `cloud/functions/asyncgame/index.js+engine.js` CJS 副本，service `services/asyncgame.ts`, page `pkg-game/pages/game/async.vue`（族人选对手/发起挑战/棋盘交互），smoke 6 用例（MEMBER+、member未关联openid拒绝、create→accept→move(resign)/duplicate 幂等），一致性对拍 4 用例；lint 0E, smoke 267✅, full test 503✅ → `a0248f9`(R3)+`26c6197`(R4)
+- [x] **asyncgame (F7) 异步对弈**（本批次 R3/R4）：schema `async_games`, cloud 云函数 `cloud/functions/asyncgame/index.js+engine.js` CJS 副本，service `services/asyncgame.ts`, page `pkg-game/pages/game/async.vue`（族人选对手/发起挑战/棋盘交互），smoke 6 用例（MEMBER+、member未关联openid拒绝、create→accept→move(resign)/duplicate 幂等），一致性对拍 4 用例；lint 0E, smoke 267✅, full test 503✅ → `9f85918`(R4)
+- [x] **endgame (F7) 残局挑战**（本批次 R5）：题库 `utils/endgame-library.js` 6 题（引擎验证每局恰唯一一步杀：未将军/干净/解互异/杀着类型≥3 → `tests/endgame-library.test.js` 5 用例）+ `pkg-game/pages/game/chess.vue` 双模式（对弈 / 残局挑战，本地闯关记录 storage）+ `pages.json` 注册 async 页（R4 补漏）+ chess 卡文案修正 → `3377530`(R5)；全量 512 test 全绿
 - [x] **member 全树接口 `member.tree.all`**（新增 action）：`buildTreeAll` 按 focusId 房支前缀 + ACTIVE 一次拉取 ≤2000 条（供全树 Canvas），generation/path 排序返回 `{nodes,total,hasMore}` → `services/member.ts treeAll()` 封装
 - [x] riddle/quiz 服务封装 `services/riddle.ts` + `services/quiz.ts`（§7.10 服务层通路：全部页面经 services/* 调用，无直连 wx.cloud.callFunction）
 
