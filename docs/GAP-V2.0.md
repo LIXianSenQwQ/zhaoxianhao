@@ -50,7 +50,7 @@
 | §7.2 SPOUSE 姻亲 | ✅ 已交付 | `relation.calc` 无血亲共同祖先时经 SPOUSE 边双桥解析（A 血亲 X 之配偶 B / A 的配偶 X 之血亲 B），17 种姻亲称谓 + 7 单测 `tests/relation-spouse.test.js` |
 | §7.2 方言覆盖 | ✅ 已交付 | `kindship.kinshipTitle()` 返回 `{formal, dialect?}`；`relation.calc` 从 settings.kindshipDialect 读取方言表并附加 `dialectTitle` 字段（additive，backward compatible）+ 8 单测 |
 | §7.3 五服 | ✅ fiveFu(n) 阈值正确；着色待 Canvas 层接入 | 五色映射已在 layout 模块 WU_FU_COLORS |
-| §7.4 隐私中间件 | ✅ 全覆盖审计通过 | common/privacy.js + writeAudit + needAuthCard 路由；需逐 action 复核（P1 复查清单） |
+| §7.4 隐私中间件 | ✅ P1 复查完成（bfb9feb） | common/privacy.js + writeAudit + needAuthCard 路由；privacy-coverage.test.js 阻断式门禁（17 敏感集合×写操作+KNOWN_SAFE_WRITES 8 条白名单），auth.grantAuth 加固（MEMBER+/受权人 ACTIVE/scope 必填） |
 | §7.5 积分幂等 | ✅ R12 大修完成 | EDITOR+ 门禁/幂等键查重/流水先插/账户 atom/inc/重复返回已有 delta |
 | §7.6 入谱挂接 | ✅ FINALIZE 入库路径闭环；公示期待 E4 | entry.RECORDS/FIRST_PASS/SECOND_PASS/APPROVED → finalizeApprovedMember 写入 path/generation/branchId |
 | §7.7 谱名冲突检测 | ✅ 提交命中统计随单返回 | `entry.submit` conflict/conflictCount/hint 供族史委裁决 |
