@@ -7,7 +7,8 @@ const assert = require('node:assert');
 const {
   CHILD_DAILY_LIMIT_MS, BLOCKED_NEWS_CATEGORY,
   todayKey, normalizeUsage, remainingMs, canPlay,
-  consume, isExhausted, filterCategories, dailyLimitFromFlags
+  consume, isExhausted, filterCategories, dailyLimitFromFlags,
+  settleSession, SETTLE_MIN_MS
 } = require('../utils/minor-mode.js');
 
 test('todayKey: 输出本地 YYYY-MM-DD 格式', () => {
@@ -117,6 +118,53 @@ test('dailyLimitFromFlags: 读自定义分钟数（族议会调参）', () => {
 test('dailyLimitFromFlags: 非法值回退默认', () => {
   assert.strictEqual(dailyLimitFromFlags({ minorProtection: { gameDailyLimitMin: -5 } }), CHILD_DAILY_LIMIT_MS);
   assert.strictEqual(dailyLimitFromFlags({ minorProtection: { gameDailyLimitMin: 'x' } }), CHILD_DAILY_LIMIT_MS);
+});
+
+test('settleSession: 低于最小粒度(1s)不计费（防闪进闪出）', () => {
+  const t = '2026-09-07';
+  const r = settleSession(null, 1000, 1500, t);
+  assert.strictEqual(r.settledMs, 0);
+  assert.strictEqual(r.usedMs, 0);
+});
+
+test('settleSession: 真实停留 5 分钟精确累计', () => {
+  const t = '2026-09-07';
+  const start = Date.UTC(2026, 8, 7, 1, 0, 0);
+  const r = settleSession(null, start, start + 5 * 60 * 1000, t);
+  assert.strictEqual(r.settledMs, 5 * 60 * 1000);
+  assert.strictEqual(r.usedMs, 5 * 60 * 1000);
+});
+
+test('settleSession: 多次会话叠加且封顶', () => {
+  const t = '2026-09-07';
+  const start = Date.UTC(2026, 8, 7, 1, 0, 0);
+  const r1 = settleSession(null, start, start + 20 * 60 * 1000, t);
+  const r2 = settleSession(r1, start + 60 * 60 * 1000, start + 60 * 60 * 1000 + 20 * 60 * 1000, t);
+  assert.strictEqual(r2.usedMs, CHILD_DAILY_LIMIT_MS); // 40min > 30min → 封顶
+  assert.strictEqual(isExhausted(r2, t), true);
+});
+
+test('settleSession: 时钟回拨容错（end < start → 0）', () => {
+  const t = '2026-09-07';
+  const r = settleSession(null, 5000, 2000, t);
+  assert.strictEqual(r.settledMs, 0);
+  assert.strictEqual(r.usedMs, 0);
+});
+
+test('settleSession: 结算后剩余精确反映（29min 已用 + 90s 停留 → 耗尽）', () => {
+  const t = '2026-09-07';
+  const pre = { date: t, usedMs: 29 * 60 * 1000 };
+  const start = Date.UTC(2026, 8, 7, 2, 0, 0);
+  const r = settleSession(pre, start, start + 90 * 1000, t);
+  assert.strictEqual(r.usedMs, CHILD_DAILY_LIMIT_MS); // 封顶 30min
+  assert.strictEqual(remainingMs(r, t), 0);
+});
+
+test('settleSession: 跨会话返回的剩余展示口径一致', () => {
+  const t = '2026-09-07';
+  const r = settleSession(null, 1000, 1000 + 600 * 1000, t); // 10min
+  assert.strictEqual(remainingMs(r, t), 20 * 60 * 1000);
+  assert.strictEqual(SETTLE_MIN_MS, 1000);
 });
 
 test('集成: 少年模式 30 分钟全流程（进入 30 次×1 分钟耗尽）', () => {

@@ -56,7 +56,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useChildGuard } from '@/utils/child-guard.js';
 import { quizList, quizAnswer } from '@/services/quiz';
+useChildGuard();
 
 const industries = ['百家', '农业', '商贾', '文教', '医道', '工造', '蚕桑', '茶艺'];
 const currentIndustry = ref('百家');

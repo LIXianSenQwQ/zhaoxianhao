@@ -39,7 +39,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useChildGuard } from '@/utils/child-guard.js';
 import { riddleList, riddleAnswer } from '@/services/riddle';
+useChildGuard();
 
 const riddles = ref<Array<any>>([]);
 const currentRiddle = ref<any>(null);

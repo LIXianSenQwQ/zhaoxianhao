@@ -94,7 +94,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useChildGuard } from '@/utils/child-guard.js';
 import { rosterList, rosterCreate, stagePerform, dailyCheckin, recordsList } from '@/services/opera';
+useChildGuard();
 
 const ROLE_LIST = [
   { key: '生', title: '生行' }, { key: '旦', title: '旦行' }, { key: '净', title: '净行' },

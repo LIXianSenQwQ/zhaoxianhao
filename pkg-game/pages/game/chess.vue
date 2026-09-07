@@ -48,6 +48,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useChildGuard } from '@/utils/child-guard.js';
 import {
   initialBoard,
   cloneBoard,
@@ -58,6 +59,7 @@ import {
   isCheckmate,
   isStalemate
 } from '@/utils/chess-engine.js';
+useChildGuard();
 
 const board = ref<any[][]>(initialBoard());
 const turn = ref('red');

@@ -21,10 +21,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import BaseCard from '@/components/common/BaseCard.vue';
 import { useUserStore } from '@/stores/user';
 import {
-  canPlay, consume, dailyLimitFromFlags, remainingMs, todayKey
+  canPlay, dailyLimitFromFlags, remainingMs, todayKey
 } from '@/utils/minor-mode.js';
 
 const store = useUserStore();
@@ -54,9 +55,6 @@ const dailyLimitMs = computed(() =>
 function readRaw(): any {
   try { return uni.getStorageSync(STORAGE_KEY); } catch { return null; }
 }
-function writeUsed(usedMs: number) {
-  try { uni.setStorageSync(STORAGE_KEY, JSON.stringify({ date: todayKey(), usedMs })); } catch {}
-}
 function refreshRemaining() {
   remainingSec.value = Math.floor(remainingMs(readRaw(), todayKey(), dailyLimitMs.value) / 1000);
 }
@@ -81,17 +79,15 @@ onMounted(() => {
   if (childMode.value) startTimer();
 });
 onUnmounted(stopTimer);
+// 从子游戏页返回时以存储口径校准剩余（子页真实计时已写回）
+onShow(() => { if (childMode.value) refreshRemaining(); });
 
 function enter(page: string) {
   if (childMode.value && !canPlay(readRaw(), todayKey(), dailyLimitMs.value)) {
     return uni.showToast({ title: '今日游戏时间已用完', icon: 'none' });
   }
-  // 少年模式：进入一个游戏预扣 1 分钟（纯函数口径）
-  if (childMode.value) {
-    const next = consume(readRaw(), 60 * 1000, todayKey(), dailyLimitMs.value);
-    writeUsed(next.usedMs);
-    refreshRemaining();
-  }
+  // 少年模式：真实时长由子页 useChildGuard 在 onHide/onUnload 结算，
+  // 本入口不再预扣（避免双重扣减），仅做耗尽拦截
   uni.navigateTo({ url: `/pkg-game/pages/game/${page}` });
 }
 </script>

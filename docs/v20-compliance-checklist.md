@@ -44,7 +44,7 @@
 
 | 检查项 | 标准 | 现状 | 结论 |
 |-------|------|------|------|
-| 游戏时长限制 | 少年模式 ≤30 分钟/日 | ✅ `utils/minor-mode.js` 纯函数守卫（normalizeUsage/remainingMs/consume/canPlay，跨日自动重置、封顶钳制）+ 游戏中心 index.vue 接入（进入预扣 1 分钟、倒计时锁定、watch 模式切换实时生效）+ `stores/user.ts` childMode 持久化/toggleChildMode + mine.vue 开关入口 | ✅ |
+| 游戏时长限制 | 少年模式 ≤30 分钟/日 | ✅ `utils/minor-mode.js` 纯函数守卫（normalizeUsage/remainingMs/consume/canPlay/settleSession 真实前台结算，跨日自动重置、封顶钳制）+ 游戏中心 index.vue 入口拦截 + **6 游戏子页 useChildGuard 真实计时**（onShow 耗尽拦截/onHide·onUnload 精确结算/60s 到点轮询强制退出，深链直达亦被拦截）+ `stores/user.ts` childMode 持久化/toggleChildMode + mine.vue 开关入口 | ✅ |
 | 娱乐八卦子类屏蔽 | 屏蔽 | ✅ `utils/minor-mode.js` filterCategories 剔除「娱乐体育」+ pkg-news index.vue 分类 chips 接入（childMode 自动过滤） | ✅ |
 | 实名与防沉迷 | 独立小游戏时接入 | ❌ 当前不适用（无小游戏立项） | ✅ |
 

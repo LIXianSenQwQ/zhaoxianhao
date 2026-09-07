@@ -136,6 +136,11 @@
 - [x] **少年模式合规整改闭环**：`utils/minor-mode.js` 纯函数守卫（normalizeUsage 跨日重置/remainingMs/canPlay/consume 封顶/isExhausted/filterCategories 剔除娱乐体育/dailyLimitFromFlags 族议会可调）+ 20 单测 + `stores/user.ts` childMode 持久化与 toggleChildMode（与 elderMode 互斥）+ mine.vue「少年模式」开关 + 游戏中心接入（预扣 1 分钟/倒计时锁定/watch 实时启停/修复子页 URL）+ pkg-news 分类 chips 过滤 → `a0e2f66`（全量 493 test；v20-compliance-checklist 未成年人 1/3→3/3，总计 20/20 待加强清零）
 - [x] **lint 遗留清理**：`utils/tree-perf.js` truncateName `==` → `??`（eqeqeq 归零）
 
+### F1 合规补强二期（少年模式子页真实前台计时）
+- [x] **子页滞留绕过漏洞修复**：原限时仅入口预扣 1 分钟/次，用户在子页滞留不限时、深链直达可完全绕过 → `utils/child-guard.js` 组合式守卫（onShow 耗尽拦截 + onHide/onUnload 真实毫秒结算 + 60s 到点轮询强制退出）接入 chess/score/riddle/quiz/opera/async 6 子页
+- [x] **game/index.vue 去预扣改 onShow 校准**：子页真实计时后避免双重扣减；index 仅做入口拦截 + 返回校准剩余
+- [x] **minor-mode.js 新增 settleSession 纯函数**（≥1s 计费防闪进闪出/时钟回拨容错/叠加封顶）+ 6 单测（26 用例）→ 全量 499 test
+
 ---
 
 ## 三、执行纪律（延续开发框架 16/17/26）

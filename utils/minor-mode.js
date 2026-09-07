@@ -66,6 +66,31 @@ export function isExhausted(raw, today = todayKey(), limitMs = CHILD_DAILY_LIMIT
   return remainingMs(raw, today, limitMs) <= 0;
 }
 
+/** 结算最小计费粒度：低于 1 秒的滞留不累计（防误触/闪进闪出） */
+export const SETTLE_MIN_MS = 1000;
+
+/**
+ * 真实前台停留结算：把 [startMs, endMs] 的停留时长累计进当日用量。
+ * 纯函数无副作用，供子游戏页 onHide/onUnload 调用的核心逻辑（可单测）。
+ * @param raw 现有记录
+ * @param startMs 进入页面时刻（毫秒时间戳）
+ * @param endMs 离开页面时刻（毫秒时间戳）
+ * @param today 本地日期键
+ * @param limitMs 每日上限
+ * @returns { { date, usedMs, settledMs } } settledMs 为本次实际累计的毫秒
+ */
+export function settleSession(raw, startMs, endMs, today = todayKey(), limitMs = CHILD_DAILY_LIMIT_MS) {
+  const s = Number(startMs) || 0;
+  const e = Number(endMs) || 0;
+  const elapsed = Math.max(0, e - s);
+  if (elapsed < SETTLE_MIN_MS) {
+    const base = normalizeUsage(raw, today);
+    return { date: today, usedMs: base.usedMs, settledMs: 0 };
+  }
+  const next = consume(raw, elapsed, today, limitMs);
+  return { date: today, usedMs: next.usedMs, settledMs: elapsed };
+}
+
 /**
  * 少年模式分类过滤：childMode 开启时移除被屏蔽分类（保持原数组不变）
  * @param {string[]} categories

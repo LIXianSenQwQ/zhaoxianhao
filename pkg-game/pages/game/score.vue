@@ -94,6 +94,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { useChildGuard } from '@/utils/child-guard.js';
 import {
   createScorecard,
   addRound,
@@ -103,6 +104,7 @@ import {
   getPlayerStats,
   COMPLIANCE_TEXT
 } from '@/utils/scoreboard-engine.js';
+useChildGuard();
 
 const complianceText = COMPLIANCE_TEXT;
 const newPlayerName = ref('');

@@ -27,6 +27,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import BaseCard from '@/components/common/BaseCard.vue';
+import { useChildGuard } from '@/utils/child-guard.js';
+useChildGuard();
 const showCreate = ref(false);
 const myGames = ref<any[]>([]); // stub: 未来对接 game 云函数
 
