@@ -3075,3 +3075,50 @@ test('F10 quiz.list：空题库返回空数组（不崩溃）', async () => {
   assert.equal(res.success, true);
   assert.ok(Array.isArray(res.data.questions));
 });
+
+// ─── Sprint F10/F11: 虚拟角色 avatar ───
+
+test('F11 home.avatar.create：创建角色并返回完整角色', async () => {
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  const res = await FN('home').main(
+    { action: 'avatar.create', name: '梨园小生', face: { emoji: '🎭' } },
+    { OPENID: 'u-m', openid: 'u-m' }
+  );
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.avatar.name, '梨园小生');
+  assert.equal(res.data.avatar.level, 1);
+});
+
+test('F11 home.avatar.create：重复创建拒绝并提示改用 update', async () => {
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  await FN('home').main({ action: 'avatar.create', name: '角色甲' }, ctx);
+  const again = await FN('home').main({ action: 'avatar.create', name: '角色乙' }, ctx);
+  assert.equal(again.code, 400, '重复创建应被拒绝');
+  assert.ok(again.message && again.message.includes('avatar.update'));
+});
+
+test('F11 home.avatar.update：改称号与形象不回滚成长', async () => {
+  seedDB({
+    users: [{ openid: 'u-m', role: 'MEMBER' }],
+    homeAvatars: [{ _id: 'av-1', ownerOpenid: 'u-m', name: '角色甲', face: { emoji: '🎭' }, level: 5, exp: 120, title: '' }]
+  });
+  const ctx = { OPENID: 'u-m', openid: 'u-m' };
+  const res = await FN('home').main(
+    { action: 'avatar.update', title: '戏迷之友', face: { emoji: '🧓' } },
+    ctx
+  );
+  assert.equal(res.success, true);
+  assert.equal(res.data.updated, true);
+  const got = await FN('home').main({ action: 'avatar.get' }, ctx);
+  assert.equal(got.data.avatar.title, '戏迷之友');
+  assert.equal(got.data.avatar.face.emoji, '🧓');
+  assert.equal(got.data.avatar.level, 5, '升级数据不得被覆盖');
+});
+
+test('F11 home.avatar.get：无角色返回空 avatar 字段', async () => {
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  const res = await FN('home').main({ action: 'avatar.get' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(res.success, true);
+  assert.equal(res.data.avatar, null);
+});

@@ -12,6 +12,12 @@
       </view>
     </view>
 
+    <!-- 入口导航：虚拟角色 / 好友家园 -->
+    <view class="nav-row">
+      <view class="nav-chip" @tap="navToAvatar"><text class="nav-icon">👤</text><text class="nav-text">虚拟角色</text></view>
+      <view class="nav-chip" @tap="navToVisit"><text class="nav-icon">🏡</text><text class="nav-text">好友家园</text></view>
+    </view>
+
     <!-- 建筑目录 -->
     <scroll-view scroll-x class="catalog-scroll">
       <view class="catalog-inner">
@@ -29,8 +35,14 @@
       </view>
     </scroll-view>
 
-    <!-- 庭院网格 -->
-    <view class="grid-panel">
+    <!-- 视图切换：网格/鸟瞰 -->
+    <view class="view-toggle">
+      <button class="toggle-btn" :class="{ active: viewMode === 'grid' }" @tap="viewMode = 'grid'">网格</button>
+      <button class="toggle-btn" :class="{ active: viewMode === 'canvas' }" @tap="viewMode = 'canvas'">鸟瞰</button>
+    </view>
+
+    <!-- 庭院网格 (Block) -->
+    <view class="grid-panel" v-if="viewMode === 'grid'">
       <view v-for="idx in GRID.h" :key="'row' + idx" class="grid-row">
         <view
           v-for="idx2 in GRID.w"
@@ -41,6 +53,15 @@
         ></view>
       </view>
     </view>
+
+    <!-- 庭院鸟瞰 Canvas -->
+    <canvas
+      v-if="viewMode === 'canvas'"
+      canvas-id="homeCanvas"
+      id="homeCanvas"
+      class="scene-canvas"
+      :style="{ width: canvasW + 'px', height: canvasH + 'px' }"
+    ></canvas>
 
     <!-- 当前选中预览 -->
     <view class="place-bar" v-if="pendingPlacement">
@@ -73,7 +94,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
 import {
   GRID, BUILDING_CATALOG, PRIVACY,
   growHome, validatePlacement, canPlaceBuilding, privacyScope
@@ -88,6 +109,49 @@ const world = reactive<any>({
 });
 const pendingPlacement = ref<any>(null);
 const loadedFromCloud = ref(false);
+const viewMode = ref<'grid' | 'canvas'>('grid');
+
+// ─── Canvas 鸟瞰视图 ───
+const CELL = 24;
+const canvasW = GRID.w * CELL;
+const canvasH = GRID.h * CELL;
+const BUILDING_FILLS: Record<string, string> = {
+  mainHall: '#B03A2E', wingRoom: '#C9826F', courtyard: '#D9B98C',
+  pearGarden: '#C98A7C', shrine: '#8C6D5A', study: '#A9B7A5',
+  stage: '#C9B18C', archway: '#B8915A'
+};
+
+function drawScene() {
+  const ctx = uni.createCanvasContext('homeCanvas');
+  const pad = 1;
+  ctx.setFillStyle('#E7DCC7');
+  ctx.fillRect(0, 0, canvasW, canvasH);
+  // 格线
+  ctx.setStrokeStyle('rgba(0,0,0,0.06)');
+  for (let i = 0; i <= GRID.w; i++) {
+    ctx.beginPath(); ctx.moveTo(i * CELL, 0); ctx.lineTo(i * CELL, canvasH); ctx.stroke();
+  }
+  for (let j = 0; j <= GRID.h; j++) {
+    ctx.beginPath(); ctx.moveTo(0, j * CELL); ctx.lineTo(canvasW, j * CELL); ctx.stroke();
+  }
+  // 建筑
+  for (const b of world.buildings) {
+    const color = BUILDING_FILLS[b.type] || '#B03A2E';
+    ctx.setFillStyle(color);
+    ctx.fillRect(b.x * CELL + pad, b.y * CELL + pad, (b.w || 1) * CELL - pad * 2, (b.h || 1) * CELL - pad * 2);
+    ctx.setFillStyle('#FFFFFF');
+    ctx.setFontSize(9);
+    ctx.fillText(labelOf(b.type).slice(0, 2), b.x * CELL + 3, b.y * CELL + 12);
+  }
+  ctx.draw();
+}
+
+watch(viewMode, (mode) => {
+  if (mode === 'canvas') nextTick(() => drawScene());
+});
+watch(() => world.buildings.length, () => {
+  if (viewMode.value === 'canvas') nextTick(() => drawScene());
+});
 
 onMounted(loadWorld);
 
@@ -204,6 +268,14 @@ function setPrivacyToggle() {
     });
   }
 }
+
+function navToAvatar() {
+  uni.navigateTo({ url: '/pkg-home/pages/home/avatar' });
+}
+
+function navToVisit() {
+  uni.navigateTo({ url: '/pkg-home/pages/home/visit' });
+}
 </script>
 
 <style scoped>
@@ -216,6 +288,16 @@ function setPrivacyToggle() {
 .exp-bar { height: 8px; background: rgba(255,255,255,0.3); border-radius: 4px; margin: 8px 0 4px; overflow: hidden; }
 .exp-fill { height: 100%; background: #F4C76E; border-radius: 4px; transition: width 0.3s; }
 .exp-text { font-size: 11px; opacity: 0.9; }
+
+.nav-row { display: flex; gap: 8px; margin-top: 10px; }
+.nav-chip { flex: 1; background: #FFF; border: 1px solid #E8DFD0; border-radius: 10px; padding: 10px 8px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.nav-icon { font-size: 18px; }
+.nav-text { font-size: 13px; color: #5A5348; font-weight: 600; }
+
+.view-toggle { display: flex; gap: 8px; margin-top: 12px; }
+.toggle-btn { flex: 1; background: #FFF; border: 1px solid #E8DFD0; color: #5A5348; border-radius: 8px; font-size: 13px; }
+.toggle-btn.active { background: #7FA8A0; border-color: #7FA8A0; color: #FFF; }
+.scene-canvas { background: #E7DCC7; border-radius: 12px; margin-top: 10px; }
 
 .catalog-scroll { margin: 14px -16px 10px; padding: 0 16px; }
 .catalog-inner { display: flex; gap: 10px; padding-bottom: 4px; }

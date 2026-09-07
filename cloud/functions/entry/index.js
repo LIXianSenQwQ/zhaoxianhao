@@ -7,6 +7,11 @@
  *   - 统一响应格式 + 权限门禁 + 幂等提交
  *   - 双人审核：复审人 ≠ 初审人 ≠ 提交人（对齐族内双人审核文化 W2 口径）
  *   - finalize 真实入库：common/linkage 挂接校验 + 世代互指 + path 写入
+ * P3 §7.6 公示期完整链（蓝图 730：初审→复审→公示 7 天→APPROVED）：
+ *   - SECOND_PASS 不再直接 APPROVED，进入 PUBLICITY（publicityDeadline = now + 公示天数）
+ *   - 公示天数 settings.publicityDays 可配（默认 7 天，蓝图 42 settings 含「公示期天数」）
+ *   - publicityScan 定时扫描：公示期满自动 APPROVED（复用入谱/关系 finalize）
+ *   - PUBLICITY_PASS 族史委提前结束公示（公示无异议可提前生效）
  */
 const wx = require('wx-server-sdk');
 const { OK, BAD_REQUEST, FORBIDDEN, NOT_FOUND } = require('./common/response');
@@ -18,6 +23,7 @@ const { finalizePatch } = require('./common/linkage');
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
 
 const LIST_LIMIT = 50;
+const DEFAULT_PUBLICITY_DAYS = 7;
 
 async function main(event, context) {
   const openid = context.OPENID || context.openid;
@@ -36,6 +42,9 @@ async function main(event, context) {
       return await mySubmissions(db, openid);
     case 'pendingList':
       return await pendingList(db, openid);
+    case 'publicityScan':
+      // 系统定时入口（每天 config.json timer 触发），无用户上下文；扫描公示期满工单自动 APPROVED
+      return await publicityScan(db);
     default:
       return BAD_REQUEST(`unknown action: ${action}`);
   }
@@ -45,6 +54,21 @@ async function main(event, context) {
 async function roleOf(db, openid) {
   const res = await db.collection('users').where({ openid }).limit(1).get();
   return (res.data[0] && res.data[0].role) || 'VISITOR';
+}
+
+/** 公示天数：settings.publicityDays 可配（蓝图 42 settings 含「公示期天数」），默认 7 天 */
+async function publicityDays(db) {
+  try {
+    const res = await db.collection('settings').where({ key: 'publicityDays' }).limit(1).get();
+    const raw = res.data && res.data[0] && res.data[0].value;
+    let n = NaN;
+    if (raw !== null && raw !== undefined && typeof raw === 'object') n = Number(raw.days);
+    if (Number.isNaN(n)) n = Number(raw);
+    if (Number.isInteger(n) && n >= 0) return n;
+  } catch (e) {
+    console.warn('[entry] publicityDays settings read failed:', e.message);
+  }
+  return DEFAULT_PUBLICITY_DAYS;
 }
 
 /** 校验必填 + 生成谱名（generations 集合字辈字） */
@@ -121,21 +145,28 @@ async function auditEntry(db, openid, { recordId, auditAction, comment }) {
   const role = await roleOf(db, openid);
   if (!hasRole(role, 'BRANCH_HEAD')) return FORBIDDEN('仅房长及以上可执行审核');
 
-  if (!recordId || !['FIRST_PASS', 'SECOND_PASS', 'REJECT'].includes(auditAction)) {
+  if (!recordId || !['FIRST_PASS', 'SECOND_PASS', 'PUBLICITY_PASS', 'REJECT'].includes(auditAction)) {
     return BAD_REQUEST('缺少 recordId 或 auditAction 非法');
   }
 
   const res = await db.collection('entry_records').doc(recordId).get().catch(() => null);
   const record = res && res.data && !Array.isArray(res.data) ? res.data : (res && res.data && res.data[0]);
   if (!record) return NOT_FOUND('工单不存在');
-  if (record.status !== 'SUBMITTED' && record.status !== 'FIRST_PASS') {
-    return BAD_REQUEST(`工单状态 ${record.status} 不可审核`);
+
+  // §7.6 状态机：仅允许合法迁移
+  const legal = {
+    SUBMITTED: ['FIRST_PASS', 'REJECT'],
+    FIRST_PASS: ['SECOND_PASS', 'REJECT'],
+    PUBLICITY: ['PUBLICITY_PASS', 'REJECT']
+  };
+  if (!(legal[record.status] || []).includes(auditAction)) {
+    return BAD_REQUEST(`工单状态 ${record.status} 不可执行 ${auditAction}`);
   }
 
-  // 细门禁（蓝图 7.6）：复审/驳回已入审的工单须 HISTORIAN+（族史委）
-  const needHistorian = record.status === 'FIRST_PASS' || auditAction === 'SECOND_PASS';
+  // 细门禁（蓝图 7.6）：已入审工单（初审后/公示中）的复审与提前通过须 HISTORIAN+（族史委）
+  const needHistorian = record.status === 'FIRST_PASS' || auditAction === 'SECOND_PASS' || auditAction === 'PUBLICITY_PASS';
   if (needHistorian && !hasRole(role, 'HISTORIAN')) {
-    return FORBIDDEN('仅族史委可执行复审');
+    return FORBIDDEN('仅族史委可执行复审/公示操作');
   }
 
   // 蓝图 11：通过/驳回必填意见（驳回强制留痕）
