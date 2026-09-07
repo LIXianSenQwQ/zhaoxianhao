@@ -159,8 +159,5 @@ function initWorld() {
   };
 }
 
-module.exports = {
-  GRID, BUILDING_CATALOG, DECORATION_TYPES, PRIVACY, PRIVACY_SET,
-  expForNextLevel, growHome, validatePlacement, canPlaceBuilding,
-  canVisitToday, privacyScope, initWorld
-};
+// ─── ESM 导出 ─────────────────────────────────
+export { GRID, BUILDING_CATALOG, DECORATION_TYPES, PRIVACY, PRIVACY_SET, expForNextLevel, growHome, validatePlacement, canPlaceBuilding, canVisitToday, privacyScope, initWorld };

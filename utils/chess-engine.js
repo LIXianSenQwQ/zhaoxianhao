@@ -315,9 +315,5 @@ function isStalemate(b, side) {
   return !isCheck(b, side) && legalMoves(b, side).length === 0;
 }
 
-module.exports = {
-  BOARD_W, BOARD_H, PIECE, SIDE,
-  initialBoard, cloneBoard, createPiece,
-  findPieces, possibleRawMoves, makeMove,
-  isCheck, legalMoves, isCheckmate, isStalemate
-};
+// ─── ESM 导出 ─────────────────────────────────
+export { BOARD_W, BOARD_H, PIECE, SIDE, initialBoard, cloneBoard, createPiece, findPieces, possibleRawMoves, makeMove, isCheck, legalMoves, isCheckmate, isStalemate };

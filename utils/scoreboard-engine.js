@@ -101,12 +101,5 @@ function getPlayerStats(scorecard, playerId) {
 // 合规声明（底部固定文本）
 const COMPLIANCE_TEXT = '⚠️ 本功能为线下娱乐记分工具，禁止赌博。\nScoreboard for offline entertainment only. Gambling prohibited.';
 
-module.exports = {
-  createScorecard,
-  addRound,
-  finishScorecard,
-  resetScorecard,
-  getRankings,
-  getPlayerStats,
-  COMPLIANCE_TEXT
-};
+// ─── ESM 导出 ─────────────────────────────────
+export { createScorecard, addRound, finishScorecard, resetScorecard, getRankings, getPlayerStats, COMPLIANCE_TEXT };
