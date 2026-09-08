@@ -283,13 +283,108 @@ test('branch.stats：EDITOR 真实人口聚合（members.branchId → perBranch/
   assert.equal(res.data.perBranch[1].population, 1);
 });
 
-test('branch.archive：缺 code → 400', async () => {
-  seed({ users: [USER('EDITOR')] });
-  const res = await FN().main({ action: 'archive' }, CTX('EDITOR'));
-  assert.equal(res.code, 400);
+// ─── merge 合并（R28）───
+
+test('branch.merge：MEMBER → 403（鉴权先行）', async () => {
+  seed({
+    users: [USER('MEMBER')],
+    branches: [
+      { _id: 'b1', code: 'HAO-0000-01', name: '宋村一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' },
+      { _id: 'b2', code: 'HAO-0000-02', name: '南庄一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' }
+    ]
+  });
+  const res = await FN().main({ action: 'merge', fromCode: 'HAO-0000-01', toCode: 'HAO-0000-02' }, CTX('MEMBER'));
+  assert.equal(res.code, 403);
 });
 
-// ─── stats 分页测试 ───
+test('branch.merge：缺参/自合并 → 400', async () => {
+  seed({ users: [USER('EDITOR')] });
+  const r1 = await FN().main({ action: 'merge' }, CTX('EDITOR'));
+  assert.equal(r1.code, 400, '缺 fromCode/toCode');
+  const r2 = await FN().main({ action: 'merge', fromCode: 'HAO-0000-01', toCode: 'HAO-0000-01' }, CTX('EDITOR'));
+  assert.equal(r2.code, 400, '自合并拒绝');
+  assert.ok(r2.message.includes('自身'), '提示不能合并到自身');
+});
+
+test('branch.merge：源分支有活跃子支 → 拒绝', async () => {
+  seed({
+    users: [USER('EDITOR')],
+    branches: [
+      { _id: 'b1', code: 'HAO-0000-01', name: '宋村一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' },
+      { _id: 'b2', code: 'HAO-0000-01-01', name: '长房', level: 3, status: 'ACTIVE', parentCode: 'HAO-0000-01' },
+      { _id: 'b3', code: 'HAO-0000-02', name: '南庄一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' }
+    ]
+  });
+  const res = await FN().main({ action: 'merge', fromCode: 'HAO-0000-01', toCode: 'HAO-0000-02' }, CTX('EDITOR'));
+  assert.equal(res.code, 400);
+  assert.ok(res.message.includes('子分支'), '提示先处理子支');
+});
+
+test('branch.merge：目标层级更低 → 拒绝', async () => {
+  seed({
+    users: [USER('EDITOR')],
+    branches: [
+      { _id: 'b0', code: 'HAO-0000', name: '总谱', level: 1, status: 'ACTIVE', parentCode: null },
+      { _id: 'b1', code: 'HAO-0000-01', name: '宋村一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' },
+      { _id: 'b1b', code: 'HAO-0000-02', name: '南庄一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' },
+      { _id: 'b2', code: 'HAO-0000-02-01', name: '东房', level: 3, status: 'ACTIVE', parentCode: 'HAO-0000-02' }
+    ]
+  });
+  // 二级 → 三级（更低层级，且非源子支）拒绝
+  const res = await FN().main({ action: 'merge', fromCode: 'HAO-0000-01', toCode: 'HAO-0000-02-01' }, CTX('EDITOR'));
+  assert.equal(res.code, 400);
+  assert.ok(res.message.includes('不能合并'), '层级校验提示');
+});
+
+test('branch.merge：成功合并（状态/mergedInto/成员迁移/审计）', async () => {
+  seed({
+    users: [USER('EDITOR')],
+    branches: [
+      { _id: 'b0', code: 'HAO-0000', name: '总谱', level: 1, status: 'ACTIVE', parentCode: null },
+      { _id: 'b1', code: 'HAO-0000-01', name: '宋村一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' },
+      { _id: 'b2', code: 'HAO-0000-02', name: '南庄一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' }
+    ],
+    members: [
+      { _id: 'm1', openid: 'u-m1', branchId: 'HAO-0000-01', path: '/m1/g5' },
+      { _id: 'm2', openid: 'u-m2', branchId: 'HAO-0000-01', path: '/m2/g6' }
+    ]
+  });
+  const res = await FN().main({ action: 'merge', fromCode: 'HAO-0000-01', toCode: 'HAO-0000-02' }, CTX('EDITOR'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.status, 'MERGED');
+  assert.equal(res.data.toCode, 'HAO-0000-02');
+
+  // 1. 源分支状态/mergedInto
+  const col = globalThis.__HCS_STUB_SEED__.collections.branches;
+  const from = col.find(b => b.code === 'HAO-0000-01');
+  assert.equal(from.status, 'MERGED');
+  assert.equal(from.mergedInto, 'HAO-0000-02');
+
+  // 2. 成员迁移
+  const mems = globalThis.__HCS_STUB_SEED__.collections.members;
+  assert.equal(mems.filter(m => m.branchId === 'HAO-0000-01').length, 0, '源分支成员已迁出');
+  assert.equal(mems.filter(m => m.branchId === 'HAO-0000-02').length, 2, '目标分支成员已迁入');
+
+  // 3. 审计
+  const audits = globalThis.__HCS_STUB_SEED__.collections.audit_logs;
+  const audit = audits.find(a => a.action === 'branch.merge');
+  assert.ok(audit, 'merge 审计有痕');
+  assert.ok(audit.target.includes('HAO-0000-01'), '审计含源 code');
+  assert.ok(audit.target.includes('HAO-0000-02'), '审计含目标 code');
+});
+
+test('branch.merge：重复合并（源已 MERGED）→ 400', async () => {
+  seed({
+    users: [USER('EDITOR')],
+    branches: [
+      { _id: 'b1', code: 'HAO-0000-01', name: '宋村一支', level: 2, status: 'MERGED', parentCode: 'HAO-0000', mergedInto: 'HAO-0000-02' },
+      { _id: 'b2', code: 'HAO-0000-02', name: '南庄一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' }
+    ]
+  });
+  const res = await FN().main({ action: 'merge', fromCode: 'HAO-0000-01', toCode: 'HAO-0000-02' }, CTX('EDITOR'));
+  assert.equal(res.code, 400);
+  assert.ok(res.message.includes('非 ACTIVE'), '重复合并拦截');
+});
 
 test('branch.stats：members 空集合 → totalPopulation=0', async () => {
   seed({

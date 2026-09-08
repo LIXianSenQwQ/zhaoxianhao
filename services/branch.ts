@@ -73,14 +73,19 @@ export function create(payload: {
   return write('branch', { action: 'create', ...payload }, 'branch', `create_${payload.name}`);
 }
 
-/** 更新非结构字段（EDITOR+） */
-export function update(code: string, payload: Partial<Pick<Branch, 'description' | 'generationVerses' | 'population' | 'headUserId'>>) {
+/** 更新非结构字段（EDITOR+；R28 含 mergedInto） */
+export function update(code: string, payload: Partial<Pick<Branch, 'description' | 'generationVerses' | 'population' | 'headUserId' | 'mergedInto'>>) {
   return write('branch', { action: 'update', code, ...payload }, 'branch', `update_${code}`);
 }
 
 /** 归档（EDITOR+；总谱/含活跃子支不可归档） */
 export function archive(code: string) {
   return write('branch', { action: 'archive', code }, 'branch', `archive_${code}`);
+}
+
+/** 合并分支（EDITOR+；源→目标，成员自动迁移，R28） */
+export function merge(fromCode: string, toCode: string) {
+  return write('branch', { action: 'merge', fromCode, toCode }, 'branch', `merge_${fromCode}_to_${toCode}`);
 }
 
 /** 初始化总谱（CHIEF+，幂等） */

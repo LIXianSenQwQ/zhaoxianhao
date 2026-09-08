@@ -284,10 +284,10 @@ async function main(event, context) {
       }
 
       case 'update': {
-        // EDITOR+ 可改非结构字段
+        // EDITOR+ 可改非结构字段（含 mergedInto）
         if (!hasRole(role, 'EDITOR')) return FORBIDDEN('仅编辑及以上可更新分支');
         
-        const { code, name, description, generationVerses, population, headUserId } = event || {};
+        const { code, name, description, generationVerses, population, headUserId, mergedInto } = event || {};
         if (!code) return BAD_REQUEST('code required');
         
         const branch = await findBranchByCode(db, code);
@@ -298,8 +298,9 @@ async function main(event, context) {
         if (generationVerses !== undefined) updates.generationVerses = generationVerses;
         if (population !== undefined && typeof population === 'number') updates.population = population;
         if (headUserId !== undefined) updates.headUserId = headUserId;
-        // 注意：不允许修改 code/name/level/parentCode 等结构字段
+        if (mergedInto !== undefined) updates.mergedInto = mergedInto; // R28: 合并指向允许直接修改
         
+        // 注意：不允许修改 code/name/level/parentCode 等结构字段
         if (Object.keys(updates).length === 0) return OK({ message: 'No changes to apply' });
         
         updates.updatedAt = new Date();
@@ -310,6 +311,54 @@ async function main(event, context) {
         await writeAudit(db, { userId: openid, action: 'branch.update', target: code, detail: Object.keys(updates).join(',') });
         
         return OK({ message: 'Updated', ...updates });
+      }
+      
+      case 'merge': {
+        // EDITOR+ 门禁
+        if (!hasRole(role, 'EDITOR')) return FORBIDDEN('仅编辑及以上可合并分支');
+        
+        const { fromCode, toCode } = event || {};
+        if (!fromCode || !toCode) return BAD_REQUEST('fromCode and toCode required');
+        if (fromCode === toCode) return BAD_REQUEST('不能合并到自身');
+        
+        // 1. 源分支必须 ACTIVE 且无活跃子支
+        const fromBranch = await findBranchByCode(db, fromCode);
+        if (!fromBranch) return NOT_FOUND('源分支不存在');
+        if (fromBranch.status !== 'ACTIVE') return BAD_REQUEST(`源分支非 ACTIVE（当前 ${fromBranch.status}）`);
+        const childRes = await db.collection('branches').where({ parentCode: fromCode, status: 'ACTIVE' }).limit(1).get();
+        const activeChild = (childRes && childRes.data && childRes.data[0]) || null;
+        if (activeChild) return BAD_REQUEST(`存在活跃子分支 ${activeChild.code}，请先归档子分支`);
+        
+        // 2. 目标分支必须 ACTIVE 且层级相同或更高
+        const toBranch = await findBranchByCode(db, toCode);
+        if (!toBranch) return NOT_FOUND('目标分支不存在');
+        if (toBranch.status !== 'ACTIVE') return BAD_REQUEST('目标分支非 ACTIVE');
+        if (toBranch.level > fromBranch.level) return BAD_REQUEST('不能合并到更低层级');
+        
+        // 3. 更新源分支状态 MERGED + mergedInto
+        await db.collection('branches').doc(fromBranch._id).update({
+          data: {
+            status: 'MERGED',
+            mergedInto: toCode,
+            updatedAt: new Date(),
+            updatedBy: openid
+          }
+        });
+        
+        // 4. 迁移 members.branchId: fromCode → toCode
+        await db.collection('members').where({ branchId: fromCode }).update({
+          data: { branchId: toCode }
+        });
+        
+        // 5. 审计
+        await writeAudit(db, { 
+          userId: openid, 
+          action: 'branch.merge', 
+          target: `${fromCode} → ${toCode}`, 
+          detail: 'merged' 
+        });
+        
+        return OK({ fromCode, toCode, status: 'MERGED' });
       }
       
       default:
