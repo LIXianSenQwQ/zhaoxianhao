@@ -49,6 +49,12 @@
 					"style": {}
 				},
 				{
+					"path": "pages/branches/branches",
+					"style": {
+						"navigationBarTitleText": "分支管理"
+					}
+				},
+				{
 					"path": "pages/members/members",
 					"style": {}
 				},
