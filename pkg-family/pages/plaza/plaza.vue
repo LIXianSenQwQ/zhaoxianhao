@@ -1,6 +1,25 @@
 <!-- pkg-family/pages/plaza/plaza.vue – 家族广场动态（Sprint R12：蓝图页面 plaza/index，接 plaza.list/publish/like） -->
 <template>
   <view class="plaza-page">
+    <!-- 导航入口（按角色） -->
+    <view class="plaza-nav">
+      <navigator url="/pkg-family/pages/tree/tree" class="nav-item">
+        <text class="nav-icon">🌳</text>
+        <text class="nav-label">族谱</text>
+      </navigator>
+      <navigator url="/pkg-family/pages/members/members" class="nav-item">
+        <text class="nav-icon">👥</text>
+        <text class="nav-label">族人</text>
+      </navigator>
+      <navigator url="/pkg-family/pages/kinship/kinship" class="nav-item">
+        <text class="nav-icon">🔗</text>
+        <text class="nav-label">关系</text>
+      </navigator>
+      <navigator url="/pkg-family/pages/branches/branches" class="nav-item" v-if="canBranch">
+        <text class="nav-icon">📂</text>
+        <text class="nav-label">分支</text>
+      </navigator>
+    </view>
     <!-- 发布框（≤3 步：输入 → 发布；蓝图 C.3） -->
     <BaseCard title="发布动态">
       <textarea
@@ -42,10 +61,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { read, write } from '@/services/request';
 import BaseCard from '@/components/common/BaseCard.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
+import { hasRole } from '@/utils/auth';
 
 const PAGE = 20;
 const posts = ref<any[]>([]);
@@ -55,6 +75,16 @@ const loading = ref(false);
 const page = ref(1);
 const hasMore = ref(true);
 const myId = ref(uni.getStorageSync('openid') || '');
+const userRole = ref<string>('VISITOR');
+
+onMounted(async () => {
+  try {
+    const { data: userData } = await (uni as any).cloud.callFunction({ name: 'auth', data: { action: 'me' } });
+    userRole.value = userData?.role || 'VISITOR';
+  } catch {}
+});
+
+const canBranch = computed(() => ['BRANCH_HEAD', 'EDITOR', 'HISTORIAN', 'CHIEF'].includes(userRole.value));
 
 function fmtTime(t: string) {
   if (!t) return '';
