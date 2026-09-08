@@ -3288,11 +3288,83 @@ test('F10 riddle 未知 action → BAD_REQUEST', async () => {
   assert.equal(res.code, 400);
 });
 
-test('F10 riddle.list：空题库返回空数组（不崩溃）', async () => {
-  seedDB({ users: [], riddles: [] });
+test('F10 riddle.list：MEMBER 空题库返回空数组（不崩溃）', async () => {
+  seedDB({ users: [{ openid: 'u-test', role: 'MEMBER' }], riddles: [] });
   const res = await FN('riddle').main({ action: 'riddle.list' }, CTX);
   assert.equal(res.success, true);
   assert.ok(Array.isArray(res.data.riddles));
+});
+
+test('F10 riddle.create：VISITOR 403；MEMBER 出题 → PENDING + 审计 + 不回传谜底', async () => {
+  seedDB({ users: [] });
+  const deny = await FN('riddle').main({ action: 'riddle.create', question: 'q', answer: '素' }, CTX);
+  assert.equal(deny.code, 403);
+  seedDB({ users: [{ openid: 'u-test', role: 'MEMBER' }] });
+  const res = await FN('riddle').main({ action: 'riddle.create', question: '半青半紫（打一字）', answer: '素', hint: '颜色字' }, CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.riddle.status, 'PENDING');
+  assert.equal(res.data.riddle.answer, undefined, '列表/创建接口不得回传谜底');
+  assert.ok(globalThis.__HCS_STUB_SEED__.collections.audit_logs.some(a => a.action === 'riddle.create'));
+});
+
+test('F10 riddle 审核：pending/approve 需 EDITOR+；approve→ACTIVE、reject→REJECTED + 审计', async () => {
+  const EDITOR_CTX = { OPENID: 'u-e', openid: 'u-e' };
+  seedDB({
+    users: [{ openid: 'u-e', role: 'EDITOR' }, { openid: 'u-m', role: 'MEMBER' }],
+    riddles: [
+      {
+        _id: 'r1', type: 'riddle', question: '一口咬掉牛尾巴', answer: '告', status: 'PENDING',
+        category: '字谜', difficulty: 2, solvedCount: 0, solvedBy: [],
+        createdAt: '2025-01-01T00:00:00Z', updatedAt: '2025-01-01T00:00:00Z'
+      },
+      {
+        _id: 'r2', type: 'riddle', question: '差评谜题', answer: 'x', status: 'PENDING',
+        solvedCount: 0, solvedBy: [], createdAt: '2025-01-02T00:00:00Z', updatedAt: '2025-01-02T00:00:00Z'
+      }
+    ]
+  });
+  // MEMBER 无审核权
+  const mem = await FN('riddle').main({ action: 'riddle.approve', riddleId: 'r1' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(mem.code, 403);
+  const list = await FN('riddle').main({ action: 'riddle.pending' }, EDITOR_CTX);
+  assert.equal(list.success, true);
+  assert.equal(list.data.riddles.length, 2);
+  assert.equal(list.data.riddles[0].answer, '告', '审核队列需带谜底供审');
+  const ok = await FN('riddle').main({ action: 'riddle.approve', riddleId: 'r1' }, EDITOR_CTX);
+  assert.equal(ok.data.status, 'ACTIVE');
+  const ng = await FN('riddle').main({ action: 'riddle.reject', riddleId: 'r2' }, EDITOR_CTX);
+  assert.equal(ng.data.status, 'REJECTED');
+  assert.ok(globalThis.__HCS_STUB_SEED__.collections.audit_logs.some(a => a.action === 'riddle.approve'));
+  assert.ok(globalThis.__HCS_STUB_SEED__.collections.audit_logs.some(a => a.action === 'riddle.reject'));
+  const pub = await FN('riddle').main({ action: 'riddle.list' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(pub.data.riddles.length, 1, '仅 ACTIVE 上架');
+  assert.equal(pub.data.riddles[0].answer, undefined);
+});
+
+test('F10 riddle.answer：仅 ACTIVE 可答；答对限一次防刷分；答错可重试', async () => {
+  seedDB({
+    users: [{ openid: 'u-test', role: 'MEMBER' }],
+    riddles: [
+      {
+        _id: 'r-p', type: 'riddle', question: 'q', answer: '素', status: 'PENDING',
+        solvedCount: 0, solvedBy: [], createdAt: '2025-01-01T00:00:00Z', updatedAt: '2025-01-01T00:00:00Z'
+      },
+      {
+        _id: 'r-a', type: 'riddle', question: '半青半紫', answer: '素', status: 'ACTIVE',
+        solvedCount: 0, solvedBy: [], createdAt: '2025-01-01T00:00:00Z', updatedAt: '2025-01-01T00:00:00Z'
+      }
+    ]
+  });
+  const onPending = await FN('riddle').main({ action: 'riddle.answer', riddleId: 'r-p', guess: '素' }, CTX);
+  assert.equal(onPending.code, 400, '未上架不可作答');
+  const wrong = await FN('riddle').main({ action: 'riddle.answer', riddleId: 'r-a', guess: '紫' }, CTX);
+  assert.equal(wrong.data.correct, false);
+  const right = await FN('riddle').main({ action: 'riddle.answer', riddleId: 'r-a', guess: '素' }, CTX);
+  assert.equal(right.data.correct, true);
+  assert.equal(right.data.score, 10);
+  const again = await FN('riddle').main({ action: 'riddle.answer', riddleId: 'r-a', guess: '素' }, CTX);
+  assert.equal(again.data.already, true, '答对后该题限答一次（防刷分）');
+  assert.equal(again.data.score, 0);
 });
 
 test('F10 quiz 未知 action → BAD_REQUEST', async () => {
@@ -3300,11 +3372,51 @@ test('F10 quiz 未知 action → BAD_REQUEST', async () => {
   assert.equal(res.code, 400);
 });
 
-test('F10 quiz.list：空题库返回空数组（不崩溃）', async () => {
-  seedDB({ users: [], questions: [] });
+test('F10 quiz.list：MEMBER 空题库返回空数组（不崩溃）', async () => {
+  seedDB({ users: [{ openid: 'u-test', role: 'MEMBER' }], questions: [] });
   const res = await FN('quiz').main({ action: 'quiz.list', industry: '百家' }, CTX);
   assert.equal(res.success, true);
   assert.ok(Array.isArray(res.data.questions));
+});
+
+test('F10 quiz.create：VISITOR 403；MEMBER 出题 → PENDING + 审计', async () => {
+  seedDB({ users: [] });
+  const deny = await FN('quiz').main(
+    { action: 'quiz.create', question: 'q', choices: [{ text: 'a' }, { text: 'b' }], correctIndex: 0 }, CTX);
+  assert.equal(deny.code, 403);
+  seedDB({ users: [{ openid: 'u-test', role: 'MEMBER' }] });
+  const res = await FN('quiz').main({
+    action: 'quiz.create', question: '水稻属于什么科？',
+    choices: [{ text: '禾本科' }, { text: '豆科' }], correctIndex: 0, industry: '农业'
+  }, CTX);
+  assert.equal(res.success, true, JSON.stringify(res));
+  assert.equal(res.data.question.status, 'PENDING', '禁止未审核直接上架');
+  assert.ok(globalThis.__HCS_STUB_SEED__.collections.audit_logs.some(a => a.action === 'quiz.create'));
+});
+
+test('F10 quiz 审核 + 作答：approve→ACTIVE、list 剥离答案、每用户限答一次', async () => {
+  const EDITOR_CTX = { OPENID: 'u-e', openid: 'u-e' };
+  seedDB({
+    users: [{ openid: 'u-e', role: 'EDITOR' }, { openid: 'u-test', role: 'MEMBER' }],
+    questions: [{
+      _id: 'q1', type: 'question', question: '1+1=?',
+      choices: [{ label: '', text: '2' }, { label: '', text: '3' }],
+      correctIndex: 0, industry: '百家', explanation: '算术', status: 'PENDING',
+      createdAt: '2025-01-01T00:00:00Z', updatedAt: '2025-01-01T00:00:00Z'
+    }]
+  });
+  const onPending = await FN('quiz').main({ action: 'quiz.answer', questionId: 'q1', selectedIndex: 0 }, CTX);
+  assert.equal(onPending.code, 400, '未上架不可作答');
+  const ap = await FN('quiz').main({ action: 'quiz.approve', questionId: 'q1' }, EDITOR_CTX);
+  assert.equal(ap.data.status, 'ACTIVE');
+  const list = await FN('quiz').main({ action: 'quiz.list', industry: '百家' }, CTX);
+  assert.equal(list.data.questions.length, 1);
+  assert.equal(list.data.questions[0].correctIndex, undefined, 'list 不得回传正确索引');
+  const a1 = await FN('quiz').main({ action: 'quiz.answer', questionId: 'q1', selectedIndex: 0 }, CTX);
+  assert.equal(a1.data.correct, true);
+  const a2 = await FN('quiz').main({ action: 'quiz.answer', questionId: 'q1', selectedIndex: 1 }, CTX);
+  assert.equal(a2.data.already, true, '每用户每题限一次（防枚举刷分）');
+  assert.equal(a2.data.score, 0);
 });
 
 // ─── Sprint F10/F11: 虚拟角色 avatar ───
