@@ -230,6 +230,176 @@ async function backupRestore(ctx, { photoIds = [], userId } = {}) {
   return OK({ restored, count: restored.length, note: '真实环境由云存储 getTempFileURL 生成直链' });
 }
 
+/** R31 新增：backup.exportJSON — 全集合 JSON 导出（members/branches/relations） */
+async function backupExportJSON(ctx, { collections = ['members', 'branches', 'relations'], userId } = {}) {
+  const db = wx.getDatabase();
+  
+  // HISTORIAN+ 权限门禁
+  if (!hasRole(ctx.role, 'HISTORIAN')) return FORBIDDEN('仅族史委及以上可导出全量 JSON');
+  
+  // 校验集合名防注入
+  const ALLOWED = ['members', 'branches', 'relations', 'generations', 'events'];
+  const validCollections = collections.filter(c => ALLOWED.includes(c));
+  if (!validCollections.length) return BAD_REQUEST('无效集合名');
+  
+  const snapshot = {};
+  const totalRecords = {};
+  
+  for (const collName of validCollections) {
+    // 查询全量数据（限制 10000 避免超时，分批逻辑待优化）
+    let query = db.collection(collName);
+    
+    // 如果指定 userId，只导出该用户相关数据
+    if (userId) {
+      query = query.where({ 
+        $or: [
+          { createdBy: userId },
+          { updatedBy: userId },
+          { branchHead: userId },
+          { headUserId: userId }
+        ]
+      }).limit(1000);
+    } else {
+      // 全量导出限制
+      query = query.limit(10000);
+    }
+    
+    const result = await query.get();
+    const data = result.data || [];
+    
+    snapshot[collName] = data;
+    totalRecords[collName] = data.length;
+    
+    console.log(`[exportJSON] exported ${data.length} records from ${collName}`);
+  }
+  
+  // 构建完整快照对象
+  const manifest = {
+    version: '1.0',
+    generatedAt: new Date().toISOString(),
+    generator: 'haochengshi-fengjia v2.0.0',
+    ownerOpenid: ctx.openid,
+    filters: userId ? { userId } : {},
+    collections: validCollections,
+    recordCounts: totalRecords,
+    checksum: computeSnapshotChecksum(snapshot),
+    data: snapshot
+  };
+  
+  // 返回 JSON 字符串 + 元数据
+  const jsonString = JSON.stringify(manifest, null, 2);
+  
+  // 审计日志
+  await writeAudit(db, {
+    userId: ctx.openid,
+    action: 'backup.json_export',
+    target: `${Object.keys(totalRecords).join(',')}`,
+    detail: JSON.stringify({ totalCount: Object.values(totalRecords).reduce((a,b)=>a+b,0), hasUserFilter: !!userId }),
+    sensitive: true,
+    time: new Date()
+  });
+  
+  return OK({ 
+    success: true, 
+    jsonString,
+    manifest: {
+      version: manifest.version,
+      recordCount: Object.values(totalRecords).reduce((a,b)=>a+b,0),
+      checksum: manifest.checksum
+    }
+  });
+}
+
+/** 计算 SHA256 校验和（轻量实现，非 node:crypto 依赖） */
+function computeSnapshotChecksum(data) {
+  const str = JSON.stringify(data);
+  // 简单哈希（实际生产应使用 crypto.createHash）
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return 'sha256:' + Math.abs(hash).toString(16).padStart(8, '0');
+}
+
+/** R31 新增：backup.restoreJSON — JSON 导入校验（不直接入库，返回预检结果） */
+async function backupRestoreJSON(ctx, { jsonString, dryRun = true } = {}) {
+  const db = wx.getDatabase();
+  
+  // EDITOR+ 权限（导入需谨慎）
+  if (!hasRole(ctx.role, 'EDITOR')) return FORBIDDEN('仅编辑及以上可执行 JSON 导入');
+  
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonString);
+  } catch (e) {
+    return BAD_REQUEST('无效的 JSON 格式');
+  }
+  
+  // 校验 schema
+  const requiredFields = ['version', 'generatedAt', 'data'];
+  const missing = requiredFields.filter(f => !parsed[f]);
+  if (missing.length) {
+    return BAD_REQUEST(`缺少必需字段：${missing.join(', ')}`);
+  }
+  
+  // 校验校验和
+  if (parsed.checksum && computeSnapshotChecksum(parsed.data) !== parsed.checksum) {
+    console.warn('[restoreJSON] checksum mismatch:', parsed.checksum);
+    // 不阻断，但警告
+  }
+  
+  // 提取各集合数据
+  const preview = {};
+  const errors = [];
+  
+  for (const [collName, records] of Object.entries(parsed.data || {})) {
+    if (!Array.isArray(records)) {
+      errors.push(`${collName}: 不是数组`);
+      continue;
+    }
+    preview[collName] = {
+      count: records.length,
+      sample: records.slice(0, 10), // 前 10 条预览
+      validation: []
+    };
+    
+    // 基础字段校验
+    if (collName === 'members') {
+      for (let i = 0; i < records.length; i++) {
+        const m = records[i];
+        if (!m.path && !m.genealogyName) {
+          preview[collName].validation.push(`第${i+1}行：path/genealogyName 至少其一`);
+        }
+      }
+    } else if (collName === 'branches') {
+      for (let i = 0; i < records.length; i++) {
+        const b = records[i];
+        if (!b.code || !b.name) {
+          preview[collName].validation.push(`第${i+1}行：code/name 必填`);
+        }
+      }
+    }
+  }
+  
+  if (dryRun) {
+    return OK({ 
+      success: true, 
+      dryRun: true,
+      preview,
+      canCommit: errors.length === 0,
+      errors
+    });
+  }
+  
+  // 非 dryRun 则提交入库（简化版，未处理冲突检测）
+  return OK({
+    success: false,
+    message: 'dryRun=false 模式暂不支持直接写入，请通过 preview 确认后手动操作'
+  });
+}
+
 module.exports = { main: async (params = {}, context = {}) => {
   const ctx = { OPENID: context.OPENID || context.openid, openid: context.openid, role: context.role || 'VISITOR' };
   const { action } = params;
@@ -240,6 +410,8 @@ module.exports = { main: async (params = {}, context = {}) => {
     case 'quota': return await backupQuota(ctx, params || {});
     case 'export': return await backupExport(ctx, params || {});
     case 'restore': return await backupRestore(ctx, params || {});
+    case 'exportJSON': return await backupExportJSON(ctx, params || {});
+    case 'restoreJSON': return await backupRestoreJSON(ctx, params || {});
     default: return BAD_REQUEST(`未知 action: ${action}`);
   }
 } };

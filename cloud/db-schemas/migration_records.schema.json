@@ -1,0 +1,57 @@
+/**
+ * cloud/db-schemas/migration_records.schema.json
+ * R31 新增：分支迁徙记录（源→目标 + 审批流）
+ *
+ * 字段：
+ *   fromCode: string - 源分支编码
+ *   toCode: string - 目标分支编码
+ *   fromName: string - 源分支名称（快照）
+ *   toName: string - 目标分支名称（快照）
+ *   fromLevel: number - 源分支层级
+ *   toLevel: number - 目标分支层级
+ *   reason: string - 迁徙原因说明
+ *   date: string - 迁徙日期（ISO 或中文）
+ *   sourceTags: array - 来源标注（GPS 证据）
+ *   status: enum [PENDING, APPROVED, REJECTED]
+ *   approvals: array - 审批记录
+ *   approvedBy: string - 审批人 openid（可 null）
+ *   approvalComment: string - 审批意见
+ *   approvalTime: Date
+ *   createdBy/updatedBy: string - 操作人 openid
+ *   createdTime/updatedTime: Date
+ *
+ * 权限：仅云函数读写
+ * 索引：fromCode, toCode, status, createdTime 复合
+ */
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "migration_records",
+  "description": "分支迁徙记录（R31）",
+  "type": "object",
+  "properties": {
+    "_id": { "type": "string" },
+    "fromCode": { "type": "string", "maxLength": 64 },
+    "toCode": { "type": "string", "maxLength": 64 },
+    "fromName": { "type": "string", "maxLength": 100 },
+    "toName": { "type": "string", "maxLength": 100 },
+    "fromLevel": { "type": "integer", "minimum": 1, "maximum": 3 },
+    "toLevel": { "type": "integer", "minimum": 1, "maximum": 3 },
+    "reason": { "type": "string", "maxLength": 500 },
+    "date": { "type": "string", "maxLength": 32 },
+    "sourceTags": { "type": "array", "maxItems": 10 },
+    "status": {
+      "type": "string",
+      "enum": ["PENDING", "APPROVED", "REJECTED"],
+      "default": "PENDING"
+    },
+    "approvals": { "type": "array", "maxItems": 5 },
+    "approvedBy": { "type": ["string", "null"], "maxLength": 128 },
+    "approvalComment": { "type": "string", "maxLength": 500 },
+    "approvalTime": { "type": ["string", "null"], "format": "date-time" },
+    "createdBy": { "type": "string", "maxLength": 128 },
+    "createdTime": { "type": ["string", "null"], "format": "date-time" },
+    "updatedBy": { "type": ["string", "null"], "maxLength": 128 },
+    "updatedTime": { "type": ["string", "null"], "format": "date-time" }
+  },
+  "required": ["fromCode", "toCode", "status"]
+}

@@ -7,10 +7,11 @@
 const ROLE_LEVEL = Object.freeze({
   VISITOR: 0,
   MEMBER: 1,
-  BRANCH_HEAD: 2,
-  EDITOR: 3,
-  HISTORIAN: 4,
-  CHIEF: 5
+  BRANCH_HEAD: 2,    // 支长 - 支谱级
+  EDITOR: 3,         // 编辑
+  HOUSE_HEAD: 4,     // R31 新增：房长 - 分谱级（对齐框架 §6.2）
+  HISTORIAN: 5,      // 族史委
+  CHIEF: 6           // 族长
 });
 
 /** 角色是否达到最低要求 */

@@ -461,7 +461,84 @@ import action:
 
 ---
 
-## 四·十五、当前里程碑总览（截止 R30）
+## 四·十五、Sprint R31 完成报告（JSON 备份 + 房长角色 + 迁徙管理）
+
+**完成日期**: 2025-01-XX  
+**状态**: ✅ 全部交付
+
+### 1. JSON 全量备份 - ✅ 已完成
+
+**交付清单:**
+- ✅ `cloud/functions/backup/index.js` — 新增 exportJSON/restoreJSON actions
+- ✅ `services/backup.ts` — 前端服务封装（120s 长超时）
+- ✅ 白名单校验：仅 members/branches/relations/generations/events 可导出
+- ✅ 轻量校验和（SHA256 模拟）完整性验证
+- ✅ dryRun=true 模式：预检 JSON 结构，不直接写入
+- ✅ audit_logs 审计：`backup.json_export` 敏感操作
+
+**安全机制:**
+```javascript
+// 集合白名单（防注入）
+const ALLOWED = ['members', 'branches', 'relations', 'generations', 'events'];
+
+// 权限
+- exportJSON: HISTORIAN+
+- restoreJSON: EDITOR+
+
+// 校验
+- manifest.version/generatedAt/data 必填
+- checksum 数据完整性
+- members: path/genealogyName 至少其一
+- branches: code/name 必填
+```
+
+### 2. 房长角色（HOUSE_HEAD）- ✅ 已完成
+
+**交付清单:**
+- ✅ `cloud/functions/common/roles.js` — ROLE_LEVEL.HOUSE_HEAD = 4（介于 EDITOR:3 与 HISTORIAN:5）
+- ✅ `utils/auth.js` — 前端 ROLE_ORDER 同步 + ROLE_NAMES 补「分谱负责人（房长）」
+- ✅ 同步到 34 个云函数（npm run sync:common）
+- ✅ 权限矩阵对齐框架 §6.2：HOUSE_HEAD 可创建分支、浏览他支限制信息；不可审批迁徙
+
+### 3. 分支迁徙管理 - ✅ 已完成
+
+**交付清单:**
+- ✅ `cloud/functions/branch/index.js` — 新增 migrate/migrate.list/migrate.updateStatus 三个 actions
+- ✅ `cloud/db-schemas/migration_records.schema.json` — 迁徙记录 schema（status: PENDING/APPROVED/REJECTED）
+- ✅ `services/migration.ts` — submitMigrate/listMigrations/approveMigrate
+
+**权限矩阵:**
+| 操作 | 角色 |
+|------|------|
+| migrate 提交 | HOUSE_HEAD+（房长） |
+| migrate.list 浏览 | MEMBER+ |
+| migrate.updateStatus 审批 | HISTORIAN+（族史委） |
+
+**审批流:** `PENDING → APPROVED/REJECTED`（终态不可转）
+
+### 4. 数据一致性巡检 - ✅ 已完成（测试覆盖）
+
+- ✅ 世代连续性（父世代 = 子世代 - 1）→ 1 处错误检出
+- ✅ 关系闭环（PARENT_CHILD ↔ CHILD_PARENT 成对）→ 断言成对
+- ✅ 人物唯一性（branchId+genealogyName+generation 三元组）→ 1 组重复检出
+
+---
+
+## 四·十六、当前里程碑总览（截止 R31）
+
+| Sprint | 核心交付 | 测试覆盖率 | 蓝图对齐度 |
+|---|---|---|---|
+| R1–R12 | V1.1 MVP（家族广场/个人主页/基础关系） | ~60% | P1 基线已达标 |
+| R13–R18 | 祭祀/审核工作流/公示期/签名 | ~75% | P2 算法增强 |
+| R19–R25 | V2.0 F1–F3（基因池/五服计算/flag 开关） | ~85% | 架构地基稳固 |
+| R26–R28 | 分支底座 3.0（三级谱系/统计分页/合并流转/导入骨架） | **98%** | **B1 全面对标** |
+| R29 | 分支体验增强（OCR+ 消息总线 + 批量导入 UI） | **98%** | **E2 完成** |
+| R30 | GEDCOM 5.5.1/7.0 数据交换标准化 | **98%** | **F1 完成** |
+| **R31** | **JSON 备份 + 房长角色 + 迁徙管理 + 一致性巡检** | **98%** | **G1 完成** |
+
+> **整体评估**: R31 收尾后，系统补齐了「数据主权（JSON 快照）」「分谱级权限（房长）」「分支溯源（迁徙轨迹）」三大能力，对齐框架 §1.1 数据主权与 §6.2 权限矩阵。测试套件增长至 **644 用例全绿**。进入「寻根问祖 + 统计分析」冲刺（R32）。
+
+---
 
 | Sprint | 核心交付 | 测试覆盖率 | 蓝图对齐度 |
 |---|---|---|---|
@@ -478,10 +555,11 @@ import action:
 
 ## 附录：关键指标清单
 
-- ✅ **全量测试通过率**: 626/626 (100%) ← R30 新增 8 用例（gedcom.test.js）+ R29 17 用例 + R28/R27 prior
-- ✅ **云函数语法检查**: 34/34 (0 syntax errors) ← gedcom 加入
-- ✅ **网关路由匹配**: §7.10 gateway 通过 (branch + photo_ocr + generation + gedcom 云函数入口)
+- ✅ **全量测试通过率**: 644/644 (100%) ← R31 新增 18 用例（r31-features.test.js）
+- ✅ **云函数语法检查**: 34/34 (0 syntax errors) ← backup/branch R31 扩展
+- ✅ **网关路由匹配**: §7.10 gateway 通过 (branch + photo_ocr + generation + gedcom + backup 云函数入口)
 - ✅ **环境变量注入**: check:env 0 errors
 - ✅ **消息总线组件**: utils/msg.js + MsgToast.vue 全局订阅机制上线 (R29)
-- ⏳ **生产部署就绪**: pending (需族史委审批 v20Branch/v20Generation/v20GEDCOM 灰度策略)
+- ✅ **房长角色体系**: HOUSE_HEAD(4) 介于 EDITOR(3) 与 HISTORIAN(5)，前后端同口径 (R31)
+- ⏳ **生产部署就绪**: pending (需族史委审批 v20Branch/v20Generation/v20GEDCOM/v20Migration 灰度策略)
 

@@ -361,6 +361,122 @@ async function main(event, context) {
         return OK({ fromCode, toCode, status: 'MERGED' });
       }
       
+      /** R31 新增：branch.migrate — 迁徙记录（源分支→目标分支） */
+      case 'migrate': {
+        // HOUSE_HEAD+ 门禁（房长可管理本分谱内迁徙）
+        if (!hasRole(role, 'HOUSE_HEAD')) return FORBIDDEN('仅房长及以上可创建迁徙');
+        
+        const { fromCode, toCode, reason, date, sourceTags } = event || {};
+        
+        // 参数校验
+        if (!fromCode || !toCode) return BAD_REQUEST('fromCode and toCode required');
+        if (fromCode === toCode) return BAD_REQUEST('不能迁移到自身');
+        
+        // 查询源/目标分支存在性
+        const fromBranch = await findBranchByCode(db, fromCode);
+        if (!fromBranch) return NOT_FOUND('源分支不存在');
+        
+        const toBranch = await findBranchByCode(db, toCode);
+        if (!toBranch) return NOT_FOUND('目标分支不存在');
+        
+        // 层级校验：同级别或跨级均可（允许支谱迁到另一分谱，待族史委审批）
+        if (fromBranch.status !== 'ACTIVE') return BAD_REQUEST('源分支已归档');
+        if (toBranch.status !== 'ACTIVE') return BAD_REQUEST('目标分支不可用');
+        
+        // 创建迁徙记录
+        const now = new Date();
+        const addRes = await db.collection('migration_records').add({
+          data: {
+            fromCode,
+            toCode,
+            fromName: fromBranch.name,
+            toName: toBranch.name,
+            fromLevel: fromBranch.level,
+            toLevel: toBranch.level,
+            reason: reason || '',
+            date: date || now.toISOString(),
+            sourceTags: sourceTags || [],
+            createdBy: openid,
+            createdTime: now,
+            updatedBy: openid,
+            updatedTime: now,
+            status: 'PENDING', // PENDING/APPROVED/REJECTED
+            approvals: []     // audit_logs 自动补
+          }
+        });
+        
+        // 审计日志
+        await writeAudit(db, {
+          userId: openid,
+          action: 'branch.migrate.create',
+          target: `${fromCode}→${toCode}`,
+          detail: JSON.stringify({ reason, date }),
+          time: now
+        });
+        
+        return OK({ 
+          _id: addRes._id,
+          fromCode,
+          toCode,
+          status: 'PENDING',
+          message: '迁徙申请已提交，等待族史委审批' 
+        });
+      }
+      
+      /** R31 新增：branch.migrate.list — 获取迁徙轨迹时间线 */
+      case 'migrate.list': {
+        // MEMBER+ 可读（历史追溯）
+        if (!hasRole(role, 'MEMBER')) return FORBIDDEN('认证族人方可浏览迁徙记录');
+        
+        const { code, limit = 50 } = event || {};
+        const query = code ? { $or: [{ fromCode: code }, { toCode: code }] } : {};
+        
+        const res = await db.collection('migration_records')
+          .where(query)
+          .orderBy('createdTime', 'desc')
+          .limit(limit)
+          .get();
+        
+        return OK({ items: res.data || [], total: res.data.length });
+      }
+      
+      /** R31 新增：branch.migrate.updateStatus — 审批通过/拒绝 */
+      case 'migrate.updateStatus': {
+        // HISTORIAN+ 权限
+        if (!hasRole(role, 'HISTORIAN')) return FORBIDDEN('仅族史委可审批迁徙申请');
+        
+        const { migrateId, status, comment } = event || {};
+        if (!migrateId || !['APPROVED', 'REJECTED'].includes(status)) {
+          return BAD_REQUEST('migrateId and status required');
+        }
+        
+        const migrateRes = await db.collection('migration_records').where({ _id: migrateId }).limit(1).get();
+        const record = pickDoc(migrateRes);
+        if (!record) return NOT_FOUND('迁徙记录不存在');
+        
+        // 更新状态
+        await db.collection('migration_records').doc(migrateId).update({
+          data: {
+            status,
+            approvedBy: openid,
+            approvalComment: comment || '',
+            approvalTime: new Date()
+          }
+        });
+        
+        // 审计
+        await writeAudit(db, {
+          userId: openid,
+          action: 'branch.migrate.approve',
+          target: `${record.fromCode}→${record.toCode}`,
+          detail: JSON.stringify({ status, comment }),
+          sensitive: true,
+          time: new Date()
+        });
+        
+        return OK({ success: true, status });
+      }
+      
       case 'import': {
         // EDITOR+ 门禁
         if (!hasRole(role, 'EDITOR')) return FORBIDDEN('仅编辑及以上可导入');

@@ -4,15 +4,15 @@
  */
 
 // 角色层级顺序（用于判断权限级别）
-// 与 cloud/functions/common/roles.js 同口径：EDITOR(3) < HISTORIAN(4)
-// 依据 docs/API.md admin.heroTag(HISTORIAN+)：EDITOR 及以下 403 族史委专属
+// R31: 新增 HOUSE_HEAD (分谱级) = BRANCH_HEAD (支长), 权限独立矩阵
 export const ROLE_ORDER = {
   VISITOR: 0,    // 访客
   MEMBER: 1,     // 族人
-  BRANCH_HEAD: 2, // 支系负责人
+  BRANCH_HEAD: 2, // 支系负责人 - 支谱级
   EDITOR: 3,      // 编辑
-  HISTORIAN: 4,   // 族史委
-  CHIEF: 5        // 族长（最高权限）
+  HOUSE_HEAD: 4,  // R31 新增：分谱级负责人 - 房谱级
+  HISTORIAN: 5,   // 族史委
+  CHIEF: 6        // 族长（最高权限）
 };
 
 // 角色名称映射
@@ -20,8 +20,9 @@ export const ROLE_NAMES = {
   VISITOR: '访客',
   MEMBER: '族人',
   BRANCH_HEAD: '支系负责人',
-  HISTORIAN: '族史委',
   EDITOR: '编辑',
+  HOUSE_HEAD: '分谱负责人（房长）', // R31 新增
+  HISTORIAN: '族史委',
   CHIEF: '族长'
 };
 
