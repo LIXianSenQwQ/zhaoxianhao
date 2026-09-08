@@ -513,6 +513,12 @@ test('branch.import：部分失败（含重名/层级错误）', async () => {
   assert.ok(res.data.failed.some(f => f.reason.includes('parent')), '父级层级失败');
 });
 
+test('branch.import：空 rows → 400', async () => {
+  seed({ users: [USER('EDITOR')] });
+  const res = await FN().main({ action: 'import', rows: [] }, CTX('EDITOR'));
+  assert.equal(res.code, 400);
+});
+
 test('branch.archive：缺 code → 400', async () => {
   seed({ users: [USER('EDITOR')] });
   const res = await FN().main({ action: 'archive' }, CTX('EDITOR'));
