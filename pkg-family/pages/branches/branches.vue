@@ -29,8 +29,9 @@
           <view class="detail-row"><text class="detail-label">人口</text><text>{{ detailMap[node.code].population ?? 0 }}</text></view>
           <view class="detail-row" v-if="detailMap[node.code].generationVerses"><text class="detail-label">字辈</text><text>{{ detailMap[node.code].generationVerses }}</text></view>
           <view class="detail-row"><text class="detail-label">描述</text><text>{{ detailMap[node.code].description || '—' }}</text></view>
-          <view class="detail-actions" v-if="canArchive && node.level > 1 && node.status === 'ACTIVE'">
-            <button class="btn-archive" @tap.stop="archiveBranch(node.code)">归档</button>
+          <view class="detail-actions" v-if="canArchive && node.status === 'ACTIVE'">
+            <button class="btn-edit" @tap.stop="showEditDialog(node.code)">编辑</button>
+            <button class="btn-archive" v-if="node.level > 1" @tap.stop="archiveBranch(node.code)">归档</button>
           </view>
           <view class="detail-children" v-if="detailMap[node.code].children && detailMap[node.code].children.length">
             <text class="sub-title">子分支：</text>
@@ -75,12 +76,34 @@
         </view>
       </view>
     </uni-popup>
+    <!-- 编辑对话框 -->
+    <uni-popup ref="editPopup" type="dialog">
+      <view class="dialog">
+        <text class="dialog-title">编辑分支</text>
+        <view class="form-item">
+          <text class="form-label">描述</text>
+          <textarea class="form-textarea" v-model="editForm.description" placeholder="分支描述" />
+        </view>
+        <view class="form-item">
+          <text class="form-label">字辈诗</text>
+          <textarea class="form-textarea" v-model="editForm.generationVerses" placeholder="本支字辈诗（≤500）" maxlength="500" />
+        </view>
+        <view class="form-item">
+          <text class="form-label">人口</text>
+          <input class="form-input" v-model.number="editForm.population" type="number" placeholder="本支现有人口数" />
+        </view>
+        <view class="dialog-actions">
+          <button class="btn-cancel" @tap="closeEditDialog">取消</button>
+          <button class="btn-primary" @tap="saveEdit">保存</button>
+        </view>
+      </view>
+    </uni-popup>
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { listAll, detail as fetchDetail, create, archive, stats as fetchStats } from '@/services/branch';
+import { listAll, detail as fetchDetail, create, archive, stats as fetchStats, update } from '@/services/branch';
 import { hasRole } from '@/utils/auth';
 import { parseBranchCode, branchLevelLabel } from '@/utils/branch-code';
 
@@ -96,6 +119,9 @@ const detailMap = ref<Record<string, any>>({});
 const stats = ref<any>(null);
 const userRole = ref<string>('VISITOR');
 const createPopup = ref<any>(null);
+const editPopup = ref<any>(null);
+const editForm = ref({ code: '', description: '', generationVerses: '', population: '' });
+const editCode = ref<string>('');
 
 // 角色门禁
 const canCreate = computed(() => ['BRANCH_HEAD', 'EDITOR', 'HISTORIAN', 'CHIEF'].includes(userRole.value));
@@ -211,6 +237,61 @@ async function archiveBranch(code: string) {
     }
   });
 }
+
+// 编辑对话框
+const canEdit = computed(() => ['EDITOR', 'HISTORIAN', 'CHIEF'].includes(userRole.value));
+
+function showEditDialog(code: string) {
+  const detail = detailMap.value[code];
+  if (!detail) return uni.showToast({ title: '加载中', icon: 'none' });
+  editCode.value = code;
+  editForm.value = {
+    code,
+    description: detail.description || '',
+    generationVerses: detail.generationVerses || '',
+    population: String(detail.population ?? '')
+  };
+  editPopup.value?.open?.();
+}
+function closeEditDialog() {
+  editPopup.value?.close?.();
+}
+async function saveEdit() {
+  if (!editForm.value.description?.trim() && !editForm.value.generationVerses?.trim()) {
+    return uni.showToast({ title: '请填写描述或字辈诗', icon: 'none' });
+  }
+  try {
+    const payload: any = {};
+    if (editForm.value.description.trim()) payload.description = editForm.value.description.trim();
+    if (editForm.value.generationVerses.trim()) payload.generationVerses = editForm.value.generationVerses.trim();
+    if (editForm.value.population !== '' && editForm.value.population !== null) {
+      const pop = parseInt(editForm.value.population, 10);
+      if (!isNaN(pop)) payload.population = pop;
+    }
+    const res = await update(editCode.value, payload);
+    if (res?.success) {
+      uni.showToast({ title: '保存成功', icon: 'success' });
+      // 更新详情缓存
+      if (detailMap.value[editCode.value]) {
+        detailMap.value[editCode.value] = { ...detailMap.value[editCode.value], ...payload };
+      }
+      // 同步 stats
+      if (canStats.value && stats.value) {
+        const [listRes, statsRes] = await Promise.all([
+          listAll(500),
+          fetchStats()
+        ]);
+        branchTree.value = listRes.data.items.map((i: any) => ({ ...i, expanded: false }));
+        stats.value = statsRes.data;
+      }
+      closeEditDialog();
+    } else {
+      uni.showToast({ title: res?.message || '保存失败', icon: 'none' });
+    }
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '保存失败', icon: 'none' });
+  }
+}
 </script>
 
 <style scoped>
@@ -234,7 +315,8 @@ async function archiveBranch(code: string) {
 .detail-panel { background: #F9F7F2; padding: 8px 16px 12px 40px; font-size: 13px; color: #4A4640; }
 .detail-row { display: flex; margin-bottom: 4px; }
 .detail-label { width: 48px; color: #8A867F; flex-shrink: 0; }
-.detail-actions { margin-top: 8px; }
+.detail-actions { margin-top: 8px; display: flex; gap: 6px; }
+.btn-edit { background: #1976D2; color: #fff; font-size: 12px; padding: 2px 12px; border-radius: 4px; }
 .btn-archive { background: #E57373; color: #fff; font-size: 12px; padding: 2px 12px; border-radius: 4px; }
 .detail-children { margin-top: 8px; padding-left: 8px; }
 .sub-title { font-size: 12px; color: #8A867F; }
