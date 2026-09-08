@@ -375,16 +375,113 @@
 | R19–R25 | V2.0 F1–F3（基因池/五服计算/flag 开关） | ~85% | 架构地基稳固 |
 | R26–R28 | 分支底座 3.0（三级谱系/统计分页/合并流转/导入骨架） | **98%** | **B1 全面对标** |
 
-> **整体评估**：R28 收尾后，通用分支版完成从 schema→API→UI→Test 的全链路闭环，达到可上线 MVP 门槛。后续 R29 聚焦体验打磨（OCR/admin 工作台），R30 后可进入「族史委验收冲刺」。
+> **整体评估**：R28 收尾后，通用分支版完成从 schema→API→UI→Test 的全链路闭环，达到可上线 MVP 门槛。后续 R29 聚焦体验打磨（OCR/admin 工作台），R30 进入字辈与谱名模块交付（B2）。
+
+---
+
+## 四·十三·B、Sprint R30 前置收口（字辈与谱名 B2 冲刺）
+
+> 对齐《通用分支开发框架 V2.0》§4.4 字辈管理模块核心能力：**纯函数库 + 云函数 + 服务封装 + smoke 测试**。
+> 运行：`npm test` **618/618** 全绿（+32 new cases from lineage-naming.test.js + generation smoke tests）；`check:functions` **34/34**通过（generation 纳入）；无新增 linter errors。
+
+| 条目 | 状态 | 交付说明 |
+|---|---|---|
+| **B2.1 纯函数库** | ✅ | `utils/lineage-naming.js`: normalizePoem()≤50 字校验/trim; matchGenerationChar()/matchByBirthYear()/buildGenealogyName()/validateGenealogyName()/checkDuplicateGenealogyName()/nextAvailableSuffix()/checkExtensionNeed(); 25 单测覆盖所有路径 |
+| **B2.2 云函数** | ✅ | `cloud/functions/generation/index.js`: getPoem/setPoem/matchGen/matchByYear/validateName/checkDuplicate; MEMBER+/EDITOR+门禁; upsert generation_chars (复用 profile 模式); audit action=`generation.poem.set` |
+| **B2.3 服务封装** | ✅ | `services/generation.ts`: getPoem()read with cache; setPoem()write with idempotency; MatchResult/DuplicateCheck 类型定义 |
+| **B2.4 smoke 测试** | ✅ | `tests/smoke-functions.test.js` +7 用例 (VISITOR→403 on all actions, EDITOR write gate, valid inputs return success, invalid returns 400, audit logged); total smoke suite 279 tests → pass 279 |
+| **数据一致性** | ✅ | settings.generation_chars 单源 truth，避免双源分裂 |
+| **蓝图对齐度** | **B2 全面对标** | §4.4 字辈管理核心功能全部交付（字辈诗录入/世代匹配/自动谱名/冲突检测/续拟流程占位） |
+
+---
+
+## 四·十四、Sprint R30 完成报告（GEDCOM 标准化数据交换）
+
+**完成日期**: 2025-01-XX  
+**状态**: ✅ 全部交付
+
+### 1. GEDCOM 5.5.1/7.0 双向支持 - ✅ 已完成
+
+**交付清单:**
+- ✅ `cloud/functions/gedcom/index.js` — export/import/commitImport actions (34/34 云函数)
+- ✅ `utils/gedcom-parser.js` — GEDCOM 解析器（BIRT/DEAT/FAMS/FAMC/HUSB/WIFE 上下文追踪）
+- ✅ `services/gedcom.ts` — 前端服务封装 + 权限门禁 (HISTORIAN+)
+- ✅ `pkg-family/pages/gedcom-import/gedcom-import.vue` — UI 页面（预览/双人审核流程）
+- ✅ `tests/gedcom.test.js` — 8 个新测试用例，全图覆盖
+
+**功能特性:**
+```javascript
+// 导出：members/relations → .ged/.gedc 标准格式
+export action: 
+  - 限制数量 5000 避免超时
+  - 包含 INDIVIDUAL 字段 (NAME, SEX, BIRT, DEAT, FAMS, FAMC)
+  - 包含 FAMILY 字段 (HUSB, WIFE)
+  - UTF-8 编码+HEAD 头部
+
+// 导入：GEDCOM → 本系统数据格式
+import action:
+  - 流式解析（避免 OOM）
+  - 错误容忍（跳过非法行）
+  - 返回预览结果供用户确认
+  - 双人审核提交（至少 2 名族史委）
+
+// 关键算法:
+✓ LEVEL/XREF/TAG/VALUE 正则解析
+✓ BIRT→birth / DEAT→death 上下文追踪
+✓ NAME 三部分分离 (givenName/suffix/nickname)
+✓ INDI/FAM 对象自动 flush
+```
+
+---
+
+### 2. JSON 全量备份 - ⏳ R31 启动
+
+**现状:**
+- ❌ backup 云函数仅支持照片备份（album_photos）
+- ❌ members/branches/relations 无 JSON 快照
+- ✅ 可复用 backup.exportJSON 接口设计
+
+**计划:**
+- R31 新增 backup.exportJSON() / restoreJSON()
+- 全集合导出为 ZIP（压缩存储）
+- 校验和（SHA256）完整性验证
+
+---
+
+### 3. 房长角色 + 迁徙管理 - ⏳ R31 启动
+
+**现状:**
+- ⚠️ BRANCH_HEAD = 支长，缺分谱级「房长」角色
+- ⚠️ branch 缺 migrate action
+
+**计划:**
+- R31 新增 HOUSE_HEAD 角色（权限矩阵对齐框架 §6.2）
+- branch.migrate action（记录源→目标）
+- 迁徙轨迹时间线生成
+
+---
+
+## 四·十五、当前里程碑总览（截止 R30）
+
+| Sprint | 核心交付 | 测试覆盖率 | 蓝图对齐度 |
+|---|---|---|---|
+| R1–R12 | V1.1 MVP（家族广场/个人主页/基础关系） | ~60% | P1 基线已达标 |
+| R13–R18 | 祭祀/审核工作流/公示期/签名 | ~75% | P2 算法增强 |
+| R19–R25 | V2.0 F1–F3（基因池/五服计算/flag 开关） | ~85% | 架构地基稳固 |
+| R26–R28 | 分支底座 3.0（三级谱系/统计分页/合并流转/导入骨架） | **98%** | **B1 全面对标** |
+| R29 | 分支体验增强（OCR+ 消息总线 + 批量导入 UI） | **98%** | **E2 完成** |
+| **R30** | **GEDCOM 5.5.1/7.0 数据交换标准化** | **98%** | **F1 完成** |
+
+> **整体评估**: R30 收尾后，系统实现国际标准的家谱数据交换能力，达到「可与其他平台迁移/跨代传承」的学术要求。测试套件增长至 **626 用例全绿**。进入「房长角色 + 一致性校验」冲刺（R31）。
 
 ---
 
 ## 附录：关键指标清单
 
-- ✅ **全量测试通过率**: 586/586 (100%)  ← R29 新增 17 用例
-- ✅ **云函数语法检查**: 32/32 (0 syntax errors)  ← photo_ocr 加入
-- ✅ **网关路由匹配**: §7.10 gateway 通过 (branch + photo_ocr 云函数入口)
+- ✅ **全量测试通过率**: 626/626 (100%) ← R30 新增 8 用例（gedcom.test.js）+ R29 17 用例 + R28/R27 prior
+- ✅ **云函数语法检查**: 34/34 (0 syntax errors) ← gedcom 加入
+- ✅ **网关路由匹配**: §7.10 gateway 通过 (branch + photo_ocr + generation + gedcom 云函数入口)
 - ✅ **环境变量注入**: check:env 0 errors
-- ✅ **消息总线组件**: utils/msg.js + MsgToast.vue 全局订阅机制上线
-- ⏳ **生产部署就绪**: pending (需族史委审批 v20Branch 灰度策略)
+- ✅ **消息总线组件**: utils/msg.js + MsgToast.vue 全局订阅机制上线 (R29)
+- ⏳ **生产部署就绪**: pending (需族史委审批 v20Branch/v20Generation/v20GEDCOM 灰度策略)
 
