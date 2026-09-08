@@ -2,7 +2,10 @@
   <view class="page branch-page">
     <view class="header-bar">
       <text class="title">分支谱系</text>
-      <button class="btn-create" @tap="showCreateDialog" v-if="canCreate">创建分支</button>
+      <view class="header-actions">
+        <button class="btn-import" @tap="goImport" v-if="canImport">📥 批量导入</button>
+        <button class="btn-create" @tap="showCreateDialog" v-if="canCreate">创建分支</button>
+      </view>
     </view>
 
     <view class="stats-bar" v-if="stats">
@@ -127,6 +130,11 @@ const editCode = ref<string>('');
 const canCreate = computed(() => ['BRANCH_HEAD', 'EDITOR', 'HISTORIAN', 'CHIEF'].includes(userRole.value));
 const canArchive = computed(() => ['EDITOR', 'HISTORIAN', 'CHIEF'].includes(userRole.value));
 const canStats = computed(() => ['EDITOR', 'HISTORIAN', 'CHIEF'].includes(userRole.value));
+const canImport = computed(() => ['EDITOR', 'HISTORIAN', 'CHIEF'].includes(userRole.value));
+
+function goImport() {
+  uni.navigateTo({ url: '/pkg-family/pages/branches-import/branches-import' });
+}
 
 // 创建表单
 const createForm = ref({
@@ -294,10 +302,12 @@ async function saveEdit() {
 }
 </script>
 
-<style scoped>
+.style scoped>
 .page { min-height: 100vh; background: #FAF8F2; padding: 16px; }
-.header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; }
 .title { font-size: 20px; font-weight: 600; color: #26221E; }
+.header-actions { display: flex; gap: 8px; }
+.btn-import { background: #07C160; color: #fff; font-size: 13px; padding: 6px 14px; border-radius: 6px; }
 .btn-create { background: #B03A2E; color: #fff; font-size: 14px; padding: 6px 16px; border-radius: 6px; }
 .stats-bar { font-size: 12px; color: #8A867F; margin-bottom: 12px; }
 .tree-list { background: #fff; border-radius: 8px; overflow: hidden; }
@@ -332,4 +342,3 @@ async function saveEdit() {
 .btn-cancel { background: #F0EDE6; color: #26221E; padding: 6px 20px; border-radius: 6px; margin-right: 8px; font-size: 14px; }
 .btn-primary { background: #B03A2E; color: #fff; padding: 6px 20px; border-radius: 6px; font-size: 14px; }
 .level-1 .node-row { background: #F5EFE6; }
-</style>
