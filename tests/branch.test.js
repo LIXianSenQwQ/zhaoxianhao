@@ -196,3 +196,64 @@ test('branch.stats：MEMBER → 403 / EDITOR 可读', async () => {
   assert.equal(ok.success, true);
   assert.equal(ok.data.totalActive, 1);
 });
+
+// ─── archive 归档 ───
+
+test('branch.archive：非编辑 → 403（鉴权先行）', async () => {
+  seed({
+    users: [USER('MEMBER')],
+    branches: [{ _id: 'b1', code: 'HAO-0000-01', name: '宋村一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' }]
+  });
+  const res = await FN().main({ action: 'archive', code: 'HAO-0000-01' }, CTX('MEMBER'));
+  assert.equal(res.code, 403);
+});
+
+test('branch.archive：总谱 HAO-0000 不可归档', async () => {
+  seed({
+    users: [USER('EDITOR')],
+    branches: [{ _id: 'b0', code: 'HAO-0000', name: '郝氏总谱', level: 1, status: 'ACTIVE', parentCode: null }]
+  });
+  const res = await FN().main({ action: 'archive', code: 'HAO-0000' }, CTX('EDITOR'));
+  assert.equal(res.code, 400);
+  assert.ok(res.message.includes('总谱'), '总谱不可归档提示');
+});
+
+test('branch.archive：存在活跃子支 → 先归档子支', async () => {
+  seed({
+    users: [USER('EDITOR')],
+    branches: [
+      { _id: 'b0', code: 'HAO-0000', name: '郝氏总谱', level: 1, status: 'ACTIVE', parentCode: null },
+      { _id: 'b1', code: 'HAO-0000-01', name: '宋村一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' },
+      { _id: 'b2', code: 'HAO-0000-01-01', name: '长房', level: 3, status: 'ACTIVE', parentCode: 'HAO-0000-01' }
+    ]
+  });
+  const res = await FN().main({ action: 'archive', code: 'HAO-0000-01' }, CTX('EDITOR'));
+  assert.equal(res.code, 400);
+  assert.ok(res.message.includes('子分支'), '提示先归档子支');
+});
+
+test('branch.archive：成功归档（先归档子支后父可归档）', async () => {
+  seed({
+    users: [USER('EDITOR')],
+    branches: [
+      { _id: 'b0', code: 'HAO-0000', name: '郝氏总谱', level: 1, status: 'ACTIVE', parentCode: null },
+      { _id: 'b1', code: 'HAO-0000-01', name: '宋村一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' }
+    ]
+  });
+  const r1 = await FN().main({ action: 'archive', code: 'HAO-0000-01' }, CTX('EDITOR'));
+  assert.equal(r1.success, true);
+  assert.equal(r1.data.status, 'ARCHIVED');
+  const col = globalThis.__HCS_STUB_SEED__.collections.branches;
+  assert.equal(col.find((b) => b.code === 'HAO-0000-01').status, 'ARCHIVED');
+
+  // 重复归档 → 400
+  const r2 = await FN().main({ action: 'archive', code: 'HAO-0000-01' }, CTX('EDITOR'));
+  assert.equal(r2.code, 400);
+  assert.ok(r2.message.includes('仅 ACTIVE'), '重复归档被拒');
+});
+
+test('branch.archive：缺 code → 400', async () => {
+  seed({ users: [USER('EDITOR')] });
+  const res = await FN().main({ action: 'archive' }, CTX('EDITOR'));
+  assert.equal(res.code, 400);
+});

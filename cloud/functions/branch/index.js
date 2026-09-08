@@ -220,6 +220,32 @@ async function main(event, context) {
         return OK({ _id: addRes._id, code: 'HAO-0000', level: 1, message: 'Root branch seeded' });
       }
       
+      case 'archive': {
+        // EDITOR+ 归档；总谱不可归档；存在活跃子支时须先归档子支
+        if (!hasRole(role, 'EDITOR')) return FORBIDDEN('仅编辑及以上可归档分支');
+
+        const { code } = event || {};
+        if (!code) return BAD_REQUEST('code required');
+
+        const branch = await findBranchByCode(db, code);
+        if (!branch) return NOT_FOUND('branch not found');
+        if (branch.code === 'HAO-0000') return BAD_REQUEST('总谱不可归档');
+        if (branch.status !== 'ACTIVE') return BAD_REQUEST(`仅 ACTIVE 分支可归档（当前 ${branch.status}）`);
+
+        const childRes = await db.collection('branches').where({ parentCode: code, status: 'ACTIVE' }).limit(1).get();
+        const activeChild = (childRes && childRes.data && childRes.data[0]) || null;
+        if (activeChild) return BAD_REQUEST(`存在活跃子分支 ${activeChild.code}，请先归档子分支`);
+
+        const now = new Date();
+        await db.collection('branches').doc(branch._id).update({
+          data: { status: 'ARCHIVED', updatedAt: now, updatedBy: openid }
+        });
+
+        await writeAudit(db, { userId: openid, action: 'branch.archive', target: code, detail: 'archived' });
+
+        return OK({ code, status: 'ARCHIVED', message: 'Branch archived' });
+      }
+
       case 'update': {
         // EDITOR+ 可改非结构字段
         if (!hasRole(role, 'EDITOR')) return FORBIDDEN('仅编辑及以上可更新分支');
