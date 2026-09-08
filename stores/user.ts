@@ -24,6 +24,15 @@ export const useUserStore = defineStore('user', () => {
   const childMode = ref(false); // 少年模式
   const featureFlags = ref<Record<string, any>>({});
 
+  // 从本地存储恢复用户信息（避免每次登录）
+  try {
+    const raw = uni.getStorageSync('hcs:user');
+    if (raw) {
+      const cached = JSON.parse(raw);
+      userInfo.value = { ...cached.userInfo };
+    }
+  } catch (e) { /* 存储不可用时保持默认 */ }
+
   // 从本地存储恢复模式开关（避免每次启动重置）
   try {
     elderMode.value = !!uni.getStorageSync('elderMode');
@@ -43,6 +52,15 @@ export const useUserStore = defineStore('user', () => {
       if (token && user) {
         userInfo.value = { ...user, status: user.status || 'ACTIVE' };
         uni.setStorageSync('token', token);
+        // 持久化用户信息供非响应式使用（utils/auth.js）
+        try {
+          uni.setStorageSync('hcs:user', JSON.stringify({
+            userInfo: { ...userInfo.value },
+            ts: Date.now()
+          }));
+        } catch (err) {
+          console.warn('store/login: storage failed', err.message);
+        }
       }
     } catch (err) {
       console.warn('store/login failed:', err);
@@ -100,6 +118,7 @@ export const useUserStore = defineStore('user', () => {
   function logout() {
     userInfo.value = null;
     uni.removeStorageSync('token');
+    uni.removeStorageSync('hcs:user');
   }
 
   return {
