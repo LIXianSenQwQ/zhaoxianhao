@@ -244,13 +244,15 @@
 ## 三·十、Sprint R26 收口（通用分支版三级谱系 + 快赢修复）
 
 > 对齐《通用分支开发框架 V2.0》（`docs/planning/FRAMEWORK-GENERIC-BRANCH-V2.md`）B1 分支底座 + 紧急修复清单。
-> 运行：`npm test` 543/543 全绿（新增 branch.test.js 14 用例）；check-functions 31/31；check:gateway §7.10 通过；check:env 0 errors。
+> 运行：`npm test` 555/555 全绿（+ branch-code 6、archive 5、stats 人口聚合）；check-functions 31/31；check:gateway §7.10 通过；check:env 0 errors。
 > 族史委评审简报：`docs/REVIEW-BRANCH-族史委简报.md`（MVP 三档划定 + 四阶段排期 + 5 决策点）。
 
 | 条目 | 状态 | 交付说明 |
 |---|---|---|
 | **B1 branches 三级谱系 schema** | ❌→✅ | `cloud/db-schemas/branches.schema.json` R26 重写：level(1总谱/2分谱/3支谱)/code(HAO- 层级序列码)/parentCode/founderGeneration/region/population/generationVerses/headUserId/sourceTags/confidence/status(ACTIVE/MERGED/ARCHIVED)/mergedInto；索引 code 唯一 + parentCode/level/status；database-init.js 同步对齐 |
-| **B1 branch 云函数** | ❌→✅ | `cloud/functions/branch/index.js`：create(BRANCH_HEAD+ 门禁/父级层级校验/同父重名校验/序号递增编码 HAO-0000-01→02→HAO-0000-01-01)/list·tree(MEMBER+ 只读 ACTIVE 升序)/detail(单支+直接子支)/stats(EDITOR+)/seed(CHIEF 幂等初始化总谱 HAO-0000)/update(EDITOR 白名单非结构字段)；鉴权先行于参数校验（R2 安全原则）；审计 writeAudit 落痕 |
+| **B1 branch 云函数** | ❌→✅ | `cloud/functions/branch/index.js`：create(BRANCH_HEAD+ 门禁/父级层级校验/同父重名校验/序号递增编码 HAO-0000-01→02→HAO-0000-01-01)/list·tree(MEMBER+ 只读 ACTIVE 升序)/detail(单支+直接子支)/stats(EDITOR+)/seed(CHIEF 幂等初始化总谱 HAO-0000)/update(EDITOR 白名单非结构字段)/**archive(EDITOR+ 归档：总谱与含活跃子支的不可归档，先归档子支)**；鉴权先行于参数校验（R2 安全原则）；审计 writeAudit 落痕 |
+| **B1 前端链路** | ❌→✅ | `utils/branch-code.js` 编码纯函数（parse/validate/format/label + 6 单测）；`services/branch.ts` 服务封装（listAll/tree/detail/stats/create/update/archive/seed，走 §7.10 统一 request 层）；页面 `pkg-family/pages/branches/branches.vue`（三级树/详情/创建/归档，pages.json 注册）+ 家族广场 plaza.vue 导航入口（BRANCH_HEAD+ 且 v20Branch 开启）；**功能开关 v20Branch**（admin defaultFlags / seed-v2-features INITIAL_FLAGS / utils/feature-flags.ts 三处对齐，默认启用可灰度关闭） |
+| **宋村演示种子** | ❌→✅ | `scripts/seed-branch-demo.js` 幂等种子：总谱 HAO-0000 → 宋村支系分谱 → 长房/二房支谱（可离线 stub 跑通） |
 | **快赢 #1 seniorityDiff 辈分差** | ✅ | `relation.calc` 输出 seniorityDiff（高出X代/低出Y代/同代）——称谓四要素（正式称谓/方言/五服/辈分差）补齐；`kinship.vue` 结果卡新增辈分差展示位 |
 | **快赢 #2 五服着色统一** | ✅ | WU_FU_COLORS 中文键全链路统一（family-tree-layout/fan-tree-layout/TreeGraph/kindship.vue 色带一致）；TreeGraph tree 模式 `fiveFabric`→`fiveFu` 字段名修正；member/tree buildTree 回填 fiveFu |
 | **五服语义修正（框架 §7.3）** | ✅ | ≥6 代 → `出五服`（≠`同宗`）：kindship.fiveFu/family-tree-layout wufuColor/fan-tree-layout fanRingWuFu·RING_FU_ORDER/TreeGraph/kinship.vue FU_SEGMENTS 全链路替换 + 4 个测试文件同步；无共同祖先 `related:false → fiveFu:null` 与"出五服的血亲"区分（fail-closed 不再混叠） |

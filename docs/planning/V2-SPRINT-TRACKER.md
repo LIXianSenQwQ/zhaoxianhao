@@ -148,6 +148,27 @@
 
 ---
 
+## 三·B1 分支管理 MVP（Sprint R27 交付基线）
+
+> 对齐《通用分支开发框架 V2.0》（`docs/planning/FRAMEWORK-GENERIC-BRANCH-V2.md`）B1 分支底座。运行：`npm run verify` 555/555 tests 全绿、lint 0E、cloud functions 31/31、§7.10 接口不变性 36 文件通过。族史委评审简报：`docs/REVIEW-BRANCH-族史委简报.md`。
+
+| 交付项 | 交付物与说明 | 状态 |
+|---|---|---|
+| **branches schema 扩展** | `cloud/db-schemas/branches.schema.json` 重写：code(HAO- 层级序列码)/level(1 总谱/2 分谱/3 支谱)/parentCode/founderGeneration/region/population/generationVerses/headUserId/sourceTags/confidence/status(ACTIVE/MERGED/ARCHIVED)/mergedInto；索引 code 唯一 + parentCode/level/status；`cloud/functions/database-init.js` 同步索引 | ✅ |
+| **branch 云函数 7 actions** | `cloud/functions/branch/index.js`：**seed**(CHIEF+ 幂等初始化 HAO-0000)/**list·tree**(MEMBER+ 只读 ACTIVE 升序)/**detail**(单支 + 直接子支)/**stats**(EDITOR+ 计数)/**create**(BRANCH_HEAD+ 门禁/父级层级校验/同父重名校验/序号递增编码 HAO-0000-01→02→HAO-0000-01-01)/**update**(EDITOR+ 白名单非结构字段)/**archive**(EDITOR+ 归档：总谱不可归档/含活跃子支须先归档子支)；鉴权先行于参数校验（R2）；审计 writeAudit 落痕 | ✅ |
+| **utils/branch-code.js 编码纯函数** | parseBranchCode/formatBranchCode/validateBranchCode/branchLevelLabel + `tests/branch-code.test.js` 6 单测（解析合法/非法/maxLevel 边界/生成/标签映射） | ✅ |
+| **services/branch.ts 封装** | listAll/tree/detail/stats/create/update/archive/seed（走 services/request 统一层，§7.10） | ✅ |
+| **分支管理页面** | `pkg-family/pages/branches/branches.vue`（三级树展示/详情展开/创建/归档，pages.json 注册 `/pkg-family/pages/branches/branches`） | ✅ |
+| **功能开关 v20Branch** | 三处对齐：`cloud/functions/admin/index.js` defaultFlags / `scripts/seed-v2-features.js` INITIAL_FLAGS / `utils/feature-flags.ts` defaultFeatureFlags，默认启用，支持灰度关闭 | ✅ |
+| **广场导航入口** | `pkg-family/pages/plaza/plaza.vue` 顶部导航新增「分支」卡，权限条件为 BRANCH_HEAD/HISTORIAN/EDITOR/CHIEF 且 isFeatureEnabled('v20Branch') | ✅ |
+| **宋村演示种子脚本** | `scripts/seed-branch-demo.js`（幂等：总谱 → 宋村分谱 → 长房/二房子支，stub 环境可跑通） | ✅ |
+| **测试** | `tests/branch.test.js` 20 用例（含 archive 5 条归档门禁/父子依赖检查 + stats 人口聚合 1）；全量 555 条（+ branch-code 6、archive 5、stats 1） | ✅ |
+| **文档** | `docs/GAP-V2.0.md` R26/B1 行更新；`docs/REVIEW-BRANCH-族史委简报.md`（MVP 划定 + 四阶段排期 +5 决策点）；`docs/planning/V2-SPRINT-TRACKER.md` 本表条目补充；`docs/RELEASE-NOTES.md` 发布说明（B1+B0 全量） | ✅ |
+
+> **备注**：schema 字段名以 generationVerses 为准（已确认 cloud/functions/branch/index.js 与 database-init.js 一致）。前端显示可读性由 name + region 组合承担，无需中文别名。
+
+---
+
 ## 三、执行纪律（延续开发框架 16/17/26）
 1. 每项交付必过门禁：`npm run verify`（test + lint + functions）全绿方可 commit；
 2. 新集合必配 db-schema + 进 seedDB；新云函数 action 必配冒烟测试；

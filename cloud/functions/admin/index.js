@@ -91,6 +91,8 @@ const defaultFlags = {
   v20Moment: { enabled: true, scope: 'global', note: '家族动态与公告' },
   v20Games: { enabled: true, scope: 'global', note: '合规版游戏' },
   v20Home: { enabled: true, scope: 'global', note: '虚拟成长家园（零内购）' },
+  // V2.0 分支域
+  v20Branch: { enabled: true, scope: 'global', note: '分支管理（总谱/分谱/支谱三级）' },
   // P1/P2
   live: { enabled: false, scope: 'global' },
   healthArchive: { enabled: false, scope: 'global' },

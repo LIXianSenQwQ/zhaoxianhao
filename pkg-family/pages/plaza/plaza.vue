@@ -66,6 +66,7 @@ import { read, write } from '@/services/request';
 import BaseCard from '@/components/common/BaseCard.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import { hasRole } from '@/utils/auth';
+import { isFeatureEnabled } from '@/utils/feature-flags';
 
 const PAGE = 20;
 const posts = ref<any[]>([]);
@@ -84,7 +85,7 @@ onMounted(async () => {
   } catch {}
 });
 
-const canBranch = computed(() => ['BRANCH_HEAD', 'EDITOR', 'HISTORIAN', 'CHIEF'].includes(userRole.value));
+const canBranch = computed(() => ['BRANCH_HEAD', 'EDITOR', 'HISTORIAN', 'CHIEF'].includes(userRole.value) && isFeatureEnabled('v20Branch'));
 
 function fmtTime(t: string) {
   if (!t) return '';
