@@ -628,11 +628,11 @@ path '/001/002/003/' → segments ['001','002','003']
 
 ## 附录：关键指标清单
 
-- ✅ **全量测试通过率**: 664/664 (100%) ← R32 新增 20 用例（r32-features.test.js）
-- ✅ **云函数语法检查**: 36/36 (0 syntax errors) ← rootseek/analytics R32 新增
-- ✅ **网关路由匹配**: §7.10 gateway 通过 (branch + photo_ocr + generation + gedcom + backup 云函数入口)
+- ✅ **全量测试通过率**: 681/681 (100%) ← R33-R34 新增 17 用例（r33-r34-features.test.js）+ R32 20 + R31 18
+- ✅ **云函数语法检查**: 38/38 (0 syntax errors) ← pdf-gen/xml-export R33-R34 新增
+- ✅ **网关路由匹配**: §7.10 gateway 通过 (branch + photo_ocr + generation + gedcom + backup + analytics + rootseek + pdf-gen + xml-export)
 - ✅ **环境变量注入**: check:env 0 errors
 - ✅ **消息总线组件**: utils/msg.js + MsgToast.vue 全局订阅机制上线 (R29)
 - ✅ **房长角色体系**: HOUSE_HEAD(4) 介于 EDITOR(3) 与 HISTORIAN(5)，前后端同口径 (R31)
-- ⏳ **生产部署就绪**: pending (需族史委审批 v20Branch/v20Generation/v20GEDCOM/v20Migration 灰度策略)
+- ⏳ **生产部署就绪**: pending (需族史委审批 v20Migration/v20Rootseek/v20Analytics/v20PdfGen/v20XmlExport 灰度策略)
 
