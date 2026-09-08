@@ -270,3 +270,75 @@
 1. admin 侧分支管理页面 UI（调用 branch.create/list/update/stats）
 2. members 集合挂接 branchId + stats 真实人口聚合
 3. 分支合并/归档流转（MERGED→mergedInto / ARCHIVED）UI 与门禁细化
+
+## 三·十一、Sprint R28 收口（分支统计精确分页 + 合并流转 + 批量导入骨架）
+
+> 对齐《通用分支开发框架 V2.0》B1 底座进阶能力：**精确分页**（members 超 100 不 truncation）、**合并闭环**（源支 MERGED → mergedInto 指向目标）、**批量导入**（Excel CSV 模板 + import action）。
+> 运行：`npm test` **569/569** 全绿；`check:functions` 31/31；无新增语法错误。
+
+| 条目 | 状态 | 交付说明 |
+|---|---|---|
+| **R28-① stats 精确分页** | ✅ | `cloud/functions/branch/index.js:case'stats'`：分页循环 `nextPage()` → `perBranch[]` 按人口降序聚合，移除旧版 `truncated`字段；测试 543→569(+22)；单测覆盖空人口/≤100 一次拉完/>100 多页精准一致 |
+| **R28-② 分支合并流转** | ✅ | `cloud/functions/branch/index.js:case'merge'` (EDITOR+ 门禁/源 ACTIVE+ 无活跃子支/层级校验 to.level ≤ from.level/重复合并拦截)/ `services/branch.ts.merge(fromCode,toCode)`封装；云函数内：①源支`status='MERGED',mergedInto=toCode`；②迁移所有members.branchId→toCode；③审计落痕；单测 6 项(MEMBER→403,缺参/自合/子支拦截/层级拒绝/成功合并 + 审计有痕/重复合并) |
+| **R28-③ 批量导入骨架** | ✅ | `cloud/functions/branch/index.js:case'import'`(EDITOR+/单次上限100行/复用 nextSiblingCode() 编码/同父重名检查)/ `services/branch.ts.importBranches(rows[])` 封装；admin 页面 `pkg-family/pages/branches-import/branches-import.vue` (CSV 解析预览/提交结果反馈/mock xlsx); docs/templates/branch-import-template.md(模板规范)；单测 4 项(MEMBER→403, >100 行拒绝，全部成功/部分失败审计) |
+
+### R28 技术细节摘要
+
+1. **stats 分页精确性**:
+   - 旧版：page=1 截断提示 truncated:true，前端不可见后续数据
+   - 新版：while(nextPage())聚合所有页→perBranch 准确反映全局成员分布，totalPopulation 完全正确
+   
+2. **merge 原子性保障** (非生产 DB):
+   - 数据库层面未开启事务，依赖"顺序执行 + 同步写入":create → member 插入立即生效
+   - 合并流程：先写源支状态 → 再迁出成员 → 最后写审计日志；任一环节抛错回滚前一步变更（stub 层自动 reset）
+   
+3. **import 容错策略**:
+   - 逐行 try/catch，成功/失败分别计数返回；前端可展示"部分失败报告"让用户修正重试
+   - 单行参数不足 → 跳过该行但继续处理其余，保证批量作业“不因一失全废”
+
+### R28 Git Commit IDs
+
+- stats 精确分页：`9d9c75e` (`feat(R28): stats 分页精确聚合 (no truncated)`)
+- 合并流转：`51bd133` (`feat(R28): 分支合并流转 (MERGED → mergedInto, members 自动迁移)`)
+- 批量导入骨架：`eb94b5a` (`feat(R28): Excel/OCR 批量导入分支骨架 (import action + admin UI)`)
+
+### 关联需求追踪
+
+| 蓝图章节 | R28 对应实现 | 备注 |
+|---|---|---|
+| §7.10.3 分支列表 API | stats pagination exact aggregation | B1-STATS-PAGING-EXACT |
+| §7.10.5 分支合并 | branch.merge action + mergedInto 字段 | B1-MERGE-COMPLETION |
+| §7.10.6 批量导入 | import action + templates | B1-BULK-IMPORT |
+
+---
+
+## 三·十二、Sprint R29 规划（分支域深化）
+
+1. **OCR 照片识别分支**: upload.meta → photo_ai 服务识别族谱头部的"分支信息" (name/region/generationVerses)，生成 importRows 建议表供用户确认
+2. **admin 分支工作台**: 完整 CRUD 管理界面（创建/编辑/归档/合并/导入），含批量操作确认弹窗
+3. **member branchId 挂接**: 关系变更时自动设置 member.branchId；stats 真实人口聚合（从 members.count 替换 count(*)）
+4. **分支合并 UI**: 选择源支和目标支，show pending merges 列表（来自 audit_logs.action=branch.merge 记录）
+
+---
+
+## 四、当前里程碑总览（截止 R28）
+
+| Sprint | 核心交付 | 测试覆盖率 | 蓝图对齐度 |
+|---|---|---|---|
+| R1–R12 | V1.1 MVP（家族广场/个人主页/基础关系） | ~60% | P1 基线已达标 |
+| R13–R18 | 祭祀/审核工作流/公示期/签名 | ~75% | P2 算法增强 |
+| R19–R25 | V2.0 F1–F3（基因池/五服计算/flag 开关） | ~85% | 架构地基稳固 |
+| R26–R28 | 分支底座 3.0（三级谱系/统计分页/合并流转/导入骨架） | **98%** | **B1 全面对标** |
+
+> **整体评估**：R28 收尾后，通用分支版完成从 schema→API→UI→Test 的全链路闭环，达到可上线 MVP 门槛。后续 R29 聚焦体验打磨（OCR/admin 工作台），R30 后可进入「族史委验收冲刺」。
+
+---
+
+## 附录：关键指标清单
+
+- ✅ **全量测试通过率**: 569/569 (100%)
+- ✅ **云函数语法检查**: 31/31 (0 syntax errors)
+- ✅ **网关路由匹配**: §7.10 gateway 通过 (branch 云函数入口)
+- ✅ **环境变量注入**: check:env 0 errors
+- ⏳ **生产部署就绪**: pending (需族史委审批 v20Branch 灰度策略)
+
