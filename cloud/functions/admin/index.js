@@ -8,9 +8,10 @@
  *   - auditList 分页（filterPage，蓝图 26.3 管理员审计页可检索）
  */
 const wx = require('wx-server-sdk');
-const { OK, BAD_REQUEST, FORBIDDEN, NOT_FOUND } = require('./common/response');
+const { OK, BAD_REQUEST, FORBIDDEN, NOT_FOUND, CONFLICT } = require('./common/response');
 const { hasRole } = require('./common/roles');
 const { writeAudit } = require('./common/audit');
+const { currentVersion, versionConflict, withVersionBump } = require('./common/version');
 
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
 
@@ -47,13 +48,15 @@ function db() { return wx.getDatabase(); }
 /**
  * R16 英名录录入通道（蓝图 6.3 英烈由族史委维护 + R15 member.heroList 配套）：
  * HISTORIAN+ 设置 members.isHero / heroNote（GAP 登记 schema 增量），全程审计。
+ * R36 乐观锁（框架 §3.1 方案 A）：可选 expectedVersion 冲突检测（不匹配 → 409）；
+ * 成功更新一律 version++（历史数据缺 version 视为 1 起算）。
  */
 async function setHeroTag(dbo, openid, params) {
   const userRes = await dbo.collection('users').where({ openid }).limit(1).get();
   const role = (userRes.data[0] && userRes.data[0].role) || 'VISITOR';
   if (!hasRole(role, 'HISTORIAN')) return FORBIDDEN('仅族史委及以上可维护英名录');
 
-  const { memberId, isHero, heroNote } = params || {};
+  const { memberId, isHero, heroNote, expectedVersion } = params || {};
   if (!memberId) return BAD_REQUEST('缺少 memberId');
   if (typeof isHero !== 'boolean') return BAD_REQUEST('isHero 须为布尔值');
   if (heroNote !== undefined && typeof heroNote !== 'string') return BAD_REQUEST('heroNote 须为字符串');
@@ -62,18 +65,24 @@ async function setHeroTag(dbo, openid, params) {
   const m = mRes && mRes.data && !Array.isArray(mRes.data) ? mRes.data : (mRes && mRes.data && mRes.data[0]);
   if (!m) return NOT_FOUND('族人不存在');
 
+  // R36：乐观锁冲突检测（expectedVersion 不传 = 向后兼容，跳过校验但仍 version++）
+  if (versionConflict(m, expectedVersion)) {
+    return CONFLICT('该记录已被他人修改，请刷新后重试', { currentVersion: currentVersion(m) });
+  }
+
   await dbo.collection('members').doc(memberId).update({
-    data: { isHero, heroNote: heroNote || '', updatedAt: new Date() }
+    data: withVersionBump(dbo.command, { isHero, heroNote: heroNote || '', updatedAt: new Date() })
   });
+  const newVersion = currentVersion(m) + 1;
 
   await writeAudit(dbo, {
     userId: openid,
     action: 'admin.heroTag',
     target: memberId,
-    detail: `isHero=${isHero} heroNote=${(heroNote || '').slice(0, 50)}`
+    detail: `isHero=${isHero} heroNote=${(heroNote || '').slice(0, 50)} v${newVersion}`
   }).catch(() => {});
 
-  return OK({ memberId, isHero, heroNote: heroNote || '' });
+  return OK({ memberId, isHero, heroNote: heroNote || '', version: newVersion });
 }
 
 // V2.0 核心功能：功能开关（Feature Flags）——蓝图 17.2 开关表
@@ -93,6 +102,7 @@ const defaultFlags = {
   v20Home: { enabled: true, scope: 'global', note: '虚拟成长家园（零内购）' },
   // V2.0 分支域
   v20Branch: { enabled: true, scope: 'global', note: '分支管理（总谱/分谱/支谱三级）' },
+  v20Roots: { enabled: true, scope: 'global', note: '宋村·根脉专区（地标/时间轴/英烈/追思）' },
   // P1/P2
   live: { enabled: false, scope: 'global' },
   healthArchive: { enabled: false, scope: 'global' },

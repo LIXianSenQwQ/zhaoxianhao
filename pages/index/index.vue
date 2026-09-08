@@ -39,7 +39,7 @@
       <ErrorPage
         v-else-if="loadError"
         title="今日要事加载失败"
-        :message="loadError.message"
+        :message="String(loadError.message).includes('INVALID_ENV') ? '云开发暂未启用 · 查看下方祖训今日' : loadError.message"
         @retry="loadTodayCards"
       />
 
@@ -68,6 +68,9 @@
         <text class="home-overview-label">{{ stat.label }}</text>
       </view>
     </view>
+
+    <!-- ⑤ 宋村·根脉专区（R33：v20Roots 开关门禁，关闭时整块隐藏） -->
+    <RootsSection />
   </view>
 </template>
 
@@ -79,6 +82,7 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ErrorPage from '@/components/common/ErrorPage.vue';
+import RootsSection from '@/components/root-seek/RootsSection.vue';
 import { resolveTheme, MUTED_THEME } from '@/utils/home-atmosphere';
 import WeatherWidget from '@/components/weather/WeatherWidget.vue';
 
@@ -168,9 +172,9 @@ async function loadTodayCards() {
     const d = atm.data.data ?? atm.data;
     solarTerm.value = d.solarTerm || '';
     festival.value = d.festival || '';
-    isMutedPeriod.value = !!d.muted; // R13 atmosphere 字段口径：muted
+    isMutedPeriod.value = !!d.muted;
     loaded.value = true;
-    themeOverride.value = d.moodTheme || null; // §7.8 服务端 24 节气端点色板为主源
+    themeOverride.value = d.moodTheme || null;
   }
   // 注：天气由 <WeatherWidget> 组件独立承载（含 3h 缓存），避免双请求
 
@@ -181,8 +185,13 @@ async function loadTodayCards() {
   });
 
   if (digest.error && !digest.data) {
-    loadError.value = { message: digest.error.message };
-    cards.value = [];
+    // 优雅降级：云环境未配置 → 静默切换到"祖训今日"卡（不空屏不报错，蓝图 0.3.3）
+    if (String(digest.error.message).includes('INVALID_ENV')) {
+      cards.value = []; // 触发 EmptyState 祖训卡
+    } else {
+      loadError.value = { message: digest.error.message };
+      cards.value = [];
+    }
   } else {
     const d = digest.data?.data ?? digest.data;
     cards.value = (d?.cards || []).map((c: any) => ({
@@ -229,7 +238,7 @@ function goWeatherDetail() {
 </script>
 
 <style lang="scss" scoped>
-@import '@/styles/home.scss';
+/* 设计令牌已在 App.vue 全局样式引入（scoped 中 :root 会失效） */
 
 /* 年长模式：全局字号 ×1.4（文档 0.5） */
 .elder-mode {

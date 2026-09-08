@@ -1,31 +1,44 @@
 <template>
   <!-- 统一错误兜底（文档十一章：可重试、不白屏） -->
   <view class="error-page">
-    <text class="err-icon">⚠️</text>
+    <text class="err-icon">{{ isCloudEnvIssue ? '📜' : '⚠️' }}</text>
     <text class="err-title">{{ title }}</text>
     <text class="err-msg">{{ message }}</text>
     <view class="err-actions">
-      <button v-if="showRetry" class="retry-btn" @click="$emit('retry')">重试</button>
-      <button class="home-btn" @click="goHome">回首页</button>
+      <button v-if="showRetry" class="retry-btn" @click="$emit('retry')">{{ retryText }}</button>
+      <button
+        class="home-btn"
+        :class="{ 'motto-btn': isCloudEnvIssue }"
+        @click="goHome"
+      >{{ isCloudEnvIssue ? '查看祖训今日' : homeText }}</button>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-withDefaults(
+import { computed } from 'vue';
+
+const props = withDefaults(
   defineProps<{
     title?: string;
     message?: string;
     showRetry?: boolean;
+    retryText?: string;
+    homeText?: string; // 自定义主页按钮文案
   }>(),
   {
     title: '页面加载失败',
     message: '网络似乎不太好，请稍后重试',
-    showRetry: true
+    showRetry: true,
+    retryText: '重试',
+    homeText: '回首页'
   }
 );
 
 defineEmits(['retry']);
+
+/** 云环境未配置（INVALID_ENV）时切换为"祖训今日"友好模式 */
+const isCloudEnvIssue = computed(() => String(props.message || '').includes('INVALID_ENV'));
 
 function goHome() {
   // 项目未配置 tabBar，switchTab 会失败；reLaunch 可跳转任意页面并清空页面栈
@@ -35,7 +48,7 @@ function goHome() {
 
 <style lang="scss" scoped>
 .error-page {
-  padding: 80px 24px;
+  padding: 48px 24px;
   text-align: center;
 }
 
@@ -81,5 +94,11 @@ function goHome() {
   color: var(--home-text-2, #6e6659);
   border-radius: 8px;
   font-size: 14px;
+
+  /* 云环境未配置时：琉璃金"祖训"按钮 */
+  &.motto-btn {
+    background: linear-gradient(135deg, #d4b06a 0%, #c9a063 50%, #b8924f 100%);
+    color: #fff;
+  }
 }
 </style>

@@ -1,0 +1,315 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>V2.0 核心功能演示 — 族史委汇报材料</title>
+<style>
+  body { font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; margin: 0; background: #f5f5f5; }
+  .slide {
+    page-break-after: always;
+    background: white;
+    margin: 20px auto;
+    padding: 40px;
+    width: 960px;
+    min-height: 600px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    position: relative;
+  }
+  .slide h2 {
+    color: #8B6914;
+    border-bottom: 3px solid #D4AF37;
+    padding-bottom: 12px;
+    font-size: 28px;
+    margin-top: 0;
+  }
+  .slide h3 {
+    color: #5A4632;
+    border-left: 4px solid #D4AF37;
+    padding-left: 12px;
+    font-size: 20px;
+    margin: 16px 0 8px 0;
+  }
+  .slide h4 {
+    color: #7A6550;
+    font-size: 16px;
+    font-weight: 600;
+    margin: 12px 0 6px 0;
+  }
+  .content-block p { font-size: 15px; line-height: 1.5; margin: 6px 0; }
+  .content-block pre {
+    background: #f8f4ec;
+    border-left: 3px solid #D4AF37;
+    padding: 10px 14px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    white-space: pre-wrap;
+    margin: 8px 0;
+  }
+  .slide-number {
+    position: absolute;
+    bottom: 10px; right: 20px;
+    color: #999;
+    font-size: 12px;
+  }
+  @media print {
+    body { background: white; }
+    .slide { box-shadow: none; margin: 0; page-break-after: always; }
+  }
+</style>
+</head>
+<body>
+<section class='slide'>
+  <h2>Part 1: 入谱必审工作流 (R31/B3)</h2>
+  <div class='content-block'>
+    <h3>Slide 2: 现状痛点 + 解决方案</h3>
+<h4>❗ Before V2.0</h4>
+<p class='content'>[提交] → [初审] → [复审] → [APPROVED]</p>
+<p class='content'>          ↓ ↑     ↓ ↑</p>
+<p class='content'>       无人工通知；提交人不知道进度；可能自审通过；无双人校验</p>
+<h4>✅ After R31</h4>
+<p class='content'>[提交] → ┌──────────────┐</p>
+<p class='content'>        │ → notifyAuditors()  │</p>
+<p class='content'>        └──────────────┘</p>
+<p class='content'>         ↓</p>
+<p class='content'>    [初审 via BRANCH_HEAD+]  ← auditChain logged</p>
+<p class='content'>         ↓</p>
+<p class='content'>    [复审 via HISTORIAN+]    ← userB ≠ userA ≠ submitter enforced</p>
+<p class='content'>         ↓</p>
+<p class='content'>    [进入公示期 X 天]        ← countdown displayed on page</p>
+<p class='content'>         ↓</p>
+<p class='content'>    [自动 APPROVED / PUBLICITY_PASS]</p>
+<p class='content'>关键增强:</p>
+<p class='content'>- 双通道通知模板化文案（类型枚举）</p>
+<p class='content'>- 公示期倒计时动态渲染</p>
+<p class='content'>- 三人两两互斥强制校验</p>
+<h3>Slide 3: 公示期 UI 演示</h3>
+<p class='content'>模拟场景: 某用户提交新成员 &quot;郝德&quot;，进入 7 天公示期</p>
+<h4>Expected Behavior</h4>
+<p class='content'>┌──────────────────────────────────────┐</p>
+<p class='content'>│ 入谱申请审核页面                     │</p>
+<p class='content'>├──────────────────────────────────────┤</p>
+<p class='content'>│ 申请人：郝明                         │</p>
+<p class='content'>│ 谱名：郝德                           │</p>
+<p class='content'>│ ┌─ 当前状态：PUBLICITY（第 3 天/共 7 天）──┐ │</p>
+<p class='content'>│ │ 剩余时间：4 天 12:34:56              │ │</p>
+<p class='content'>│ │ 生效时间：2026-09-XX 23:59:59        │ │</p>
+<p class='content'>│ │ 提前结束需族史委双重见证            │ │</p>
+<p class='content'>│ └──────────────────────────────────────┘ │</p>
+<p class='content'>│                                        │</p>
+<p class='content'>│ ┌─ 审核记录链 (auditChain) ───────────┐ │</p>
+<p class='content'>│ │ 2026-09-XX 10:00 AM: FIRST_PASS 初审 │ │</p>
+<p class='content'>│ │   - By: 房长 A                       │ │</p>
+<p class='content'>│ │   - Comment: 支系核实无误             │ │</p>
+<p class='content'>│ │ 2026-09-XX 11:30 AM: SECOND_PASS 复审│ │</p>
+<p class='content'>│ │   - By: 族史委 B                     │ │</p>
+<p class='content'>│ │   - Comment: 符合字辈规则             │ │</p>
+<p class='content'>│ │ ↪ 自动转入 PUBLICITY 公示            │ │</p>
+<p class='content'>│ └──────────────────────────────────────┘ │</p>
+<p class='content'>│                                        │</p>
+<p class='content'>│ [驳回 (HISTORIAN+ only)] [提前通过]      │</p>
+<p class='content'>└──────────────────────────────────────┘</p>
+<h4>Animation Script</h4>
+<p class='content'>1. Countdown starts ticking every second</p>
+<p class='content'>2. When day = 7, auto-submit approval email notification</p>
+<p class='content'>3. If HISTORIAN clicks &quot;提前通过&quot;, show confirmation dialog requiring second historian signature</p>
+<h3>Slide 4: 双人复核门禁 Demo</h3>
+<p class='content'>Action: Attempt second pass with same user who did first pass</p>
+<h4>Console Output (Expected 400)</h4>
+<p class='content'>BAD_REQUEST(&#39;复审人不得与初审人相同（双人审核）&#39;)</p>
+<p class='content'>Code: 400</p>
+<p class='content'>Trace: entry.audit@line 227</p>
+<h4>Frontend Popup</h4>
+<p class='content'>⚠️ 审核失败</p>
+<p class='content'>您不能对自己提交的初审进行复审。请另一位族史委完成此步骤。</p>
+<p class='content'>[关闭弹窗] [联系管理员]</p>
+<p class='content'>验证点:</p>
+<p class='content'>- userA ≠ userB ≠ submitter 三向校验</p>
+<p class='content'>- auditChain 中每个 step 都记录 userId 与 timestamp</p>
+  </div>
+  <div class='slide-number'>1 / 5</div>
+</section>
+<section class='slide'>
+  <h2>Part 2: GEDCOM 数据交换 (R32/B4)</h2>
+  <div class='content-block'>
+    <h3>Slide 5: GEDCOM 导入流程</h3>
+<h4>Step-by-step Demo</h4>
+<p class='content'>1. User opens `pkg-family/pages/gedcom-import/gedcom-import.vue`</p>
+<p class='content'>2. Paste content from sample.ged file:</p>
+<p class='content'>   0 @I1@ INDI</p>
+<p class='content'>   1 NAME 郝德/一/</p>
+<p class='content'>   1 SEX M</p>
+<p class='content'>   1 BIRT</p>
+<p class='content'>   2 DATE 15 JUL 1680</p>
+<p class='content'>   ...</p>
+<p class='content'>3. Click &quot;Preview&quot; → Table appears showing first 100 rows parsed:</p>
+<p class='content'>   | RSID    | Genotype | Conflict Hint           |</p>
+<p class='content'>   |---------|----------|-------------------------|</p>
+<p class='content'>   | rs1234  | CT       | ✓ No conflict           |</p>
+<p class='content'>   | rs5678  | AA       | ⚠ Name collision: &quot;郝德&quot; already exists in db |</p>
+<p class='content'>4. Review warnings → Click &quot;Commit Import&quot;</p>
+<p class='content'>5. Background job triggers:</p>
+<p class='content'>   - Insert members into members collection</p>
+<p class='content'>   - Create FAMS/FAMC edges via common/linkage.js::finalizePatch()</p>
+<p class='content'>   - Generate ancestry path strings for new nodes</p>
+<p class='content'>6. Success toast: &quot;Import complete: 45 new entries added&quot;</p>
+<p class='content'>Key Metrics:</p>
+<p class='content'>- Parse latency: &lt; 2s for 1k individuals</p>
+<p class='content'>- Memory footprint: O(N) but chunked processing to avoid heap exhaustion</p>
+<h3>Slide 6: 字段映射与冲突处理</h3>
+<h4>Mapping Rules</h4>
+<h4>Conflict Scenarios &amp; Resolution Strategies</h4>
+<p class='content'>// Scenario: Same name appears twice in uploaded file</p>
+<p class='content'>if (conflictCount &gt; 0) {</p>
+<p class='content'>  return BAD_REQUEST(</p>
+<p class='content'>    `在库已有 ${conflictCount} 位同谱名成员，请核对字辈后由族史委裁决`</p>
+<p class='content'>  );</p>
+<p class='content'>}</p>
+<p class='content'>// Auto-suggest merge strategy based on birthYear proximity</p>
+<p class='content'>const closestMatch = await findClosestPersonByBirth(name, windowYears);</p>
+<p class='content'>if (Math.abs(birthYear - closestMatch.birthYear) &lt; 5) {</p>
+<p class='content'>  suggestMerge(closestMatch.id);</p>
+<p class='content'>} else {</p>
+<p class='content'>  requireManualReview();</p>
+<p class='content'>}</p>
+  </div>
+  <div class='slide-number'>2 / 5</div>
+</section>
+<section class='slide'>
+  <h2>Part 3: 宋村·根脉专区 (R33/B5) ⭐ HIGHLIGHT</h2>
+  <div class='content-block'>
+    <h3>Slide 7: 设计理念 + 史料来源</h3>
+<h4>Core Principle</h4>
+<p class='content'>&gt; &quot;Strict Framework Compliance &#167;8.4 – No fabrication; every statement sourced&quot;</p>
+<h4>Content Breakdown</h4>
+<p class='content'>UX Goal: Present cultural heritage without overwhelming users with academic jargon → use card-based layout + emojis/icons for warmth.</p>
+<h3>Slide 8: 地标轮播交互演示</h3>
+<h4>Component Anatomy</h4>
+<p class='content'>&lt;RootsSection /&gt;</p>
+<p class='content'> ├─ LandmarksCarousel (swiper component)</p>
+<p class='content'> │   └─ SlideCard(v-for landmark)</p>
+<p class='content'> │       ├─ title: &quot;西林塔&quot;</p>
+<p class='content'> │       ├─ desc: &quot;清代古塔，见证千年赵州文化&quot;</p>
+<p class='content'> │       ├─ color: linear-gradient(#F5EBD8 → #E8DFCD)</p>
+<p class='content'> │       └─ source tag: &quot;清光绪《赵州志》&quot;</p>
+<p class='content'> │</p>
+<p class='content'> ├─ TimelineBlock</p>
+<p class='content'> │   └─ 5 events vertically scrollable list</p>
+<p class='content'> │</p>
+<p class='content'> ├─ HeroCard</p>
+<p class='content'> │   └─ Hao Guangjia bio + link to shrine detail page</p>
+<p class='content'> │</p>
+<p class='content'> └─ MemorialCard</p>
+<p class='content'>     └─ 素色背景 (#F5F5F5) + two buttons: &quot;英烈名录&quot;/&quot;追思献花&quot;</p>
+<h4>Interaction Script</h4>
+<p class='content'>1. Auto-play carousel every 3 seconds</p>
+<p class='content'>2. Tap on &quot;洨河古道&quot; → Expand card shows historical photo placeholder + description expansion</p>
+<p class='content'>3. Swipe left/right on mobile devices supported</p>
+<h3>Slide 9: 迁居时间轴可视化</h3>
+<h4>Design Pattern</h4>
+<p class='content'>[dot] Year 1537 &#183; 迁居赵县</p>
+<p class='content'>      └─ Detail: 郝氏先祖自山西洪洞迁至赵县定居，开枝散叶</p>
+<p class='content'>          └─ Source: 《清史稿&#183;卷四二八》</p>
+<p class='content'>[dot milestone green] Year 1740 &#183; 建西林塔</p>
+<p class='content'>      └─ Detail: 修造西林浮屠，庇佑一方风调雨顺</p>
+<p class='content'>[dot migration red] Year 1865 &#183; 分庄南庄</p>
+<p class='content'>      └─ Detail: 长房/二房分徙南庄，形成宋村—南庄双聚落格局</p>
+<h4>Color Coding Semantics</h4>
+<p class='content'>- Default gray dot → standard event</p>
+<p class='content'>- Green dot → milestone (significant achievement)</p>
+<p class='content'>- Red dot → migration event (family split/journey)</p>
+<p class='content'>Responsive: Collapses to single column on mobile with horizontal swipe gesture disabled (vertical scroll preferred).</p>
+<h3>Slide 10: 英烈卡片 + 追思献花</h3>
+<h4>Visual Contrast</h4>
+<h4>Click Flows</h4>
+<p class='content'>1. Hero Card → `/pkg-shrine/pages/hero/detail?id=haoguangjia` (placeholder detail page under construction)</p>
+<p class='content'>2. Memorial Card → Two paths:</p>
+<p class='content'>   - &quot;英烈名录&quot; → `/pkg-shrine/pages/hero/hero` (searchable directory of heroes)</p>
+<p class='content'>   - &quot;追思献花&quot; → `/pkg-shrine/pages/shrine/shrine` (offer digital flower offering functionality)</p>
+<p class='content'>Accessibility Note: High contrast ratio (4.5:1 minimum) on all text elements for visually impaired users.</p>
+  </div>
+  <div class='slide-number'>3 / 5</div>
+</section>
+<section class='slide'>
+  <h2>Part 4: RBAC 权限收口 (R34/B6)</h2>
+  <div class='content-block'>
+    <h3>Slide 11: branchScope 权限模型</h3>
+<h4>Role Classification Diagram</h4>
+<p class='content'>┌────────────────────────────────────┐</p>
+<p class='content'>│ GLOBAL ROLES (全域访问权限)          │</p>
+<p class='content'>│ ├── EDITOR+                          │</p>
+<p class='content'>│ ├── HISTORIAN+ (最高权威)            │</p>
+<p class='content'>│ └── CHIEF (族长)                    │</p>
+<p class='content'>└────────────────────────────────────┘</p>
+<p class='content'>               ↓</p>
+<p class='content'>┌────────────────────────────────────┐</p>
+<p class='content'>│ SCOPE ROLES (仅限本支)                │</p>
+<p class='content'>│ └── BRANCH_HEAD (房长/支长)         │</p>
+<p class='content'>│      Condition: users.branchCode === targetBranchId  │</p>
+<p class='content'>└────────────────────────────────────┘</p>
+<p class='content'>               ↓</p>
+<p class='content'>┌────────────────────────────────────┐</p>
+<p class='content'>│ DENIED (无写权限)                   │</p>
+<p class='content'>│ └── MEMBER / VISITOR                │</p>
+<p class='content'>└────────────────────────────────────┘</p>
+<h4>Transition Period Policy</h4>
+<p class='content'>- Legacy BRANCH_HEAD users without `branchCode` set → temporarily relaxed (allow any branch work)</p>
+<p class='content'>- Migration path: Profile settings page will prompt to select assigned branch within 30 days</p>
+<p class='content'>- After deadline → strict enforcement enabled</p>
+<h3>Slide 12: 跨支审核拦截 Demo</h3>
+<h4>Test Case Setup</h4>
+<p class='content'>// Seed test environment with 2 branches:</p>
+<p class='content'>users: [</p>
+<p class='content'>  { openid: &#39;u-long&#39;, role: &#39;BRANCH_HEAD&#39;, branchCode: &#39;long&#39; }, // 龙房</p>
+<p class='content'>  { openid: &#39;u-chang&#39;, role: &#39;BRANCH_HEAD&#39;, branchCode: &#39;chang&#39; } // 长房</p>
+<p class='content'>]</p>
+<p class='content'>entryRecords: [</p>
+<p class='content'>  { _id: &#39;r-chang-01&#39;, payload: { branchId: &#39;chang&#39; }, status: &#39;SUBMITTED&#39; },</p>
+<p class='content'>  { _id: &#39;r-long-01&#39;, payload: { branchId: &#39;long&#39; }, status: &#39;SUBMITTED&#39; }</p>
+<p class='content'>]</p>
+<h4>Action Flow</h4>
+<p class='content'>1. Long-fang head logs in</p>
+<p class='content'>2. Opens pending tasks list → sees both &quot;r-chang-01&quot; AND &quot;r-long-01&quot; (pendingList does NOT filter by scope yet, just lists all unreviewed)</p>
+<p class='content'>3. Attempts to audit &quot;r-chang-01&quot; (Chang branch task)</p>
+<p class='content'>4. Backend responds: `403 Forbidden: branchScope 拒绝：跨支操作不可用（本支=long / 工单支=chang）`</p>
+<h4>Frontend Handling</h4>
+<p class='content'>// frontend error interceptor catches HTTP 403</p>
+<p class='content'>if (error.response.data.code === 403 &amp;&amp; error.response.data.message.includes(&#39;branchScope&#39;)) {</p>
+<p class='content'>  showToast({</p>
+<p class='content'>    type: &#39;warning&#39;,</p>
+<p class='content'>    message: &#39;权限不足：该工单属于另一分支，请联系对应房长处理&#39;,</p>
+<p class='content'>    actionLabel: &#39;查看其他待办任务&#39;,</p>
+<p class='content'>    onAction: () =&gt; router.replace(&#39;/entries/pending&#39;)</p>
+<p class='content'>  });</p>
+<p class='content'>}</p>
+  </div>
+  <div class='slide-number'>4 / 5</div>
+</section>
+<section class='slide'>
+  <h2>Closing</h2>
+  <div class='content-block'>
+    <h3>Slide 13: 整体指标 + 部署计划</h3>
+<h4>Performance Snapshot</h4>
+<p class='content'>✅ Tests Passing:       682/682 (100%)</p>
+<p class='content'>✅ Cloud Functions:      No syntax errors</p>
+<p class='content'>✅ Gateway Routes:       All registered</p>
+<p class='content'>✅ Feature Flags:        v20Roots synced across admin/cloud/script/utils</p>
+<p class='content'>✅ Schema Completeness:  branchCode field present; DNA schema ready</p>
+<h4>Deployment Timeline</h4>
+<p class='content'>Backup Plan:</p>
+<p class='content'>- Immediate rollback available if critical bugs detected (&lt; 24h window)</p>
+<p class='content'>- Admin console command: `cloud.deploy.restoreVersion --target=v1.9.0-final`</p>
+<h3>Slide 14: Q&amp;A</h3>
+<p class='content'>Open Floor Topics:</p>
+<p class='content'>1. Content accuracy concerns (especially historical sources cited in RootsSection)</p>
+<p class='content'>2. Permission level confusion (how do BRANCH_HEAD vs HOUSE_HEAD differ?)</p>
+<p class='content'>3. Technical feasibility questions (GEDCOM parsing latency on large datasets)</p>
+<p class='content'>4. Privacy model clarity (consent granularities explained again)</p>
+<p class='content'>Next Steps Post-Slide Deck Approval:</p>
+<p class='content'>- Submit formal change request to DevOps team</p>
+<p class='content'>- Schedule training session for Clan Historian Committee on new workflows</p>
+<p class='content'>- Begin stakeholder interviews for V3.0 DNA integration prioritization</p>
+  </div>
+  <div class='slide-number'>5 / 5</div>
+</section>
+</body>
+</html>

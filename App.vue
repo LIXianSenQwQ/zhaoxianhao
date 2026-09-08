@@ -30,7 +30,12 @@ onHide(() => {
 });
 </script>
 
-<style>
+<style lang="scss">
+	/* 全局设计令牌（tokens + home）必须在【非 scoped】样式中引入，
+	   否则 :root 会被编译成 .data-v-xxx:root 而失效 → 全站变量丢失白屏 */
+	@import '@/styles/tokens.scss';
+	@import '@/styles/home.scss';
+
 	/*每个页面公共 css */
 	
 	/* 通用按钮样式（替代 uview-ui Button 组件）*/

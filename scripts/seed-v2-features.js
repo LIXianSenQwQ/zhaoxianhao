@@ -34,11 +34,12 @@ const INITIAL_FLAGS = {
   v20Moment:       { enabled: true,  scope: 'global', note: '家族动态与公告' },
   v20Games:        { enabled: true,  scope: 'global', note: '合规版游戏（无联机无内购）' },
   v20Home:         { enabled: true,  scope: 'global', note: '虚拟成长家园（零内购）' },
-  v20Branch:       { enabled: true,  scope: 'global', note: '分支管理（总谱/分谱/支谱三级）' }
+  v20Branch:       { enabled: true,  scope: 'global', note: '分支管理（总谱/分谱/支谱三级）' },
+  v20Roots:        { enabled: true,  scope: 'global', note: '宋村·根脉专区（地标/时间轴/英烈/追思）' }
 };
 
 /** V2.0 必须存在的开关键（测试断言用） */
-const REQUIRED_V2_KEYS = ['v20Content', 'v20News', 'v20Moment', 'v20Games', 'v20Home', 'v20Branch'];
+const REQUIRED_V2_KEYS = ['v20Content', 'v20News', 'v20Moment', 'v20Games', 'v20Home', 'v20Branch', 'v20Roots'];
 
 // ═══════════ 验证结构完整性（纯函数，可单测）═══════════
 function validateFlags(flags = INITIAL_FLAGS) {

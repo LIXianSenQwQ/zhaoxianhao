@@ -24,6 +24,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import BaseCard from '@/components/common/BaseCard.vue';
 import { useUserStore } from '@/stores/user';
+import { isFeatureEnabled, getFlagsSnapshot } from '@/utils/feature-flags';
 import {
   canPlay, dailyLimitFromFlags, remainingMs, todayKey
 } from '@/utils/minor-mode.js';
@@ -36,12 +37,12 @@ const remainingSec = ref(0);
 let timer: any = null;
 
 const flags = computed(() => ({
-  chess: window._featureFlags?.v20Games?.enabled,
-  score: window._featureFlags?.v20Games?.enabled,
-  riddle: window._featureFlags?.v20Games?.enabled,
-  quiz: window._featureFlags?.v20Games?.enabled,
-  simulate: window._featureFlags?.v20Games?.enabled,
-  async: window._featureFlags?.v20Games?.enabled
+  chess: isFeatureEnabled('v20Games'),
+  score: isFeatureEnabled('v20Games'),
+  riddle: isFeatureEnabled('v20Games'),
+  quiz: isFeatureEnabled('v20Games'),
+  simulate: isFeatureEnabled('v20Games'),
+  async: isFeatureEnabled('v20Games')
 }));
 
 const mm = computed(() => String(Math.floor(remainingSec.value / 60)).padStart(2, '0'));
@@ -49,7 +50,7 @@ const ss = computed(() => String(remainingSec.value % 60).padStart(2, '0'));
 
 // 每日上限从功能开关 minorProtection 读取（族议会可调，默认 30 分钟）
 const dailyLimitMs = computed(() =>
-  dailyLimitFromFlags((window as any)._featureFlags || {})
+  dailyLimitFromFlags(getFlagsSnapshot())
 );
 
 function readRaw(): any {
@@ -75,7 +76,7 @@ function stopTimer() {
 // 模式切换实时生效：开启即开始计时，关闭即停表
 watch(childMode, (on) => (on ? startTimer() : stopTimer()));
 onMounted(() => {
-  if (!(window as any)._featureFlags) import('@/utils/feature-flags');
+  // feature-flags 已在全局初始化完成（跨端兼容）
   if (childMode.value) startTimer();
 });
 onUnmounted(stopTimer);

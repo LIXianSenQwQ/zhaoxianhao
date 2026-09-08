@@ -88,6 +88,8 @@ async function worship(db, openid, type, targetMemberId, message) {
   });
 
   // 2) 灵位计数原子 +1（失败不阻塞祭记）
+  // R36 注：worshipCount 为纯计数器，db.command.inc 原子自增本身并发安全，
+  // 不属于「编辑冲突」域，豁免 members.version 乐观锁（见 common/version.js 豁免说明）。
   const currentCount = member.worshipCount || 0;
   let worshipCount = currentCount;
   try {

@@ -22,6 +22,15 @@
  *     visible: '公开'|'限制'|'私密',
  *     fieldPrivacy?: { name?, gender?, lifespan?, address? }
  *   }
+ *   generationChar: string|null (字辈字，框架§3.1)
+ *   aliases: array<string> (字号/曾用名，框架§3.1)
+ *   birthPlace/deathPlace: string|null (出生/逝世地)
+ *   siblingOrder: integer|null (同父排行)
+ *   occupation/education: string|null (职业/功名)
+ *   tomb: object|null { location, fileId, note } (墓葬)
+ *   sourceTags: array<string> (来源标注，框架§3.2 元数据规范)
+ *   confidence: integer 1-5|null (置信度，框架§3.3)
+ *   version: integer|null (记录版本号)
  *   createdAt: Date, createdBy: string, updatedAt: Date, updatedBy: string
  *
  * 权限：仅云函数读写。
@@ -52,7 +61,7 @@
     },
     "status": {
       "type": "string",
-      "enum": ["ALIVE", "DECEASED"],
+      "enum": ["ALIVE", "DECEASED", "UNKNOWN"],
       "default": "ALIVE"
     },
     "linkedOpenid": { "type": "string", "maxLength": 128 },
@@ -62,6 +71,25 @@
     "motto": { "type": "string", "maxLength": 500 },
     "heroNote": { "type": "string", "maxLength": 2000 },
     "privacy": { "type": "object" },
+    "generationChar": { "type": ["string", "null"], "maxLength": 4, "description": "字辈字（框架§3.1 必填语义；由 generations 字辈表按世代匹配或录入时指定）" },
+    "aliases": { "type": "array", "maxItems": 10, "items": { "type": "string", "maxLength": 32 }, "description": "字号/曾用名（框架§3.1）" },
+    "birthPlace": { "type": ["string", "null"], "maxLength": 128, "description": "出生地（框架§3.1，行政区划+文字）" },
+    "deathPlace": { "type": ["string", "null"], "maxLength": 128, "description": "逝世地（框架§3.1）" },
+    "siblingOrder": { "type": ["integer", "null"], "minimum": 1, "maximum": 99, "description": "同父兄弟排行（框架§3.1）" },
+    "occupation": { "type": ["string", "null"], "maxLength": 64, "description": "职业（框架§3.1）" },
+    "education": { "type": ["string", "null"], "maxLength": 64, "description": "学历/功名（框架§3.1，历史功名如「道光十八年武进士第一」）" },
+    "tomb": {
+      "type": ["object", "null"],
+      "properties": {
+        "location": { "type": ["string", "null"], "maxLength": 256 },
+        "fileId": { "type": ["string", "null"], "maxLength": 256, "description": "墓碑影像 fileId（documents/upload_metas）" },
+        "note": { "type": ["string", "null"], "maxLength": 500 }
+      },
+      "description": "墓葬信息（框架§3.1）"
+    },
+    "sourceTags": { "type": "array", "maxItems": 20, "items": { "type": "string", "maxLength": 128 }, "description": "来源标注（框架§3.1 必填语义；引用 research_sources.title 或原始出处文本）" },
+    "confidence": { "type": ["integer", "null"], "minimum": 1, "maximum": 5, "description": "置信度 1-5（框架§3.3；5=碑刻原件/DNA 验证，1=传说存疑）" },
+    "version": { "type": ["integer", "null"], "minimum": 1, "description": "记录版本号（框架§3.1，乐观锁/修订追溯用）" },
     "createdAt": { "type": "string", "format": "date-time" },
     "createdBy": { "type": "string" },
     "updatedAt": { "type": "string", "format": "date-time" },

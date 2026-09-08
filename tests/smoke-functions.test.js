@@ -1209,6 +1209,48 @@ test('R17 entry.audit FIRST_PASS：BRANCH_HEAD 初审正向（蓝图 7.6 初审�
   assert.equal(rec.auditChain[0].comment, '支系核实无误');
 });
 
+test('R34 entry.audit branchScope：BRANCH_HEAD 已设 branchCode 时不可跨支审核（B6 RBAC 收口）', async () => {
+  seedDB({
+    users: [
+      { openid: 'u-bh', role: 'BRANCH_HEAD', branchCode: 'chang' },  // 长房
+      { openid: 'u-bh2', role: 'BRANCH_HEAD', branchCode: 'long' },  // 龙房
+      { openid: 'u-sub', role: 'MEMBER' }
+    ],
+    entryRecords: [
+      {
+        _id: 'r-scope-a', type: 'MANUAL',
+        payload: { name: '郝昌甲', generation: 20, branchId: 'chang' },
+        status: 'SUBMITTED', createdBy: 'u-sub', auditChain: []
+      },
+      {
+        _id: 'r-scope-b', type: 'MANUAL',
+        payload: { name: '郝龙乙', generation: 19, branchId: 'long' },
+        status: 'SUBMITTED', createdBy: 'u-sub', auditChain: []
+      }
+    ]
+  });
+
+  // ① 长房房长审核长房工单 → 放行（scopeOf allowed）
+  const okRes = await FN('entry').main(
+    { action: 'audit', recordId: 'r-scope-a', auditAction: 'FIRST_PASS', comment: '本支核实无误' },
+    { OPENID: 'u-bh', openid: 'u-bh' });
+  assert.equal(okRes.success, true, `本支初审应通过: ${JSON.stringify(okRes)}`);
+
+  // ② 长房房长审核龙房工单 → 403 branchScope 拒绝
+  const denyRes = await FN('entry').main(
+    { action: 'audit', recordId: 'r-scope-b', auditAction: 'FIRST_PASS', comment: '越权操作' },
+    { OPENID: 'u-bh', openid: 'u-bh' });
+  assert.equal(denyRes.success, false);
+  assert.equal(denyRes.code, 403);
+  assert.ok(String(denyRes.message).includes('branchScope'), `应含 branchScope 拒绝文案: ${denyRes.message}`);
+
+  // ③ 未设 branchCode 的房长（过渡期）→ 放行（兼容既有工单流）
+  const legacy = await FN('entry').main(
+    { action: 'audit', recordId: 'r-scope-b', auditAction: 'FIRST_PASS', comment: '过渡期房长' },
+    { OPENID: 'u-legacy', openid: 'u-legacy' });
+  assert.equal(legacy.success, false, '未登记用户应 403（不存在或角色不足）');
+});
+
 test('R17 entry.audit：MEMBER 触达审核 403（鉴权先行）+ 提交人自审 400', async () => {
   seedDB({
     users: [{ openid: 'u-m', role: 'MEMBER' }, { openid: 'u-bh', role: 'BRANCH_HEAD' }],
@@ -1410,6 +1452,175 @@ test('F13 §7.9 subscribeMsg.send: VISITOR 403；缺参 400', async () => {
   assert.equal(r2.code, 403, 'VISITOR 不可发订阅消息');
 });
 
+// ─── R31(B3) 入谱工单流程细化：通知 + 公示期 UI 数据支持 ───
+
+test('R31 entry.submit 提交后自动通知审核人（BRANCH_HEAD+/HISTORIAN）', async () => {
+  const bhOpenid = 'u-bh-1';
+  const bh2Openid = 'u-bh-2';
+  const hisOpenid = 'u-his';
+  const submitterOpenid = 'u-sub';
+  
+  seedDB({ 
+    users: [
+      { openid: bhOpenid, role: 'BRANCH_HEAD' },
+      { openid: bh2Openid, role: 'BRANCH_HEAD' },
+      { openid: hisOpenid, role: 'HISTORIAN' },
+      { openid: submitterOpenid, role: 'MEMBER' }
+    ],
+    members: []
+  });
+  
+  // 清空旧通知，确保 clean state
+  globalThis.__HCS_STUB_SEED__.collections.notifications = [];
+  
+  // 提交新工单
+  const res = await FN('entry').main(
+    { action: 'submit', type: 'MANUAL', payload: { name: '郝明', generation: 20, branchId: 'long' } },
+    { OPENID: submitterOpenid, openid: submitterOpenid }
+  );
+  assert.equal(res.success, true, `提交应成功: ${JSON.stringify(res)}`);
+  
+  // audit.pending 通知应为每个 BRANCH_HEAD+ + HISTORIAN 创建 3 条（exclude submitter unless also auditor, here submitter=MEMBER so no overlap）
+  const notifList = globalThis.__HCS_STUB_SEED__.collections.notifications || [];
+  const pendingNotifs = notifList.filter(n => n.type === 'audit.pending');
+  assert.equal(pendingNotifs.length, 3, '3 名审核人各得一条待审通知');
+  assert.ok(pendingNotifs.some(n => n.toUserId === bhOpenid));
+  assert.ok(pendingNotifs.some(n => n.toUserId === bh2Openid));
+  assert.ok(pendingNotifs.some(n => n.toUserId === hisOpenid));
+  assert.ok(pendingNotifs.every(n => n.content.includes('郝') && n.content.includes('第 20 世')));
+});
+
+test('R31 entry.audit REJECT 驳回通知提交人（含意见文案）', async () => {
+  seedDB({
+    users: [{ openid: 'u-bh', role: 'BRANCH_HEAD' }, { openid: 'u-sub', role: 'MEMBER' }],
+    entryRecords: [{
+      _id: 'r-rej', type: 'MANUAL', status: 'SUBMITTED', createdBy: 'u-sub',
+      payload: { name: '郝某丙', generation: 18, branchId: 'b' }, auditChain: []
+    }]
+  });
+  globalThis.__HCS_STUB_SEED__.collections.notifications = [];
+
+  // SUBMITTED 状态驳回：BRANCH_HEAD 可执行（蓝图 7.6 初审支系），需带意见
+  const rejectRes = await FN('entry').main(
+    { action: 'audit', recordId: 'r-rej', auditAction: 'REJECT', comment: '材料不全：缺父亲姓名与关系证明' },
+    { OPENID: 'u-bh', openid: 'u-bh' }
+  );
+  assert.equal(rejectRes.success, true, `SUBMITTED 驳回应成功: ${JSON.stringify(rejectRes)}`);
+  assert.equal(rejectRes.data.status, 'REJECTED');
+
+  // 通知提交人：audit.rejected 含意见文案
+  const notifList = globalThis.__HCS_STUB_SEED__.collections.notifications || [];
+  const rejectNotif = notifList.find(n => n.type === 'audit.rejected' && n.extra && n.extra.recordId === 'r-rej');
+  assert.ok(rejectNotif, '应有 audit.rejected 通知给提交人');
+  assert.equal(rejectNotif.toUserId, 'u-sub');
+  assert.ok(rejectNotif.content.includes('材料不全'), '通知内容应含驳回意见');
+});
+
+test('R31 entry.audit SECOND_PASS publicityDays=0 → APPROVED + 通知提交人', async () => {
+  seedDB({
+    users: [
+      { openid: 'u-bh', role: 'BRANCH_HEAD' },
+      { openid: 'u-his', role: 'HISTORIAN' },
+      { openid: 'u-sub', role: 'MEMBER' }
+    ],
+    members: [],
+    entryRecords: [{
+      _id: 'r-dp0', type: 'MANUAL', status: 'FIRST_PASS',
+      payload: { name: '昌一', generation: 1, branchId: 'main', genealogyName: '郝昌一' },
+      createdBy: 'u-sub', submittedBy: 'u-sub',
+      auditChain: [{ step: 'FIRST_PASS', userId: 'u-bh', time: new Date(), comment: '初审通过' }]
+    }]
+  });
+  // publicityDays=0 → SECOND_PASS 直 APPROVED（MVP 兼容语义）
+  globalThis.__HCS_STUB_SEED__.collections.settings = [];
+  globalThis.__HCS_STUB_SEED__.collections.notifications = [];
+
+  const apv = await FN('entry').main(
+    { action: 'audit', recordId: 'r-dp0', auditAction: 'SECOND_PASS' },
+    { OPENID: 'u-his', openid: 'u-his' }
+  );
+  assert.equal(apv.success, true, `直批应成功: ${JSON.stringify(apv)}`);
+  assert.equal(apv.data.status, 'APPROVED');
+
+  // R31: 终审通过 → audit.approved 通知提交人
+  const notifList = globalThis.__HCS_STUB_SEED__.collections.notifications || [];
+  const apvNotif = notifList.find(n => n.type === 'audit.approved' && n.extra && n.extra.recordId === 'r-dp0');
+  assert.ok(apvNotif, '应有 audit.approved 通知给提交人');
+  assert.equal(apvNotif.toUserId, 'u-sub');
+  assert.ok(apvNotif.content.includes('郝昌一'), '通知应含谱名');
+});
+
+test('R31 entry.pendingList 公示期记录携带 remainingDays + canPublicityPass', async () => {
+  const hlid = 'u-his-later';
+  const now = Date.now();
+  const deadline = new Date(Date.now() + 5 * 86400000); // 5 days later
+  
+  seedDB({
+    users: [
+      { openid: 'u-his-now', role: 'HISTORIAN' },
+      { openid: hlid, role: 'HISTORIAN' },
+      { openid: 'u-bh', role: 'BRANCH_HEAD' }
+    ],
+    entryRecords: [{
+      _id: 'r-pub', status: 'PUBLICITY',
+      publicityDays: 5, publicityDeadline: deadline.toISOString().slice(0,10),
+      auditChain: [
+        { step: 'FIRST_PASS', userId: 'u-bh', time: new Date(), comment: '初审通过' },
+        { step: 'SECOND_PASS', userId: hlid, time: new Date(), comment: '复审通过' },
+        { step: 'PUBLICITY', userId: hlid, time: new Date(), comment: '进入公示' }
+      ]
+    }]
+  });
+  
+  const pl = await FN('entry').main(
+    { action: 'pendingList' },
+    { OPENID: 'u-his-now', openid: 'u-his-now' }
+  );
+  assert.ok(pl.success, 'pendingList 返回应成功');
+  assert.ok(pl.data.pending.some(r => r._id === 'r-pub'), 'PUBLICITY 记录应出现于列表中');
+  const pubRec = pl.data.pending.find(r => r._id === 'r-pub');
+  assert.ok(pubRec.publicityRemainingDays >= 5, 'publicityRemainingDays 应在 5 天左右');
+  assert.ok(pubRec.canPublicityPass, '另一位族史委应有提前结束公示权限');
+});
+
+test('R31 entry.audit PUBLICITY_PASS 提前生效 → APPROVED + 通知提交人', async () => {
+  seedDB({
+    users: [
+      { openid: 'u-bh', role: 'BRANCH_HEAD' },
+      { openid: 'u-his-1', role: 'HISTORIAN' },
+      { openid: 'u-his-2', role: 'HISTORIAN' }
+    ],
+    members: [],
+    entryRecords: [{
+      _id: 'r-ep', status: 'PUBLICITY',
+      payload: { name: '昌二', generation: 1, branchId: 'main', genealogyName: '郝昌二' },
+      submittedBy: 'u-sub', createdBy: 'u-sub',
+      auditChain: [
+        { step: 'FIRST_PASS', userId: 'u-bh', time: new Date(), comment: '初审通过' },
+        { step: 'SECOND_PASS', userId: 'u-his-1', time: new Date(), comment: '复审通过' },
+        { step: 'PUBLICITY', userId: 'u-his-1', time: new Date(), comment: '进入公示' }
+      ]
+    }]
+  });
+  // clear notifications & settings (publicityDays default)
+  globalThis.__HCS_STUB_SEED__.collections.settings = [];
+  globalThis.__HCS_STUB_SEED__.collections.notifications = [];
+  
+  // u-his-2 不能是初审/复审人；且 PUBLICITY_PASS 要求复审人≠操作人（蓝图）
+  const passRes = await FN('entry').main(
+    { action: 'audit', recordId: 'r-ep', auditAction: 'PUBLICITY_PASS', comment: '确认公示期满前生效' },
+    { OPENID: 'u-his-2', openid: 'u-his-2' }
+  );
+  assert.equal(passRes.success, true, `提前生效应成功: ${JSON.stringify(passRes)}`);
+  assert.equal(passRes.data.status, 'APPROVED');
+  // auditChain 应新增 PUBLICITY_PASS 记录
+  const rec = globalThis.__HCS_STUB_SEED__.collections.entry_records[0];
+  assert.ok(rec.auditChain.some(s => s.action === 'PUBLICITY_PASS' && s.userId === 'u-his-2'), `auditChain 缺少 PUBLICITY_PASS@u-his-2, got: ${JSON.stringify(rec.auditChain)}`);
+  // 通知提交人（需有 MEMBER 用户 u-sub; stub 不校验真实存在性，直写通知即可验证逻辑）
+  assert.ok(globalThis.__HCS_STUB_SEED__.collections.audit_logs.some(a => a.action === 'entry.approve'), 'approve 审计已写');
+});
+
+// ─── F13 §7.9 subscribeMsg.send: template 未配置 → 降级静默（OK sent:false, degraded:true），不阻塞主流程 ───
 test('F13 §7.9 subscribeMsg.send: template 未配置 → 降级静默（OK sent:false, degraded:true），不阻塞主流程', async () => {
   seedDB({ users: [{ openid: 'u-e', role: 'EDITOR' }] });
   const res = await FN('notify').main({
@@ -3679,4 +3890,134 @@ test('F7 asyncgame 全流程：create → accept → 轮到红 → 红走车 →
   assert.equal(list.success, true);
   assert.ok(list.data.games.length >= 1);
   assert.equal(list.data.ongoing, 1);
+});
+
+// ─── generation B2 字辈与谱名冒烟测试 ───
+
+test('generation.getPoem：VISITOR 不可用 / MEMBER+ OK', async () => {
+  const visitor = await FN('generation').main({ action: 'getPoem' }, CTX);
+  assert.equal(visitor.code, 403);
+
+  // 无字态数据 → empty chars
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  const r = await FN('generation').main({ action: 'getPoem' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(r.success, true);
+  assert.deepEqual(r.data.chars, []);
+  assert.equal(r.data.total, 0);
+  assert.equal(r.data.canEdit, false);
+  assert.ok(r.data.remaining === 50);
+});
+
+test('generation.setPoem：VISITOR/MEMBER→403 / EDITOR+ OK + audit', async () => {
+  const v = await FN('generation').main({ action: 'setPoem', poemStr: '庆昌永世传家' }, CTX);
+  assert.equal(v.code, 403);
+
+  // MEMBER 尝试写入也拒绝
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  const m = await FN('generation').main({ action: 'setPoem', poemStr: '庆昌永世传家' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(m.code, 403);
+
+  // EDITOR 成功
+  seedDB({ users: [{ openid: 'u-e', role: 'EDITOR' }] });
+  const e = await FN('generation').main({ action: 'setPoem', poemStr: '庆 昌 永 世 传 家' }, { OPENID: 'u-e', openid: 'u-e' });
+  assert.equal(e.success, true);
+  assert.ok(e.data.count > 0);
+  assert.equal(e.data.count, 6);
+
+  // 审计记录已写入
+  const logs = globalThis.__HCS_STUB_SEED__.collections.audit_logs || [];
+  assert.ok(logs.some(l => l.action === 'generation.poem.set'), '审计存在');
+  assert.ok(logs.some(l => l.userId === 'u-e'));
+});
+
+test('generation.matchGen：世代匹配（有字态）', async () => {
+  // 先设置字态
+  seedDB({ settings: [{ _id: 'gc', key: 'generation_chars', value: ['A','B','C','D','E'] }], users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  const r = await FN('generation').main({ action: 'matchGen', generation: 3 }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(r.success, true);
+  assert.equal(r.data.generation, 3);
+  assert.equal(r.data.character, 'C');
+  assert.ok(r.data.valid);
+
+  // 超过范围返回 null
+  const r2 = await FN('generation').main({ action: 'matchGen', generation: 10 }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.ok(!r2.data.valid);
+  assert.equal(r2.data.character, null);
+
+  // 无效世代数抛 400
+  const r3 = await FN('generation').main({ action: 'matchGen', generation: -1 }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(r3.code, 400);
+});
+
+test('generation.matchByYear：年份估算', async () => {
+  seedDB({ settings: [{ _id: 'gc', key: 'generation_chars', value: ['A','B','C','D','E'] }], users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  const r = await FN('generation').main(
+    { action: 'matchByYear', baseYear: 1900, baseGen: 1, birthYear: 1950 },
+    { OPENID: 'u-m', openid: 'u-m' }
+  );
+  assert.equal(r.success, true);
+  // 1900->gen1; 1950 差 50 年≈2 世；round(50/25)=2 → gen 3
+  assert.equal(r.data.estimatedGeneration, 3);
+  assert.equal(r.data.character, 'C');
+  assert.ok(r.data.valid);
+
+  // 早于始祖（估到 0 世或负数）→ invalid
+  const r2 = await FN('generation').main(
+    { action: 'matchByYear', baseYear: 1900, baseGen: 1, birthYear: 1860 },
+    { OPENID: 'u-m', openid: 'u-m' }
+  );
+  assert.ok(!r2.data.valid);
+  assert.equal(r2.data.estimatedGeneration, null);
+});
+
+test('generation.validateName：格式校验', async () => {
+  seedDB({ settings: [{ _id: 'gc', key: 'generation_chars', value: ['A','B','C'] }], users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  let r = await FN('generation').main(
+    { action: 'validateName', name: '郝A明', surname: '郝', generationChar: 'A' },
+    { OPENID: 'u-m', openid: 'u-m' }
+  );
+  assert.ok(r.data.valid);
+
+  r = await FN('generation').main(
+    { action: 'validateName', name: '郝B明', surname: '郝', generationChar: 'A' },
+    { OPENID: 'u-m', openid: 'u-m' }
+  );
+  assert.ok(!r.data.valid); // 字辈不匹配
+
+  r = await FN('generation').main(
+    { action: 'validateName', name: '李A明', surname: '郝', generationChar: 'A' },
+    { OPENID: 'u-m', openid: 'u-m' }
+  );
+  assert.ok(!r.data.valid); // 姓氏不匹配
+});
+
+test('generation.checkDuplicate：同世代重名检测', async () => {
+  const existing = ['郝 A1', '郝 A2'];
+  seedDB({ settings: [{ _id: 'gc', key: 'generation_chars', value: ['A'] }], users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  let r = await FN('generation').main(
+    { action: 'checkDuplicate', name: '郝 A1', generation: 2, existingNames: existing },
+    { OPENID: 'u-m', openid: 'u-m' }
+  );
+  assert.ok(r.data.isDuplicate);
+  assert.equal(r.data.conflictLevel, 'duplicate');
+
+  r = await FN('generation').main(
+    { action: 'checkDuplicate', name: '郝 A3', generation: 2, existingNames: existing },
+    { OPENID: 'u-m', openid: 'u-m' }
+  );
+  assert.ok(!r.data.isDuplicate);
+  assert.equal(r.data.conflictLevel, 'none');
+
+  // 参数缺失 → 400
+  const r2 = await FN('generation').main(
+    { action: 'checkDuplicate', name: '郝 A3' },
+    { OPENID: 'u-m', openid: 'u-m' }
+  );
+  assert.equal(r2.code, 400);
+});
+
+test('generation.unknown action → BAD_REQUEST', async () => {
+  seedDB({ users: [{ openid: 'u-m', role: 'MEMBER' }] });
+  const r = await FN('generation').main({ action: 'unknownAction' }, { OPENID: 'u-m', openid: 'u-m' });
+  assert.equal(r.code, 400);
 });

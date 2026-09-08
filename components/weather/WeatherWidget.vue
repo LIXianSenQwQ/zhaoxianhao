@@ -12,7 +12,7 @@
   </view>
   <view v-else class="ww loading">
     <text class="ww-temp">—°</text>
-    <text class="ww-city">加载天气</text>
+    <text class="ww-city">自动定位 · 点击查看详情</text>
   </view>
 </template>
 

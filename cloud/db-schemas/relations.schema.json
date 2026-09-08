@@ -1,12 +1,21 @@
 /**
  * cloud/db-schemas/relations.schema.json
- * 关系集合（血缘连接表）
+ * 关系集合（血缘/姻缘连接表）
  *
  * 字段：
  *   _id: ObjectId
- *   fromId: string (成员 ID，子节点)
- *   toId: string (成员 ID，父节点)
- *   type: enum [parent, sibling] (关系类型)
+ *   fromId: string (成员 ID，子节点/关系发起方)
+ *   toId: string (成员 ID，父节点/关系接收方)
+ *   type: enum [parent, sibling, spouse, adopted]
+ *         ——对齐框架§3.1（PARENT_CHILD/SPOUSE/SIBLING/ADOPTED），
+ *         存量数据沿用小写，新类型按小写追加保持一致
+ *   subType: string|null (细分类型：过继/入赘/继养/元配/继配 等，框架§3.1)
+ *   startDate: string|null (关系开始日期，婚姻用)
+ *   endDate: string|null (关系结束日期，婚姻终止/离婚用)
+ *   status: enum [ACTIVE, REVOKED] (关系状态，框架§3.1；默认 ACTIVE)
+ *   sourceTags: array<string> (来源标注，框架§3.2 元数据规范)
+ *   confidence: integer 1-5|null (置信度，框架§3.3)
+ *   verifiedBy: array<string> (审核人列表，双人审核留痕，框架§3.1)
  *   createdAt: Date
  *
  * 权限：仅云函数读写。
@@ -15,7 +24,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "relations",
-  "description": "关系集合（血缘连接表）",
+  "description": "关系集合（血缘/姻缘连接表）",
   "type": "object",
   "properties": {
     "_id": { "type": "string" },
@@ -23,13 +32,25 @@
     "toId": { "type": "string" },
     "type": {
       "type": "string",
-      "enum": ["parent", "sibling"]
+      "enum": ["parent", "sibling", "spouse", "adopted"]
     },
+    "subType": { "type": ["string", "null"], "maxLength": 32 },
+    "startDate": { "type": ["string", "null"], "format": "date" },
+    "endDate": { "type": ["string", "null"], "format": "date" },
+    "status": {
+      "type": "string",
+      "enum": ["ACTIVE", "REVOKED"],
+      "default": "ACTIVE"
+    },
+    "sourceTags": { "type": "array", "maxItems": 20, "items": { "type": "string", "maxLength": 128 } },
+    "confidence": { "type": ["integer", "null"], "minimum": 1, "maximum": 5 },
+    "verifiedBy": { "type": "array", "maxItems": 10, "items": { "type": "string" } },
     "createdAt": { "type": "string", "format": "date-time" }
   },
   "required": ["_id", "fromId", "toId", "type", "createdAt"],
   "indexes": [
     { "keys": { "fromId": -1, "toId": 1 }, "options": { "unique": true, "name": "relation_unique_idx" } },
-    { "keys": { "fromId": -1 }, "name": "fromId_desc_idx" }
+    { "keys": { "fromId": -1 }, "name": "fromId_desc_idx" },
+    { "keys": { "toId": 1, "type": 1 }, "name": "toId_type_idx" }
   ]
 }

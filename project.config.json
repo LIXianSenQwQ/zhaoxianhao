@@ -1,7 +1,7 @@
 {
   "description": "赵县郝 · 好诚事家风（此文件由 HBuilderX 编译时复制到 unpackage/dist/dev/mp-weixin/，微信开发者工具应直接打开 dist 目录）",
   "miniprogramRoot": "",
-  "cloudfunctionRoot": "../../../../cloud/functions/",
+  "cloudfunctionRoot": "cloud/functions/",
   "compileType": "miniprogram",
   "appid": "wxb2aa5edc3255ab86",
   "projectname": "%E8%B5%B5%E5%8E%BF%E9%83%9D",
@@ -20,10 +20,25 @@
       "ignore": [],
       "disablePlugins": [],
       "outputPath": ""
-    }
+    },
+    "compileWorklet": false,
+    "uglifyFileName": true,
+    "uploadWithSourceMap": true,
+    "packNpmRelationList": [],
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "useCompilerPlugins": false,
+    "condition": true
   },
   "editorSetting": {
     "tabIndent": "insertSpaces",
     "tabSize": 2
+  },
+  "simulatorPluginLibVersion": {},
+  "packOptions": {
+    "ignore": [],
+    "include": []
   }
 }

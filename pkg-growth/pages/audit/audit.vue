@@ -34,9 +34,13 @@
               <text class="name">{{ r.payload?.genealogyName || '未命名' }}</text>
               <text class="meta">{{ r.type }} · {{ formatTime(r.createdAt) }}</text>
             </view>
+            <!-- R31(B3): 公示期徽标 + 倒计时 -->
+            <view class="pub-badge" v-if="r.status === 'PUBLICITY'">
+              <text class="pub-text">公示中 · 余 {{ r.publicityRemainingDays ?? '?' }} 天</text>
+            </view>
           </view>
 
-          <!-- 操作按钮（R18：按 canFirstPass/canSecondPass 渲染，与后端门禁一致） -->
+          <!-- 操作按钮（R18：按 canFirstPass/canSecondPass 渲染，与后端门禁一致；R31 增补公示期） -->
           <view class="actions" v-if="curTab === '待审'">
             <button class="mini-btn btn-primary" size="mini" v-if="r.canFirstPass" @click="doAudit(r, 'FIRST_PASS')">初审</button>
             <button
@@ -45,7 +49,13 @@
               v-if="r.canSecondPass"
               @click="doAudit(r, 'SECOND_PASS')"
             >复审</button>
-            <button class="mini-btn btn-warn" size="mini" v-if="r.canFirstPass || r.canSecondPass" @click="doAudit(r, 'REJECT')">驳回</button>
+            <button
+              class="mini-btn btn-pass"
+              size="mini"
+              v-if="r.canPublicityPass"
+              @click="doAudit(r, 'PUBLICITY_PASS')"
+            >确认生效</button>
+            <button class="mini-btn btn-warn" size="mini" v-if="r.canFirstPass || r.canSecondPass || r.canPublicityPass" @click="doAudit(r, 'REJECT')">驳回</button>
           </view>
 
           <!-- 已通过 / 已驳回 -->
@@ -113,9 +123,9 @@ async function loadList() {
       30000
     );
     if (res.data?.pending) {
-      // 前端按 tab 过滤
+      // 前端按 tab 过滤（R31: 待审含公示期工单）
       if (curTab.value === '待审') {
-        records.value = res.data.pending.filter((r: any) => r.status === 'SUBMITTED' || r.status === 'FIRST_PASS');
+        records.value = res.data.pending.filter((r: any) => ['SUBMITTED', 'FIRST_PASS', 'PUBLICITY'].includes(r.status));
       } else if (curTab.value === '已通过') {
         // mySubmissions 可拉 APPROVED/FIRST_PASS 后续再补
         records.value = [];
@@ -140,7 +150,7 @@ async function loadMore() {
   loadingMore.value = false;
 }
 
-async function doAudit(record: any, action: 'FIRST_PASS' | 'SECOND_PASS' | 'REJECT') {
+async function doAudit(record: any, action: 'FIRST_PASS' | 'SECOND_PASS' | 'PUBLICITY_PASS' | 'REJECT') {
   let comment = '';
   if (action === 'REJECT') {
     // 蓝图 11：驳回必填意见（uni.showModal editable 基础库 2.17.1+）
@@ -177,20 +187,20 @@ function statusClass(s: string): string {
 }
 
 function statusLabel(s: string): string {
-  return { SUBMITTED: '待提交', FIRST_PASS: '初审通过', APPROVED: '已通过', REJECTED: '已驳回' }[s] || '未知';
+  return { SUBMITTED: '待提交', FIRST_PASS: '初审通过', PUBLICITY: '公示中', APPROVED: '已通过', REJECTED: '已驳回' }[s] || '未知';
 }
 
 function statusActionLabel(a: string): string {
-  return { FIRST_PASS: '初审', SECOND_PASS: '复审', REJECT: '驳回' }[a] || '';
+  return { FIRST_PASS: '初审', SECOND_PASS: '复审', PUBLICITY_PASS: '提前结束公示并生效', REJECT: '驳回' }[a] || '';
 }
 
 function doneText(s: string): string {
   return { APPROVED: '已通过入谱', REJECTED: '已驳回' }[s] || '';
 }
 
-/** 时间轴步骤标签（Sprint R5） */
+/** 时间轴步骤标签（Sprint R5；R31 增公示期步骤） */
 function stepLabel(s: string): string {
-  return { SUBMITTED: '提交申请', IMPORTED: '批量导入', FIRST_PASS: '初审通过', SECOND_PASS: '复审通过', APPROVED: '已入谱', REJECTED: '已驳回' }[s] || s;
+  return { SUBMITTED: '提交申请', IMPORTED: '批量导入', FIRST_PASS: '初审通过', SECOND_PASS: '复审通过', PUBLICITY: '进入公示期', PUBLICITY_EXPIRE: '公示期满自动生效', APPROVED: '已入谱', REJECTED: '已驳回' }[s] || s;
 }
 
 function tlDotClass(step: string): string {
@@ -235,11 +245,15 @@ onMounted(loadList);
 .info { flex: 1; margin-left: 10px; }
 .name { font-size: 15px; font-weight: 600; display: block; }
 .meta { font-size: 11px; color: #8A8378; margin-top: 2px; display: block; }
-.actions { display: flex; gap: 8px; margin-top: 8px; }
+.actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .mini-btn { font-size: 12px; line-height: 2; margin: 0; }
 .btn-primary { background: #7A9A5F; color: #FFF; }
 .btn-default { background: #EEECE4; color: #2B2320; }
 .btn-warn { background: #C44D4D; color: #FFF; }
+/* R31(B3): 公示期徽标 + 确认生效按钮 */
+.pub-badge { background: #EAF2E2; border-radius: 10px; padding: 4px 10px; margin-left: 8px; flex-shrink: 0; }
+.pub-text { font-size: 11px; color: #5A7A3F; font-weight: 600; }
+.btn-pass { background: #D9A441; color: #FFF; }
 .actioned { text-align: center; padding: 8px; font-size: 12px; color: #8A8378; }
 .comment { display: block; font-size: 12px; color: #999; margin-top: 6px; }
 

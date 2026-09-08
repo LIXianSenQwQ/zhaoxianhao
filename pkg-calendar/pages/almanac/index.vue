@@ -249,7 +249,7 @@ function goCalendar() {
   margin: 12px auto 0; display: inline-flex; align-items: center; gap: 6px;
   background: #F4EDDD; border: 1px solid #E3C9A0; border-radius: 6px; padding: 4px 12px;
 }
-.term-banner, .term-banner > * { display: inline-block; }
+.term-banner, .term-banner > view, .term-banner > text { display: inline-block; }
 .term-flag { font-size: 11px; color: #8A6D3B; }
 .term-name { font-size: 15px; font-weight: 700; color: #7A4A2B; }
 

@@ -67,6 +67,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useUserStore } from '@/stores/user';
 import { read } from '@/services/request';
+import { isFeatureEnabled } from '@/utils/feature-flags';
 import BaseCard from '@/components/common/BaseCard.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import ErrorPage from '@/components/common/ErrorPage.vue';
@@ -101,11 +102,11 @@ const entries = computed(() => {
     { key: 'task', label: '成长任务', url: '/pkg-growth/pages/task/task' },
     { key: 'notify', label: '我的消息', url: '/pkg-calendar/pages/notification/index' }
   ];
-  // 家族专区入口（V2.0）
-  if (window._featureFlags?.v20News?.enabled) {
+  // 家族专区入口（V2.0，跨端安全开关读取）
+  if (isFeatureEnabled('v20News')) {
     base.push({ key: 'news', label: '家族新闻', url: '/pkg-news/pages/news/index' });
   }
-  if (window._featureFlags?.v20Moment?.enabled) {
+  if (isFeatureEnabled('v20Moment')) {
     base.push({ key: 'moment', label: '家族动态', url: '/pkg-moment/pages/moment/index' });
   }
   // 族史委及以上显示审核入口

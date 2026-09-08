@@ -199,7 +199,7 @@ function showTerms() {
 </script>
 
 <style lang="scss" scoped>
-@import '@/styles/tokens.scss';
+/* 设计令牌已在 App.vue 全局样式引入（scoped 中 :root 会失效） */
 
 .login-page {
   min-height: 100vh;

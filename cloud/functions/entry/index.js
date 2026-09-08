@@ -11,6 +11,8 @@
 const wx = require('wx-server-sdk');
 const { OK, BAD_REQUEST, FORBIDDEN, NOT_FOUND } = require('./common/response');
 const { hasRole } = require('./common/roles');
+const branchScope = require('./common/branch-scope'); // R34(B6): branchScope RBAC - debug import first
+const { scopeOf, assertScope, isGlobalRole, requiresScopeCheck } = branchScope || {}; // safe destructuring
 const { idempotencyKey } = require('./common/idempotency');
 const { writeAudit } = require('./common/audit');
 const { finalizePatch } = require('./common/linkage');
@@ -77,6 +79,80 @@ function validatePayload(p) {
   return reasons;
 }
 
+/**
+ * 框架§4.5 入谱类型（V2.0 R35 对齐）：录入渠道 type(OCR/EXCEL/MANUAL) 之外的场景语义。
+ * NEWBORN=新生儿入谱；MIGRATION_IN=迁入（需原分支编码+原分支证明来源标注）；
+ * ADOPTION=过继/收养（需证明来源标注）；RETURN=归宗（需证据来源标注）。
+ * 证明材料按类型强制；迁出(MIGRATION_OUT)非入谱场景，走 branch.migrate 迁徙记录，此处不受理。
+ */
+const ENTRY_KINDS = Object.freeze({
+  NEWBORN: { label: '新生儿入谱', requiredProof: [] },
+  MIGRATION_IN: { label: '迁入入谱', requiredProof: ['sourceBranchCode', 'proofSourceTag'] },
+  ADOPTION: { label: '过继入谱', requiredProof: ['proofSourceTag'] },
+  RETURN: { label: '归宗入谱', requiredProof: ['proofSourceTag'] }
+});
+
+/** 按 entryKind 校验证明材料（鉴权后调用，缺证明细节仅对已授权者可见） */
+function validateEntryKind(payload) {
+  const kind = (payload && payload.entryKind) || 'NEWBORN';
+  const def = ENTRY_KINDS[kind];
+  if (!def) return { ok: false, reason: `entryKind 须为 ${Object.keys(ENTRY_KINDS).join('/')}` };
+  const missing = def.requiredProof.filter((f) => !payload[f] || !String(payload[f]).trim());
+  if (missing.length) {
+    return { ok: false, reason: `${def.label}缺证明材料: ${missing.join(', ')}` };
+  }
+  return { ok: true, kind, def };
+}
+
+/**
+ * R31(B3) 移动端审核通知：站内 notifications 直写（与 ceremony.remindScan 同口径）
+ * notifyAuditors：新工单/进入公示 → 通知 BRANCH_HEAD+/HISTORIAN+ 审核人（MVP 全量通知，分支过滤待 B6 branchScope 收口）
+ */
+async function notifyAuditors(db, recordId, message, extra = {}) {
+  try {
+    const res = await db.collection('users')
+      .where({ role: db.command.in(['BRANCH_HEAD', 'EDITOR', 'HISTORIAN', 'CHIEF']) })
+      .limit(100).get();
+    const now = new Date();
+    const seen = new Set();
+    for (const u of (res.data || [])) {
+      if (!u.openid || seen.has(u.openid)) continue;
+      seen.add(u.openid);
+      await db.collection('notifications').add({
+        data: {
+          type: 'audit.pending',
+          content: message,
+          toUserId: u.openid,
+          read: false,
+          createdAt: now,
+          extra: { recordId, ...extra }
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('[entry.notifyAuditors] failed:', e.message); // 通知失败不阻断主流程
+  }
+}
+
+/** notifySubmitter：审核结果 → 通知提交人 */
+async function notifySubmitter(db, submitterId, message, extra = {}) {
+  if (!submitterId) return;
+  try {
+    await db.collection('notifications').add({
+      data: {
+        type: extra.type || 'audit.result',
+        content: message,
+        toUserId: submitterId,
+        read: false,
+        createdAt: new Date(),
+        extra
+      }
+    });
+  } catch (e) {
+    console.warn('[entry.notifySubmitter] failed:', e.message);
+  }
+}
+
 async function genealogyChar(db, generation, branchId) {
   const res = await db.collection('generations')
     .where({ branchId, generation: Number(generation) })
@@ -92,6 +168,10 @@ async function submitEntry(db, openid, type, payload) {
 
   const role = await roleOf(db, openid);
   if (!hasRole(role, 'MEMBER')) return FORBIDDEN('仅认证会员可提交入谱申请');
+
+  // 框架§4.5 入谱类型校验（鉴权后执行：证明材料缺失细节不暴露给未授权者）
+  const kindCheck = validateEntryKind(payload);
+  if (!kindCheck.ok) return BAD_REQUEST(kindCheck.reason);
 
   // 幂等：同 key 已有未结单 → 返回既有单
   const key = idempotencyKey({ bizType: 'entry.submit', bizId: `${payload.branchId}:${payload.generation}:${payload.name}`, userId: openid });
@@ -115,15 +195,18 @@ async function submitEntry(db, openid, type, payload) {
     data: {
       idemKey: key,
       type,
+      entryKind: kindCheck.kind,
       ocrConfidence: payload.ocrConfidence || null,
-      payload: { ...payload, genealogyName },
+      payload: { ...payload, entryKind: kindCheck.kind, genealogyName },
       auditChain: [{ step: 'SUBMITTED', userId: openid, time: new Date() }],
       status: 'SUBMITTED',
       createdAt: new Date(),
       createdBy: openid
     }
   });
-  await writeAudit(db, { userId: openid, action: 'entry.submit', target: addRes._id, detail: genealogyName });
+  await writeAudit(db, { userId: openid, action: 'entry.submit', target: addRes._id, detail: `${genealogyName}; kind=${kindCheck.kind}` });
+  // R31(B3): 新工单 → 通知审核人（BRANCH_HEAD+/HISTORIAN+）
+  await notifyAuditors(db, addRes._id, `新的入谱工单待审：${genealogyName}（第 ${payload.generation} 世 · 支:${payload.branchId}）`, { status: 'SUBMITTED' });
   return OK({
     recordId: addRes._id,
     genealogyName,
@@ -148,6 +231,20 @@ async function auditEntry(db, openid, { recordId, auditAction, comment }) {
   const res = await db.collection('entry_records').doc(recordId).get().catch(() => null);
   const record = res && res.data && !Array.isArray(res.data) ? res.data : (res && res.data && res.data[0]);
   if (!record) return NOT_FOUND('工单不存在');
+
+  // R34(B6) branchScope RBAC：BRANCH_HEAD 仅可审核本支工单（HISTORIAN+ 全域；无 branchCode 时跳过，兼容旧数据）
+  if (!hasRole(role, 'HISTORIAN') && ['BRANCH_HEAD'].includes(role)) {
+    const targetBranch = (record.payload && record.payload.branchId) || null;
+    // 无 branchId → 不强制执行 scope，防止遗留工单无法审核；无 user branchCode → 临时放宽，待 profile.updateBranch
+    if (targetBranch) {
+      const userDoc = await db.collection('users').where({ openid }).limit(1).get().catch(() => null);
+      const userBranch = (userDoc && userDoc.data && userDoc.data[0] && userDoc.data[0].branchCode) || null;
+      // 已设 branchCode 则严格匹配；未设则放行为宜（过渡期策略）
+      if (userBranch && userBranch !== targetBranch) {
+        return FORBIDDEN(`branchScope 拒绝：跨支操作不可用（本支=${userBranch} / 工单支=${targetBranch}）`);
+      }
+    }
+  }
 
   // §7.6 状态机：仅允许合法迁移（终态不可再操作）
   const legalNext = { SUBMITTED: ['FIRST_PASS', 'REJECT'], FIRST_PASS: ['SECOND_PASS', 'REJECT'], PUBLICITY: ['PUBLICITY_PASS', 'REJECT'] };
@@ -184,6 +281,9 @@ async function auditEntry(db, openid, { recordId, auditAction, comment }) {
         { step: 'PUBLICITY', userId: openid, action: 'PUBLICITY', time: new Date(), comment: `进入公示，${days}天后（${deadline.toISOString().slice(0, 10)}）自动生效` }];
       await db.collection('entry_records').doc(recordId).update({ data: { status: 'PUBLICITY', publicityDays: days, publicityDeadline: deadline, auditChain: stepChain } });
       await writeAudit(db, { userId: openid, action: 'entry.publicity.start', target: recordId, detail: `${days}天@${deadline.toISOString()}` });
+      // R31(B3): 进入公示 → 通知提交人 + 审核人（催办公示期到点前处理）
+      await notifySubmitter(db, submitter, `您的入谱申请「${record.payload?.genealogyName || ''}」已通过复审，进入公示期（${days} 天）`, { type: 'audit.publicity', recordId, status: 'PUBLICITY', publicityDeadline: deadline });
+      await notifyAuditors(db, recordId, `工单「${record.payload?.genealogyName || ''}」进入公示期（${days} 天）`, { status: 'PUBLICITY' });
       return OK({ status: 'PUBLICITY', publicityDays: days, publicityDeadline: deadline });
     }
 
@@ -191,6 +291,8 @@ async function auditEntry(db, openid, { recordId, auditAction, comment }) {
     const stepChain = [...(record.auditChain || []), step];
     const fin = await finalizeApproved(db, record, stepChain, openid);
     if (!fin.ok) return BAD_REQUEST(fin.reason);
+    // R31(B3): 终审通过 → 通知提交人
+    await notifySubmitter(db, submitter, `您的入谱申请「${record.payload?.genealogyName || ''}」已通过双人审核并生效`, { type: 'audit.approved', recordId, status: 'APPROVED' });
     return OK(fin.data);
   }
 
@@ -203,12 +305,16 @@ async function auditEntry(db, openid, { recordId, auditAction, comment }) {
     const fin = await finalizeApproved(db, record, stepChain, openid);
     if (!fin.ok) return BAD_REQUEST(`公示生效失败: ${fin.reason}`);
     await writeAudit(db, { userId: openid, action: 'entry.publicity.pass', target: recordId, detail: JSON.stringify(fin.data || {}) });
+    // R31(B3): 提前结束公示生效 → 通知提交人
+    await notifySubmitter(db, submitter, `您的入谱申请「${record.payload?.genealogyName || ''}」公示期经族史委确认，正式生效`, { type: 'audit.approved', recordId, status: 'APPROVED' });
     return OK(fin.data);
   }
 
   // REJECT（SUBMITTED/FIRST_PASS/PUBLICITY 均可驳回；公示中驳回 = 撤回）
   await db.collection('entry_records').doc(recordId).update({ data: { status: 'REJECTED', auditChain: [...(record.auditChain || []), step] } });
   if (record.status === 'PUBLICITY') await writeAudit(db, { userId: openid, action: 'entry.publicity.withdraw', target: recordId, detail: comment });
+  // R31(B3): 驳回 → 通知提交人（含驳回理由）
+  await notifySubmitter(db, submitter, `您的入谱申请「${record.payload?.genealogyName || ''}」被驳回：${comment || '（无补充说明）'}`, { type: 'audit.rejected', recordId, status: 'REJECTED', comment });
   return OK({ status: 'REJECTED' });
 }
 
@@ -269,6 +375,7 @@ async function finalizeApprovedMember(db, record) {
       deathDate: p.deathDate || null,
       status: p.deathDate ? 'DECEASED' : 'LIVING',
       level: 'L2',
+      version: 1, // R36 乐观锁基线（框架 §3.1：新入库成员 version=1 起算）
       sourceRecordId: record._id,
       createdAt: new Date()
     }
@@ -422,16 +529,27 @@ async function pendingList(db, openid) {
   ]);
 
   const isHistorian = hasRole(role, 'HISTORIAN');
-  const decorate = (r) => ({
-    ...r,
-    canFirstPass: r.status === 'SUBMITTED' && r.createdBy !== openid && r.submittedBy !== openid,
-    canSecondPass: isHistorian && r.status === 'FIRST_PASS' &&
-      !(r.auditChain || []).some(s => s.step === 'FIRST_PASS' && s.userId === openid) &&
-      r.createdBy !== openid && r.submittedBy !== openid,
-    canPublicityPass: isHistorian && r.status === 'PUBLICITY' &&
-      !(r.auditChain || []).some(s => s.step === 'SECOND_PASS' && s.userId === openid) &&
-      r.createdBy !== openid && r.submittedBy !== openid
-  });
+  const decorate = (r) => {
+    // R31(B3): 公示期倒计时（前端渲染便利：publicityRemainingDays 为整数天，向下取整，<0 视为 0）
+    let publicityRemainingDays = null;
+    if (r.status === 'PUBLICITY' && r.publicityDeadline) {
+      const dl = new Date(r.publicityDeadline).getTime();
+      if (!Number.isNaN(dl)) {
+        publicityRemainingDays = Math.max(0, Math.ceil((dl - Date.now()) / 86400000));
+      }
+    }
+    return {
+      ...r,
+      publicityRemainingDays,
+      canFirstPass: r.status === 'SUBMITTED' && r.createdBy !== openid && r.submittedBy !== openid,
+      canSecondPass: isHistorian && r.status === 'FIRST_PASS' &&
+        !(r.auditChain || []).some(s => s.step === 'FIRST_PASS' && s.userId === openid) &&
+        r.createdBy !== openid && r.submittedBy !== openid,
+      canPublicityPass: isHistorian && r.status === 'PUBLICITY' &&
+        !(r.auditChain || []).some(s => s.step === 'SECOND_PASS' && s.userId === openid) &&
+        r.createdBy !== openid && r.submittedBy !== openid
+    };
+  };
 
   return OK({
     pending: [...(subRes.data || []).map(decorate), ...(fpRes.data || []).map(decorate), ...(pubRes.data || []).map(decorate)],

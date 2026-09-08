@@ -26,6 +26,7 @@ export const defaultFeatureFlags = {
 
   // V2.0 分支域
   "v20Branch": { enabled: true, scope: "global", note: "分支管理（总谱/分谱/支谱三级）" },
+  "v20Roots": { enabled: true, scope: "global", note: "宋村·根脉专区（地标/时间轴/英烈/追思）" },
   
   // P1/P2 未来扩展
   "live": { enabled: false, scope: "global" },
@@ -47,11 +48,20 @@ export async function loadFeatureFlags() {
   return defaultFeatureFlags;
 }
 
+/** 运行时开关缓存（H5 用 window；小程序无 window → 模块级变量） */
+let runtimeFlags: Record<string, { enabled: boolean }> | null = null;
+
 export function isFeatureEnabled(key: string): boolean {
-  return !!window._featureFlags?.[key]?.enabled;
+  const source = runtimeFlags || defaultFeatureFlags;
+  return !!source[key]?.enabled;
 }
 
-// 初始化时加载到 window
+/** 全量开关快照（跨端安全；供 dailyLimitFromFlags 等需要整表读取的场景） */
+export function getFlagsSnapshot(): Record<string, any> {
+  return runtimeFlags || defaultFeatureFlags;
+}
+
+// 初始化：拉取远端开关覆盖默认表；失败静默用默认（所有端通用，不依赖 window）
 (async () => {
-  window._featureFlags = await loadFeatureFlags();
+  runtimeFlags = await loadFeatureFlags();
 })();

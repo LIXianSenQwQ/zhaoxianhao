@@ -335,7 +335,53 @@ async function main(event, context) {
         if (toBranch.status !== 'ACTIVE') return BAD_REQUEST('目标分支非 ACTIVE');
         if (toBranch.level > fromBranch.level) return BAD_REQUEST('不能合并到更低层级');
         
-        // 3. 更新源分支状态 MERGED + mergedInto
+        // 3. 四维匹配冲突扫描（框架§5.3：姓名+世代+父名+母名）
+        //    实现：谱名 + 世代 + 父成员谱名（由物化路径解析）+ 生年（母名暂无字段，以生年替代，见对齐报告附录A）
+        //    命中=两分支存在疑似同一人，本接口不自动去重，仅出报告待人工复核
+        const fromMems = (await db.collection('members').where({ branchId: fromCode }).limit(1000).get()).data || [];
+        const toMems = (await db.collection('members').where({ branchId: toCode }).limit(1000).get()).data || [];
+        const fatherNameOf = (m, pool) => {
+          if (!m.path || typeof m.path !== 'string') return '';
+          const segs = m.path.split('/').filter(Boolean);
+          if (segs.length < 2) return ''; // 根节点无父
+          const parentPath = '/' + segs.slice(0, -1).join('/') + '/';
+          const p = pool.find(x => x.path === parentPath);
+          return (p && p.genealogyName) || '';
+        };
+        const dimKeyOf = (m, pool) => [
+          m.genealogyName || '',
+          m.generation ?? '',
+          fatherNameOf(m, pool),
+          (m.lifespan && m.lifespan.birth) || ''
+        ].join('|');
+        const toIndex = new Map();
+        for (const t of toMems) {
+          if (!t.genealogyName) continue; // 无谱名的旧数据不参与四维匹配（容错，防空键误报）
+          const k = dimKeyOf(t, toMems);
+          toIndex.set(k, (toIndex.get(k) || 0) + 1);
+        }
+        const conflicts = [];
+        for (const f of fromMems) {
+          if (!f.genealogyName) continue; // 同上
+          const k = dimKeyOf(f, fromMems);
+          if (toIndex.has(k)) {
+            conflicts.push({
+              memberId: f._id,
+              genealogyName: f.genealogyName || '',
+              generation: f.generation ?? null,
+              matchedCount: toIndex.get(k)
+            });
+          }
+        }
+        const mergeReport = {
+          scannedFrom: fromMems.length,
+          scannedTo: toMems.length,
+          conflictCount: conflicts.length,
+          conflicts: conflicts.slice(0, 100),
+          strategy: 'keep_both_source_tags_pending_review' // 冲突节点保留双方来源标注，待族史委人工裁决
+        };
+        
+        // 4. 更新源分支状态 MERGED + mergedInto
         await db.collection('branches').doc(fromBranch._id).update({
           data: {
             status: 'MERGED',
@@ -345,20 +391,20 @@ async function main(event, context) {
           }
         });
         
-        // 4. 迁移 members.branchId: fromCode → toCode
+        // 5. 迁移 members.branchId: fromCode → toCode（R36：批量编辑同步 version++，纳入修订追溯）
         await db.collection('members').where({ branchId: fromCode }).update({
-          data: { branchId: toCode }
+          data: { branchId: toCode, version: db.command.inc(1) }
         });
         
-        // 5. 审计
+        // 6. 审计（含合并报告摘要）
         await writeAudit(db, { 
           userId: openid, 
           action: 'branch.merge', 
           target: `${fromCode} → ${toCode}`, 
-          detail: 'merged' 
+          detail: `merged; conflictCount=${mergeReport.conflictCount}` 
         });
         
-        return OK({ fromCode, toCode, status: 'MERGED' });
+        return OK({ fromCode, toCode, status: 'MERGED', mergeReport });
       }
       
       /** R31 新增：branch.migrate — 迁徙记录（源分支→目标分支） */

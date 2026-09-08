@@ -1,0 +1,41 @@
+{
+  "name": "dna_records",
+  "version": "1.0.0",
+  "author": "Hao Chen Shi Family Committee",
+  "description": "DNA test records for genetic genealogy (寻根问祖)",
+  "created_at": "2026-01-XX",
+  "schema_version": "1.0",
+  "fields": {
+    "_id": { "type": "string", "required": true, "unique": true, "description": "Record ID" },
+    "subjectId": { "type": "string", "required": true, "indexed": true, "description": "关联成员 ID（members._id）" },
+    "testType": { "type": "enum", "values": ["Y-DNA", "MT-DNA", "AUTOSOMAL"], "default": "Y-DNA", "description": "检测类型：Y 染色体/线粒体/常染色体" },
+    "marker": { "type": "string", "maxLength": 200, "required": false, "description": "检测标志位/单倍群信息（如 R-FGC 等，留空表示待录入）" },
+    "result": { "type": "string", "maxLength": 200, "required": false, "description": "检测结果摘要（文本描述，占位）" },
+    "sourceTags": { "type": "array", "maxItems": 10, "items": { "type": "string", "maxLength": 50 }, "description": "来源标签（检测机构/测试日期/报告链接等元数据）" },
+    "createdAt": { "type": "date", "required": true, "description": "创建时间" },
+    "createdBy": { "type": "string", "required": true, "description": "上传者 openid" },
+    "updatedAt": { "type": "date", "required": true, "description": "更新时间" },
+    "updatedBy": { "type": "string", "required": true, "description": "更新者 openid" }
+  },
+  "indexes": [
+    { "key": "subjectId", "direction": "asc" },
+    { "key": "createdAt", "direction": "desc" },
+    { "key": "testType", "direction": "asc" }
+  ],
+  "permissions": {
+    "read": ["VISITOR", "MEMBER", "BRANCH_HEAD", "EDITOR", "HISTORIAN", "CHIEF"],
+    "create": ["EDITOR", "HISTORIAN", "CHIEF"],
+    "update": ["EDITOR", "HISTORIAN", "CHIEF"],
+    "delete": ["HISTORIAN", "CHIEF"]
+  },
+  "audit_trail": {
+    "actions": ["rootseek.dna.link", "rootseek.dna.update", "rootseek.dna.delete"],
+    "sensitive": true,
+    "log_level": "high"
+  },
+  "notes": {
+    "rationale": "V3.0 DNA 对接预留；当前为占位数据结构，支持 Y-DNA/MT-DNA/AUTOSOMAL 三档及标志位/结果录入。真实检测机构 API 集成需等待合作实验室接入。",
+    "privacy_implications": "基因数据敏感度高，建议仅 HIGHER ROLES 可见，且与公开家谱隔离存储。",
+    "future_expansion": "预留 Haplogroup/MutationList/MatchResults 字段空间（通过 sourceTags 或扩展集合实现）。"
+  }
+}

@@ -53,11 +53,17 @@
         "appid" : "wxb2aa5edc3255ab86",
         "setting" : {
             "urlCheck" : false,
-            "es6": true,
-            "minified": true
+            "es6" : true,
+            "minified" : true,
+            "postcss" : true
         },
-        "usingComponents": true,
-        "compileType": "miniprogram"
+        "usingComponents" : true,
+        "compileType" : "miniprogram",
+        "permission" : {
+            "scope.userLocation" : {
+                "desc" : "用于展示家族活动、宗亲聚会等附近位置信息，方便族人查询" 
+            }
+        }
     },
     "mp-alipay" : {
         "usingComponents" : true

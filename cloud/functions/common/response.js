@@ -20,4 +20,7 @@ const BAD_REQUEST = (message) => ERR(400, message);
 
 const NOT_FOUND = (message = '资源不存在') => ERR(404, message);
 
-module.exports = { OK, ERR, FORBIDDEN, FLAG_DISABLED, BAD_REQUEST, NOT_FOUND };
+/** 409 并发冲突（R36：members.version 乐观锁，框架§3.1 方案 A）——前端提示刷新后重试 */
+const CONFLICT = (message = '该记录已被他人修改，请刷新后重试', extra) => ERR(409, message, extra);
+
+module.exports = { OK, ERR, FORBIDDEN, FLAG_DISABLED, BAD_REQUEST, NOT_FOUND, CONFLICT };
