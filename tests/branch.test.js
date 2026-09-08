@@ -449,6 +449,70 @@ test('branch.stats：members > PAGE_SIZE → 多页聚合精确一致', async ()
   assert.equal(Object.hasOwn(res.data, 'truncated'), false, 'no truncated field in R28');
 });
 
+test('branch.import：MEMBER → 403（鉴权先行）', async () => {
+  seed({ users: [USER('MEMBER')] });
+  const res = await FN().main({ action: 'import', rows: [{ name: '测试支谱', level: 3, parentCode: 'HAO-0000-01' }] }, CTX('MEMBER'));
+  assert.equal(res.code, 403);
+});
+
+test('branch.import：超过 100 行 → 400', async () => {
+  seed({ users: [USER('EDITOR')] });
+  const rows = Array.from({ length: 101 }, (_, i) => ({ name: `Row${i}`, level: 2 }));
+  const res = await FN().main({ action: 'import', rows }, CTX('EDITOR'));
+  assert.equal(res.code, 400);
+  assert.ok(res.message.includes('100 行'), '行数提示');
+});
+
+test('branch.import：空 rows → 400', async () => {
+  seed({ users: [USER('EDITOR')] });
+  const res = await FN().main({ action: 'import' }, CTX('EDITOR'));
+  assert.equal(res.code, 400);
+});
+
+test('branch.import：全部成功（批量创建）', async () => {
+  seed({
+    users: [USER('EDITOR')],
+    branches: [{ _id: 'b0', code: 'HAO-0000', name: '总谱', level: 1, status: 'ACTIVE', parentCode: null }]
+  });
+  const rows = [
+    { name: '宋村二支', level: 2, region: '河北省石家庄市赵县宋村' },
+    { name: '南庄一支', level: 2, region: '河北省石家庄市赵县南庄' }
+  ];
+  const res = await FN().main({ action: 'import', rows }, CTX('EDITOR'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.success.length, 2, '成功数');
+  assert.equal(res.data.failed.length, 0, '无失败');
+  // HAO-0000-01, HAO-0000-02 自动生成
+  assert.equal(res.data.success[0].code, 'HAO-0000-01');
+  assert.equal(res.data.success[1].code, 'HAO-0000-02');
+  
+  // 审计
+  const audits = globalThis.__HCS_STUB_SEED__.collections.audit_logs;
+  const audit = audits.find(a => a.action === 'branch.import');
+  assert.ok(audit, 'import 审计有痕');
+});
+
+test('branch.import：部分失败（含重名/层级错误）', async () => {
+  seed({
+    users: [USER('EDITOR')],
+    branches: [
+      { _id: 'b0', code: 'HAO-0000', name: '总谱', level: 1, status: 'ACTIVE', parentCode: null },
+      { _id: 'b1', code: 'HAO-0000-01', name: '宋村一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' }
+    ]
+  });
+  const rows = [
+    { name: '宋村二支', level: 2, region: '河北' }, // OK
+    { name: '宋村一支', level: 2, region: '河北' }, // 重名 → 失败
+    { name: '长房', level: 3, parentCode: 'HAO-0000', region: '河北' } // 父级层级不匹配 → 失败
+  ];
+  const res = await FN().main({ action: 'import', rows }, CTX('EDITOR'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.success.length, 1, '仅第一行成功');
+  assert.equal(res.data.failed.length, 2, '两行失败');
+  assert.ok(res.data.failed.some(f => f.reason.includes('already exists')), '重名失败');
+  assert.ok(res.data.failed.some(f => f.reason.includes('parent')), '父级层级失败');
+});
+
 test('branch.archive：缺 code → 400', async () => {
   seed({ users: [USER('EDITOR')] });
   const res = await FN().main({ action: 'archive' }, CTX('EDITOR'));

@@ -31,7 +31,7 @@
       <text v-if="aPick && bPick && aPick._id === bPick._id" class="warn">A 与 B 为同一人，请重新选择。</text>
     </BaseCard>
 
-    <BaseCard v-if="result" :title="`计算结果（${aPick.name} → ${bPick.name}）`">
+    <BaseCard v-if="result" :title="resultTitle">
       <view class="res-grid">
         <view class="res-item">
           <text class="res-label">称谓（A 看对方）</text>
@@ -39,7 +39,7 @@
         </view>
         <view class="res-item">
           <text class="res-label">辈分差</text>
-          <text class="res-value small">{{ result.seniorityDiff || (result.upSteps == null ? '—' : `${result.upSteps > result.downSteps ? '高出'+(result.upSteps-result.downSteps)+'代' : result.upSteps < result.downSteps ? '低出'+(result.downSteps-result.upSteps)+'代' : '同代'`) }}</text>
+          <text class="res-value small">{{ seniorityText(result) }}</text>
         </view>
         <view class="res-item">
           <text class="res-label">五服等第</text>
@@ -69,7 +69,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, defineComponent, h } from 'vue';
+import { ref, computed, defineComponent, h } from 'vue';
 import { read } from '@/services/request';
 import BaseCard from '@/components/common/BaseCard.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
@@ -85,6 +85,20 @@ const bOpen = ref(false);
 const result = ref<any>(null);
 const loading = ref(false);
 const searchFailed = ref(false);
+
+/** 辈分差文案（蓝图 7.2 口径：seniorityDiff 优先，其次按上下溯步数推导；复杂逻辑不进模板表达式） */
+function seniorityText(r: any): string {
+  if (!r) return '—';
+  if (r.seniorityDiff) return String(r.seniorityDiff);
+  if (r.upSteps == null) return '—';
+  if (r.upSteps > r.downSteps) return '高出' + (r.upSteps - r.downSteps) + '代';
+  if (r.upSteps < r.downSteps) return '低出' + (r.downSteps - r.upSteps) + '代';
+  return '同代';
+}
+
+const resultTitle = computed(() =>
+  `计算结果（${aPick.value?.name ?? '?'} → ${bPick.value?.name ?? '?'}）`
+);
 
 /** 五服着色（蓝图 7.3 五色 + 出五服灰） */
 const FU_SEGMENTS = [

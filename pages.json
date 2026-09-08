@@ -77,6 +77,12 @@
 					"style": {
 						"navigationBarTitleText": "人生书"
 					}
+				},
+				{
+					"path": "pages/branches-import/branches-import",
+					"style": {
+						"navigationBarTitleText": "批量导入分支"
+					}
 				}
 			]
 		},

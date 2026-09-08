@@ -88,6 +88,19 @@ export function merge(fromCode: string, toCode: string) {
   return write('branch', { action: 'merge', fromCode, toCode }, 'branch', `merge_${fromCode}_to_${toCode}`);
 }
 
+/** 批量导入分支（EDITOR+；单次上限 100 行，R28） */
+export interface BranchImportRow {
+  name: string;
+  level: number;
+  parentCode?: string;
+  region?: string;
+  description?: string;
+  generationVerses?: string;
+}
+export function importBranches(rows: BranchImportRow[]) {
+  return write('branch', { action: 'import', rows }, 'branch', `import_${Date.now()}`);
+}
+
 /** 初始化总谱（CHIEF+，幂等） */
 export function seed() {
   return write('branch', { action: 'seed' }, 'branch', 'branch_seed');

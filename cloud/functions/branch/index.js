@@ -361,6 +361,70 @@ async function main(event, context) {
         return OK({ fromCode, toCode, status: 'MERGED' });
       }
       
+      case 'import': {
+        // EDITOR+ 门禁
+        if (!hasRole(role, 'EDITOR')) return FORBIDDEN('仅编辑及以上可导入');
+        
+        const { rows } = event || [];
+        if (!Array.isArray(rows) || rows.length === 0) return BAD_REQUEST('rows required');
+        if (rows.length > 100) return BAD_REQUEST('单次导入上限 100 行');
+        
+        const results = { success: [], failed: [] };
+        for (const [idx, row] of rows.entries()) {
+          try {
+            // 参数校验
+            if (!row.name || !row.level) throw new Error('name and level required');
+            if (!['string', 'number'].includes(typeof row.name)) throw new Error('invalid name');
+            if (![2, 3].includes(Number(row.level))) throw new Error('level must be 2 or 3');
+            
+            let targetParentCode = row.parentCode?.trim();
+            if (Number(row.level) === 2) targetParentCode = targetParentCode || 'HAO-0000'; // 默认总谱为根（与 create 一致）
+            if (!targetParentCode) throw new Error('parentCode required');
+            
+            // parent 存在性和层级校验
+            const parentBranch = await findBranchByCode(db, targetParentCode);
+            if (!parentBranch) throw new Error(`parent ${targetParentCode} not found`);
+            if (parentBranch.status !== 'ACTIVE') throw new Error('parent branch not active');
+            if (parentBranch.level !== Number(row.level) - 1) throw new Error(`parent must be level ${Number(row.level)-1}`);
+            
+            // 同父名唯一性
+            const dupRes = await db.collection('branches').where({ parentCode: targetParentCode, name: row.name.trim() }).get();
+            if ((dupRes && dupRes.data && dupRes.data.length > 0)) throw new Error('branch name already exists under same parent');
+            
+            // 生成 code
+            const newCode = await nextSiblingCode(db, targetParentCode, parentBranch.level);
+            
+            // add document
+            await db.collection('branches').add({
+              data: {
+                code: newCode,
+                name: row.name.trim(),
+                level: Number(row.level),
+                parentCode: targetParentCode,
+                region: row.region || null,
+                population: 0,
+                description: row.description || '',
+                generationVerses: (row.generationVerses || '').toString().slice(0, 500),
+                ancestorId: null, founderGeneration: null, sourceTags: [], confidence: 3, status: 'ACTIVE',
+                createdAt: new Date(), createdBy: openid, updatedAt: null, updatedBy: null
+              }
+            });
+            
+            results.success.push({ row: idx + 1, code: newCode, name: row.name.trim() });
+          } catch (e) {
+            console.error(`import row ${idx} error:`, e.message);
+            results.failed.push({ row: idx + 1, name: row.name || `row${idx}`, reason: e.message });
+          }
+        }
+        
+        await writeAudit(db, { userId: openid, action: 'branch.import', target: `${results.success.length}/${rows.length}`, detail: 'excel-import' });
+        
+        console.log('[import] summary:', JSON.stringify({ total: rows.length, ok: results.success.length, failed: results.failed.length }));
+        if (results.failed.length) console.log('[import] errors:', JSON.stringify(results.failed));
+        
+        return OK(results);
+      }
+      
       default:
         return BAD_REQUEST(`unknown action: ${action}`);
     }

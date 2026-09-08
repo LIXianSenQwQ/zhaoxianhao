@@ -235,7 +235,7 @@ case 'import': {
 }
 ```
 
-#### 4.2.3 前端页面：`pages/admin/branches-import.vue`
+#### 4.2.3 前端页面：`pkg-family/pages/branches-import/branches-import.vue`
 
 - 上传 Excel（`.xlsx` / `.csv`）
 - 模板下载链接（静态文件）
@@ -250,7 +250,7 @@ case 'import': {
 |------|--------|------|
 | `cloud/functions/branch/index.js` | +import action（~40 行，复用 createInternal） | 核心逻辑 |
 | `services/branch.ts` | +importBranches(rows) 封装 | 接口 |
-| `pages/admin/branches-import.vue` | 新建（~120 行骨架） | UI |
+| `pkg-family/pages/branches-import/branches-import.vue` | 新建（~150 行骨架，页面归入 pkg-family 分包与 pages.json 注册一致） | UI |
 | `pages.json` | +路由注册 | 配置 |
 | `tests/branch.test.js` | +import 用例（成功/部分失败/行数上限/权限） | 测试 |
 | `docs/templates/branch-import-template.csv` | Excel 模板样例 | 文档 |
