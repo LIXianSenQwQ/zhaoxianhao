@@ -3,7 +3,7 @@
  * 对应云函数：notify (action: list/markRead/broadcast/digest/etc.)
  */
 
-import { call, write } from './request';
+import { call, read, write } from './request';
 
 export interface NotificationRecord {
   _id?: string;
@@ -31,7 +31,7 @@ interface ListResult {
  * @param cacheKey 可选缓存 key，默认启用 60s 缓存
  */
 export async function listNotifications(page: number = 1, cacheKey?: string) {
-  return call<ListResult>('notify', { action: 'list', page }, cacheKey || `notify:list:${page}`, 60 * 1000);
+  return read<ListResult>('notify', { action: 'list', page }, cacheKey || `notify:list:${page}`, 60 * 1000);
 }
 
 /**

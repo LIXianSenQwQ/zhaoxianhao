@@ -11,7 +11,7 @@ import { call } from './request';
  */
 export function exportXML(branchId, maxRecords = 5000) {
   if (!branchId) return Promise.reject(new Error('branchId required'));
-  return call('xml-export', { action: 'exportXML', branchId, maxRecords }, undefined, 120000);
+  return call('xml-export', { action: 'exportXML', branchId, maxRecords }, { timeout: 120000 });
 }
 
 /**
@@ -25,5 +25,5 @@ export function exportRDF(branchId, format = 'turtle') {
   if (!['turtle', 'rdfxml', 'ntriples'].includes(format)) {
     return Promise.reject(new Error('format must be turtle|rdfxml|ntriples'));
   }
-  return call('xml-export', { action: 'exportRDF', branchId, format }, undefined, 120000);
+  return call('xml-export', { action: 'exportRDF', branchId, format }, { timeout: 120000 });
 }

@@ -2,11 +2,11 @@
  * services/quiz.ts — 百业问学服务封装（云函数：quiz）
  * V2.0：行业题库 / 闯关作答
  */
-import { call, write } from './request';
+import { call, write, read } from './request';
 
 /** 题目列表（按行业分页） */
 export function quizList(industry: string, page = 1) {
-  return call('quiz', { action: 'quiz.list', industry, page }, `quiz_${industry}_${page}`, 30000);
+  return read('quiz', { action: 'quiz.list', industry, page }, `quiz_${industry}_${page}`, 30000);
 }
 
 /** 创建题目（族人出题 → PENDING，审核后上架） */
@@ -23,7 +23,7 @@ export function quizCreate(params: {
 
 /** 待审题目（EDITOR+） */
 export function quizPending(page = 1) {
-  return call('quiz', { action: 'quiz.pending', page }, undefined, 30000);
+  return call('quiz', { action: 'quiz.pending', page }, { timeout: 30000 });
 }
 
 /** 审核通过（EDITOR+） */

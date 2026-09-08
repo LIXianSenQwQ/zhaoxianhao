@@ -13,8 +13,7 @@ export function exportJSON({ collections = ['members', 'branches', 'relations'],
   return call(
     'backup',
     { action: 'exportJSON', collections, userId },
-    undefined,
-    120000  // 较长超时
+    { timeout: 120000 } // 较长超时
   );
 }
 
@@ -27,8 +26,5 @@ export function exportJSON({ collections = ['members', 'branches', 'relations'],
 export function restoreJSON({ jsonString, dryRun = true }) {
   return call(
     'backup',
-    { action: 'restoreJSON', jsonString, dryRun },
-    undefined,
-    60000
-  );
+    { action: 'restoreJSON', jsonString, dryRun }, { timeout: 60000 });
 }

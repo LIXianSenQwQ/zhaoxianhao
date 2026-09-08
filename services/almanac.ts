@@ -3,7 +3,7 @@
  * 对应云函数：calendar.almanac (action:'almanac', date:YYYY-MM-DD)
  */
 
-import { call } from './request';
+import { read } from './request';
 
 export interface AlmanacResult {
   ganzhi?: {
@@ -33,7 +33,7 @@ export interface AlmanacResult {
  * @param cacheKey 缓存 key，默认启用 5min 本地缓存
  */
 export async function getAlmanac(date: string, cacheKey?: string) {
-  return call<AlmanacResult>(
+  return read<AlmanacResult>(
     'calendar',
     { action: 'almanac', date },
     cacheKey || `almanac:${date}`,

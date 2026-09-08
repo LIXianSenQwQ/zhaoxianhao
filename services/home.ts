@@ -2,16 +2,16 @@
  * services/home.ts — 虚拟家园服务封装（云函数：home）
  * V2.0 F9/F10：家园初始化/布局/成长/互访
  */
-import { call, write } from './request';
+import { call, write, read } from './request';
 
 /** 初始化/获取家园（幂等） */
 export function worldInit() {
-  return call('home', { action: 'world.init' }, `home_world_${Date.now().toString(36)}`, 30000);
+  return read('home', { action: 'world.init' }, `home_world_${Date.now().toString(36)}`, 30000);
 }
 
 /** 查询家园布局（可指定他人） */
 export function worldGet(targetOpenid?: string) {
-  return call('home', { action: 'world.get', targetOpenid }, `home_get_${targetOpenid || 'self'}`, 30000);
+  return read('home', { action: 'world.get', targetOpenid }, `home_get_${targetOpenid || 'self'}`, 30000);
 }
 
 /** 放置建筑（云函数内 engine 校验落位与解锁） */
@@ -46,7 +46,7 @@ export function avatarCreate(name: string, face?: Record<string, any>, outfit?: 
 
 /** 查询虚拟角色 */
 export function avatarGet() {
-  return call('home', { action: 'avatar.get' }, 'home_avatar', 30000);
+  return read('home', { action: 'avatar.get' }, 'home_avatar', 30000);
 }
 
 /** 更新虚拟角色 */

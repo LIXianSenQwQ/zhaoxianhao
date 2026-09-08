@@ -8,7 +8,7 @@ import { call } from './request';
  * @returns { total, male, female, unknownGender, alive, deceased, malePct, generationCount, maxGeneration, branchCount }
  */
 export function getOverview() {
-  return call('analytics', { action: 'overview' }, undefined, 60000);
+  return call('analytics', { action: 'overview' }, { timeout: 60000 });
 }
 
 /**
@@ -16,7 +16,7 @@ export function getOverview() {
  * @returns { dist: GenerationNode[], peakGeneration }
  */
 export function getGenerationDist() {
-  return call('analytics', { action: 'generationDist' }, undefined, 60000);
+  return call('analytics', { action: 'generationDist' }, { timeout: 60000 });
 }
 
 /**
@@ -24,5 +24,5 @@ export function getGenerationDist() {
  * @returns { branches: BranchStats[], totalBranches }
  */
 export function getBranchCompare() {
-  return call('analytics', { action: 'branchCompare' }, undefined, 90000); // 较长超时，可能需聚合大量数据
+  return call('analytics', { action: 'branchCompare' }, { timeout: 90000 }); // 较长超时，可能需聚合大量数据
 }

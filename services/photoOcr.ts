@@ -6,11 +6,11 @@
  *   uploadPolicy: 获取上传策略
  *   detectBranchFromPhoto: 照片 → OCR → 字段解析
  */
-import { call } from './request';
+import { call, read } from './request';
 
 /** 上传策略 */
 export function getUploadPolicy() {
-  return call('photo_ocr', { action: 'uploadPolicy' }, 'photo_ocr_policy', 60000);
+  return read('photo_ocr', { action: 'uploadPolicy' }, 'photo_ocr_policy', 60000);
 }
 
 /** 从照片识别分支信息 */
@@ -18,8 +18,7 @@ export function detectBranchFromPhoto(fileId) {
   return call(
     'photo_ocr',
     { action: 'detectBranchFromPhoto', fileId },
-    undefined, // 不缓存
-    30000
+    { timeout: 30000 } // 不缓存
   );
 }
 

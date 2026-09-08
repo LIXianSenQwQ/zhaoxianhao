@@ -10,7 +10,7 @@
  *   validateName   MEMBER+   —— 校验谱名格式（姓 + 字辈 + 名）
  *   checkDuplicate MEMBER+   —— 检查同世代重名冲突
  */
-import { call, write } from './request';
+import { call, write, read } from './request';
 
 /** 字辈数据（settings.generation_chars value[]） */
 export interface GenerationData {
@@ -45,7 +45,7 @@ export interface DuplicateCheck {
 
 /** 获取全族字辈 */
 export function getPoem() {
-  return call('generation', { action: 'getPoem' }, 'generation_poem', 60000);
+  return read('generation', { action: 'getPoem' }, 'generation_poem', 60000);
 }
 
 /** 按世代匹配字辈 */
@@ -53,7 +53,7 @@ export function matchGen(generation: number) {
   if (!Number.isInteger(generation) || generation < 1) {
     throw new Error('generation must be positive integer');
   }
-  return call('generation', { action: 'matchGen', generation }, `generation_match_${generation}`, 30000);
+  return read('generation', { action: 'matchGen', generation }, `generation_match_${generation}`, 30000);
 }
 
 /** 按出生年份估算字辈 */
@@ -62,13 +62,13 @@ export function matchByYear(baseYear: number, baseGen: number, birthYear: number
     throw new Error('baseYear/baseGen/birthYear required');
   }
   const cacheKey = `generation_byyear_${baseYear}_${baseGen}_${birthYear}`;
-  return call('generation', { action: 'matchByYear', baseYear, baseGen, birthYear, yearPerGen }, cacheKey, 30000);
+  return read('generation', { action: 'matchByYear', baseYear, baseGen, birthYear, yearPerGen }, cacheKey, 30000);
 }
 
 /** 校验谱名格式 */
 export function validateName(name: string, surname: string, generationChar: string) {
   if (!name || !surname) throw new Error('name/surname required');
-  return call('generation', { action: 'validateName', name, surname, generationChar }, `gen_validate_${name}`, 30000);
+  return read('generation', { action: 'validateName', name, surname, generationChar }, `gen_validate_${name}`, 30000);
 }
 
 /** 检查重复名 */
@@ -76,7 +76,7 @@ export function checkDuplicate(name: string, generation: number, existingNames: 
   if (!name || !Number.isInteger(generation) || !Array.isArray(existingNames)) {
     throw new Error('name/generation/existingNames required');
   }
-  return call('generation', { action: 'checkDuplicate', name, generation, existingNames }, `gen_dup_${name}_${generation}`, 30000);
+  return read('generation', { action: 'checkDuplicate', name, generation, existingNames }, `gen_dup_${name}_${generation}`, 30000);
 }
 
 // ─── 写操作（带幂等） ───

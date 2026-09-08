@@ -6,7 +6,7 @@
  *   · 前端裁剪（1:1/4:3/原图）+ 美化滑杆（亮度/对比度）
  *   · 后端 CI 压缩至 ≤200KB + 统一 WEBP + 生成缩略图（80/200/600 三档）
  */
-import { call, write } from './request';
+import { call, write, read } from './request';
 
 // 允许的上传格式
 const ALLOWED_FORMATS = ['jpg', 'jpeg', 'png', 'webp'];
@@ -36,12 +36,12 @@ export function uploadAvatar(params: {
 
 /** 获取当前用户头像 */
 export function getMyAvatar() {
-  return call('profile', { action: 'getAvatar' }, 'avatar:mine', 60000);
+  return read('profile', { action: 'getAvatar' }, 'avatar:mine', 60000);
 }
 
 /** 获取某个成员的头像 */
 export function getMemberAvatar(memberId: string) {
-  return call('profile', { action: 'getMemberAvatar', memberId }, `avatar:member:${memberId}`, 60000);
+  return read('profile', { action: 'getMemberAvatar', memberId }, `avatar:member:${memberId}`, 60000);
 }
 
 /**

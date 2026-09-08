@@ -14,10 +14,7 @@ import { call } from './request';
 export function submitMigrate({ fromCode, toCode, reason = '', date }) {
   return call(
     'branch',
-    { action: 'migrate', fromCode, toCode, reason, date },
-    undefined,
-    60000
-  );
+    { action: 'migrate', fromCode, toCode, reason, date }, { timeout: 60000 });
 }
 
 /**
@@ -29,10 +26,7 @@ export function submitMigrate({ fromCode, toCode, reason = '', date }) {
 export function listMigrations({ code, limit = 50 } = {}) {
   return call(
     'branch',
-    { action: 'migrate.list', code, limit },
-    undefined,
-    30000
-  );
+    { action: 'migrate.list', code, limit }, { timeout: 30000 });
 }
 
 /**
@@ -48,8 +42,5 @@ export function approveMigrate({ migrateId, status, comment = '' }) {
   }
   return call(
     'branch',
-    { action: 'migrate.updateStatus', migrateId, status, comment },
-    undefined,
-    60000
-  );
+    { action: 'migrate.updateStatus', migrateId, status, comment }, { timeout: 60000 });
 }

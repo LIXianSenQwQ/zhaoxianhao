@@ -7,7 +7,7 @@
  *   capsule.create / capsule.scan / capsule.list
  * 蓝图 V1.1 第八部分（个人中心扩展：头像/问候/家训/字辈/百年胶囊）
  */
-import { call, write } from './request';
+import { read, write } from './request';
 
 // ═══════════ 头像（V1.1 22.1；裁剪走 photomgr 页内 image-cropper） ═══════════
 
@@ -30,7 +30,7 @@ export function updateIntro(params: { userId?: string; greeting?: string; introV
 
 /** 获取当前家训（profile.motto.get，返回 motto + canEdit） */
 export function getMotto() {
-  return call<{ motto: string; canEdit: boolean; source: string }>('profile', { action: 'motto.get' }, 'motto:get', 60000);
+  return read<{ motto: string; canEdit: boolean; source: string }>('profile', { action: 'motto.get' }, 'motto:get', 60000);
 }
 
 /** 保存/更新家训（profile.updateFamilyInfo，EDITOR+，≤500 字） */
@@ -42,7 +42,7 @@ export function saveMotto(familyMotto: string) {
 
 /** 字辈序列 + 我的成员定位（profile.generation.list） */
 export function listGenerations(branchId?: string) {
-  return call<{ chars: string[]; total: number; member: any; canEdit: boolean }>(
+  return read<{ chars: string[]; total: number; member: any; canEdit: boolean }>(
     'profile', { action: 'generation.list', branchId }, `gen:${branchId || 'all'}`, 60000);
 }
 
@@ -67,12 +67,12 @@ export function saveGreeting(params: {
 
 /** 我的问候语卡列表（profile.greeting.list） */
 export function listGreetings() {
-  return call<{ cards: any[] }>('profile', { action: 'greeting.list' }, 'greet:list', 60000);
+  return read<{ cards: any[] }>('profile', { action: 'greeting.list' }, 'greet:list', 60000);
 }
 
 /** 当前展示问候语（profile.greeting.active：最近一条 ACTIVE） */
 export function getActiveGreeting() {
-  return call<{ card: any }>('profile', { action: 'greeting.active' }, 'greet:active', 60000);
+  return read<{ card: any }>('profile', { action: 'greeting.active' }, 'greet:active', 60000);
 }
 
 // ═══════════ 百年设置定时解密胶囊（time_capsules，蓝图 24.5） ═══════════
@@ -84,5 +84,5 @@ export function createCapsule(params: { targetType: string; targetId: string; un
 
 /** 我的胶囊列表（profile.capsule.list） */
 export function listCapsules() {
-  return call<{ capsules: any[] }>('profile', { action: 'capsule.list' }, 'capsule:list', 30000);
+  return read<{ capsules: any[] }>('profile', { action: 'capsule.list' }, 'capsule:list', 30000);
 }

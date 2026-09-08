@@ -11,7 +11,7 @@
  *   archive     EDITOR+   —— 归档（总谱与含活跃子支的不可归档）
  *   seed        CHIEF+    —— 初始化总谱（幂等）
  */
-import { call, write } from './request';
+import { call, write, read } from './request';
 
 /** 分支数据（与 cloud/db-schemas/branches.schema.json 对齐） */
 export interface Branch {
@@ -41,22 +41,22 @@ export interface Branch {
 
 /** 全部分支（前端按 code 组三级树） */
 export function listAll(limit = 500) {
-  return call('branch', { action: 'list', limit }, 'branch_list', 30000);
+  return read('branch', { action: 'list', limit }, 'branch_list', 30000);
 }
 
 /** 树视图（list 同源，语义便于前端组树） */
 export function tree(limit = 500) {
-  return call('branch', { action: 'tree', limit }, 'branch_tree', 30000);
+  return read('branch', { action: 'tree', limit }, 'branch_tree', 30000);
 }
 
 /** 分支详情 + 直接子支 */
 export function detail(code: string) {
-  return call('branch', { action: 'detail', code }, `branch_detail_${code}`, 30000);
+  return read('branch', { action: 'detail', code }, `branch_detail_${code}`, 30000);
 }
 
 /** 全族分支统计（EDITOR+） */
 export function stats() {
-  return call('branch', { action: 'stats' }, 'branch_stats', 30000);
+  return read('branch', { action: 'stats' }, 'branch_stats', 30000);
 }
 
 /** 创建分支（BRANCH_HEAD+） */

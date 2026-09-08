@@ -3,7 +3,7 @@
  * 对应云函数：login（登录注册）/ auth（认证/授权/密码）
  * V1.1 扩展：setDelegates/setReversePassword/verifyReverse
  */
-import { call, write } from './request';
+import { call, read, write } from './request';
 
 /** 微信登录（login 云函数） */
 export function login() {
@@ -49,7 +49,7 @@ export function revokeDelegate(delegateId: string, scope?: string[]) {
 
 /** 我的代理人列表（auth.delegate.list，含昵称回填） */
 export function listDelegates() {
-  return call<{ delegates: { userId: string; scopes: string[]; nickName?: string; status?: string }[]; count: number }>(
+  return read<{ delegates: { userId: string; scopes: string[]; nickName?: string; status?: string }[]; count: number }>(
     'auth', { action: 'delegate.list' }, 'auth:delegates', 30000);
 }
 

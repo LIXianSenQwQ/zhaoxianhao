@@ -12,7 +12,7 @@ export function searchKin({ keyword, generation, region, limit = 50 } = {}) {
   if (!keyword && generation === undefined && !region) {
     return Promise.reject(new Error('keyword/generation/region 至少其一'));
   }
-  return call('rootseek', { action: 'searchKin', keyword, generation, region, limit }, undefined, 30000);
+  return call('rootseek', { action: 'searchKin', keyword, generation, region, limit }, { timeout: 30000 });
 }
 
 /**
@@ -22,7 +22,7 @@ export function searchKin({ keyword, generation, region, limit = 50 } = {}) {
  */
 export function traceAncestry(memberId) {
   if (!memberId) return Promise.reject(new Error('memberId required'));
-  return call('rootseek', { action: 'traceAncestry', memberId }, undefined, 30000);
+  return call('rootseek', { action: 'traceAncestry', memberId }, { timeout: 30000 });
 }
 
 /**
@@ -31,5 +31,5 @@ export function traceAncestry(memberId) {
  */
 export function linkDna({ subjectId, testType = 'Y-DNA', marker = '', result = '', sourceTags = [] } = {}) {
   if (!subjectId) return Promise.reject(new Error('subjectId required'));
-  return call('rootseek', { action: 'dna.link', subjectId, testType, marker, result, sourceTags }, undefined, 30000);
+  return call('rootseek', { action: 'dna.link', subjectId, testType, marker, result, sourceTags }, { timeout: 30000 });
 }

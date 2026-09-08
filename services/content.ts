@@ -6,7 +6,7 @@
  *   · 权限（PRIVATE/GROUP/PUBLIC，敏感分类强制 PRIVATE）
  *   · 组合搜索（关键词+日期+分类）
  */
-import { call, write } from './request';
+import { call, write, read } from './request';
 
 export type ContentType = 'article' | 'story' | 'photo' | 'video' | 'record';
 export type Visibility = 'PRIVATE' | 'GROUP' | 'PUBLIC';
@@ -43,7 +43,7 @@ export function searchContent(params: {
 
 /** 本人内容列表 */
 export function listMine(page = 1) {
-  return call('content', { action: 'content.search', page, pageSize: 20 }, `content:mine:${page}`, 30000);
+  return read('content', { action: 'content.search', page, pageSize: 20 }, `content:mine:${page}`, 30000);
 }
 
 // ═══════════ 三级分类管理 ═══════════
@@ -58,7 +58,7 @@ export function saveCategory(params: {
 
 /** 获取我的全部分类树 */
 export function listCategories() {
-  return call('content', { action: 'category.list' }, 'content:cats', 60000);
+  return read('content', { action: 'category.list' }, 'content:cats', 60000);
 }
 
 /** 重命名分类（主/子/标签） */

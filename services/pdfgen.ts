@@ -11,7 +11,7 @@ import { call } from './request';
  */
 export function generateBook(branchId, format = 'fan') {
   if (!branchId) return Promise.reject(new Error('branchId required'));
-  return call('pdf-gen', { action: 'generateBook', branchId, format }, undefined, 120000);
+  return call('pdf-gen', { action: 'generateBook', branchId, format }, { timeout: 120000 });
 }
 
 /**
@@ -21,7 +21,7 @@ export function generateBook(branchId, format = 'fan') {
  */
 export function previewConfig(branchId, scale = 1) {
   if (!branchId) return Promise.reject(new Error('branchId required'));
-  return call('pdf-gen', { action: 'previewConfig', branchId, scale }, undefined, 30000);
+  return call('pdf-gen', { action: 'previewConfig', branchId, scale }, { timeout: 30000 });
 }
 
 /**
@@ -32,5 +32,5 @@ export function previewConfig(branchId, scale = 1) {
  */
 export function exportSvgTree(branchId, maxDepth = 4) {
   if (!branchId) return Promise.reject(new Error('branchId required'));
-  return call('pdf-gen', { action: 'exportSvgTree', branchId, maxDepth }, undefined, 60000);
+  return call('pdf-gen', { action: 'exportSvgTree', branchId, maxDepth }, { timeout: 60000 });
 }
