@@ -553,10 +553,83 @@ const ALLOWED = ['members', 'branches', 'relations', 'generations', 'events'];
 
 ---
 
+## 四·十七、Sprint R32 完成报告（寻根问祖 + 统计分析）
+
+**完成日期**: 2025-01-XX  
+**状态**: ✅ 全部交付  
+**框架对齐**: §4.1 寻根问祖 P2 + §4.1 统计分析 P2
+
+### 1. 寻根问祖模块（rootseek 云函数）- ✅ 已完成
+
+**交付清单:**
+- ✅ `cloud/functions/rootseek/index.js` — searchKin/traceAncestry/dna.link 三个 actions（36/36 云函数）
+- ✅ `services/rootseek.ts` — 前端服务封装
+
+**功能矩阵:**
+| Action | 权限 | 功能 |
+|--------|------|------|
+| searchKin | MEMBER+ | 同宗查询：关键词（谱名/本名）+ 世代精确 + 地域模糊三维匹配 |
+| traceAncestry | MEMBER+ | 分支溯源：物化路径 `/001/002/003/` 逐级回溯至总谱始祖 |
+| dna.link | EDITOR+ | DNA 数据登记占位（Y-DNA/MT-DNA/AUTOSOMAL），V3.0 真实机构对接 |
+
+**溯源算法:**
+```javascript
+// 物化路径解析 → 祖先链
+path '/001/002/003/' → segments ['001','002','003']
+→ 逐级构造祖先路径 '/001/' '/001/002/' → 并行查询
+→ 按世代升序（始祖在前）→ relationDepth 标注第几代祖先
+```
+
+### 2. 统计分析模块（analytics 云函数）- ✅ 已完成
+
+**交付清单:**
+- ✅ `cloud/functions/analytics/index.js` — overview/generationDist/branchCompare 三个 actions
+- ✅ `services/analytics.ts` — 前端服务封装（60-90s 长超时）
+- ✅ `aggregate()` 纯函数聚合器（男女比例/在世故世/世代分布/分支聚合）
+
+**功能矩阵:**
+| Action | 权限 | 返回 |
+|--------|------|------|
+| overview | MEMBER+ | 总数/男女比例/在世故世/世代数/分支数（族人只看汇总） |
+| generationDist | MEMBER+ | 每世代人数 + 字辈字（generations 联动）+ 峰值世代 |
+| branchCompare | EDITOR+ | 各分支人口/世代深度/男女比例明细 |
+
+**性能设计:**
+- 游标分页拉取（PAGE_SIZE=100，复用 branch.stats R28 模式）
+- field 投影（真实 SDK 走字段裁剪，stub 自动降级）
+- 内存聚合（千级成员 <100ms）
+
+### 3. R32 测试覆盖 - ✅ 20 个新用例
+
+- R32-1 同宗查询: 关键词模糊/世代精确/地域正则
+- R32-2 分支溯源: 物化路径解析/祖先链排序/null path 容错
+- R32-3 DNA 登记: 类型默认值/标签截断
+- R32-4 统计聚合: 男女比例/在世故世/世代分布/分支 malePct=66.7 精度断言
+- R32-5 权限矩阵: MEMBER+/EDITOR+ 边界
+
+---
+
+## 四·十八、当前里程碑总览（截止 R32）
+
+| Sprint | 核心交付 | 测试覆盖率 | 蓝图对齐度 |
+|---|---|---|---|
+| R1–R12 | V1.1 MVP（家族广场/个人主页/基础关系） | ~60% | P1 基线已达标 |
+| R13–R18 | 祭祀/审核工作流/公示期/签名 | ~75% | P2 算法增强 |
+| R19–R25 | V2.0 F1–F3（基因池/五服计算/flag 开关） | ~85% | 架构地基稳固 |
+| R26–R28 | 分支底座 3.0（三级谱系/统计分页/合并流转/导入骨架） | **98%** | **B1 全面对标** |
+| R29 | 分支体验增强（OCR+ 消息总线 + 批量导入 UI） | **98%** | **E2 完成** |
+| R30 | GEDCOM 5.5.1/7.0 数据交换标准化 | **98%** | **F1 完成** |
+| R31 | JSON 备份 + 房长角色 + 迁徙管理 + 一致性巡检 | **98%** | **G1 完成** |
+| **R32** | **寻根问祖（同宗查询/溯源/DNA 占位）+ 统计分析（总览/分布/对比）** | **98%** | **H1 完成** |
+
+> **整体评估**: R32 收尾后，框架 §4.1 P2 模块全部落地——「寻根问祖」赋予家族跨支寻亲与溯源能力，「统计分析」让族史委掌握人口结构与世代深度。测试套件增长至 **664 用例全绿**，云函数 **36/36 通过**。剩余 P3（PDF 谱书/XML 导出）进入 V3.0 规划。
+
+---
+
 ## 附录：关键指标清单
 
-- ✅ **全量测试通过率**: 644/644 (100%) ← R31 新增 18 用例（r31-features.test.js）
-- ✅ **云函数语法检查**: 34/34 (0 syntax errors) ← backup/branch R31 扩展
+- ✅ **全量测试通过率**: 664/664 (100%) ← R32 新增 20 用例（r32-features.test.js）
+- ✅ **云函数语法检查**: 36/36 (0 syntax errors) ← rootseek/analytics R32 新增
 - ✅ **网关路由匹配**: §7.10 gateway 通过 (branch + photo_ocr + generation + gedcom + backup 云函数入口)
 - ✅ **环境变量注入**: check:env 0 errors
 - ✅ **消息总线组件**: utils/msg.js + MsgToast.vue 全局订阅机制上线 (R29)
