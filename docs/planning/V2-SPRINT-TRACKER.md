@@ -126,6 +126,7 @@
 - [x] **任务系统 task**：页面已有 `pkg-growth/pages/task/task.vue`（今日任务+打卡+积分反馈），复用既有 task 云函数与 schema，走 request 服务层 ✅ 无需新增
 - [x] 虚拟角色（`pkg-home/pages/home/avatar.vue`：创建/查看/称号与形象编辑，接 home.avatar.create/get/update）+ 家园 Canvas（home 页「网格/鸟瞰」视图切换，Canvas 2D 重绘建筑落位）+ 成长体系（world.grow 经验曲线/等级解锁）✅
 - [x] 五模块集成/安全/性能/合规测试 + 灰度上线（`tests/module-audit.test.js` 6 用例：禁止代码 A1/开关默认 A2/合规声明 A3/services 封装 A4/secscan 接入 A5/门禁引用 A6；`tests/module-integration.test.js` 3 用例：IJ1 四角完整性 / IJ2 MEMBER 跨模块旅程 home→opera→avatar→tree / IJ3 用户隔离；home+opera 写操作角色门禁加固（非 MEMBER→403）；**灰度发布包** `docs/deployment/V2.0-RELEASE-NOTES.md` (v2.0.0 基线) + `GRY-DEPLOYMENT-PLAN.md`(前置条件/G1-G5)/`ROLLBACK-CLONE.md`(回滚预案) + `LAUNCH_CHECKLIST.md` V2.0 增补 → 437 tests ✅ verify 全绿 → `032a18e` (含此前 181a60e 安全收口/49641ca 审计修复) **→ 当前状态：灰度部署就绪包交付完成**
+- [x] **F10 性能预算回归（R7）**：`tests/performance-budget.test.js` 9 项引擎耗时上限断言（棋类 legalMoves×400 <2s / isCheckmate×2000 <300ms / asyncgame 云引擎同源 / 家谱直角 2000 同代与 500 深链 <800/600ms / 扇形 801 人 <400ms / opera×3000 <200ms / 记分板 40轮8人 <200ms / sha256×20000 <500ms，预算=实测 8~15× 余量防 CI 抖动）+ `npm run perf` 独立命令（随 `npm test` 全量回归）→ 526 tests 全绿 + lint 0E → `1912d10`(R7)
 
 ### F10 家园云接口层 + member 全树接口
 - [x] **家园云函数 `cloud/functions/home/index.js`**（新增，云函数 25→28）：world.init/get/place/grow/visit/like/setPrivacy + avatar.create/get/update（place 走引擎落位校验 + 建筑解锁，visit 每日 20 次频控，grow 经验曲线自动升级，含 DB schema home_worlds/home_avatars 已有对接）→ 服务封装 `services/home.ts`
