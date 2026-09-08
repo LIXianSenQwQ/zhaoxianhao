@@ -168,20 +168,48 @@ async function main(event, context) {
       }
       
       case 'stats': {
-        // EDITOR+ 可读
+        // EDITOR+ 可读；R27 升级：真实人口聚合（members.branchId = branch code）
         if (!hasRole(role, 'EDITOR')) return FORBIDDEN('编辑器及以上可查看分支统计');
-        
-        const total = await db.collection('branches').where({ status: 'ACTIVE' }).count();
-        const byLevel = {};
-        ['1', '2', '3'].forEach(l => {
-          const r = byLevel[l] = { total: 0, population: 0 };
-          // 简单 count 占位——实际需要 groupBy
-          // MVP 先行，待成员数据接入后再精确聚合
-        });
-        
+
+        const branchesRes = await db.collection('branches').where({ status: 'ACTIVE' }).limit(500).get();
+        const branches = (branchesRes && branchesRes.data) || [];
+
+        // 本地按层级计数
+        const byLevel = { 1: { total: 0, population: 0 }, 2: { total: 0, population: 0 }, 3: { total: 0, population: 0 } };
+        const levelByCode = {};
+        for (const b of branches) {
+          levelByCode[b.code] = b.level;
+          if (byLevel[b.level]) byLevel[b.level].total += 1;
+        }
+
+        // 成员按 branchId 聚合（投影 branchId；真实 SDK 走 field，stub 无 field 自动降级全量）
+        let memQuery = db.collection('members').limit(1000);
+        if (typeof memQuery.field === 'function') memQuery = memQuery.field({ branchId: true });
+        const memRes = await memQuery.get();
+        const members = (memRes && memRes.data) || [];
+        const popByCode = {};
+        let totalPopulation = 0;
+        for (const m of members) {
+          const bc = m && m.branchId;
+          if (!bc) continue;
+          popByCode[bc] = (popByCode[bc] || 0) + 1;
+          totalPopulation += 1;
+          const lv = levelByCode[bc];
+          if (lv && byLevel[lv]) byLevel[lv].population += 1;
+        }
+
+        // 每支人口明细（仅列有人口的分支）
+        const perBranch = branches
+          .filter(b => popByCode[b.code])
+          .map(b => ({ code: b.code, name: b.name, level: b.level, population: popByCode[b.code] }))
+          .sort((a, b) => b.population - a.population);
+
         return OK({
-          totalActive: (total || {}).total || 0,
-          byLevel
+          totalActive: branches.length,
+          totalPopulation,
+          byLevel,
+          perBranch,
+          truncated: members.length >= 1000 // 成员超 1000 时聚合为近似值（分页聚合待 R28）
         });
       }
       

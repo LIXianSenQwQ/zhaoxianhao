@@ -23,8 +23,8 @@ const FN = () => require(path.join('..', 'cloud', 'functions', 'branch', 'index.
 const CTX = (role) => ({ OPENID: `u-${(role || 'visitor').toLowerCase()}`, openid: `u-${(role || 'visitor').toLowerCase()}` });
 const USER = (role) => ({ _id: `u-${(role || 'visitor').toLowerCase()}`, openid: `u-${(role || 'visitor').toLowerCase()}`, role: role || 'VISITOR' });
 
-function seed({ users = [], branches = [] } = {}) {
-  globalThis.__HCS_STUB_SEED__ = { collections: { users, branches }, seq: 0 };
+function seed({ users = [], branches = [], members = [] } = {}) {
+  globalThis.__HCS_STUB_SEED__ = { collections: { users, branches, members }, seq: 0 };
   return globalThis.__HCS_STUB_SEED__;
 }
 
@@ -250,6 +250,37 @@ test('branch.archive：成功归档（先归档子支后父可归档）', async 
   const r2 = await FN().main({ action: 'archive', code: 'HAO-0000-01' }, CTX('EDITOR'));
   assert.equal(r2.code, 400);
   assert.ok(r2.message.includes('仅 ACTIVE'), '重复归档被拒');
+});
+
+test('branch.stats：EDITOR 真实人口聚合（members.branchId → perBranch/byLevel.population）', async () => {
+  seed({
+    users: [USER('EDITOR')],
+    branches: [
+      { _id: 'b0', code: 'HAO-0000', name: '总谱', level: 1, status: 'ACTIVE', parentCode: null },
+      { _id: 'b1', code: 'HAO-0000-01', name: '宋村一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' },
+      { _id: 'b2', code: 'HAO-0000-02', name: '南庄一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' }
+    ],
+    members: [
+      { _id: 'm1', openid: 'u-m1', branchId: 'HAO-0000-01', path: '/m1/g5' },
+      { _id: 'm2', openid: 'u-m2', branchId: 'HAO-0000-01', path: '/m2/g6' },
+      { _id: 'm3', openid: 'u-m3', branchId: 'HAO-0000-02', path: '/m3/g7' },
+      { _id: 'm4', openid: 'u-m4', branchId: 'HAO-0000-01', path: '/m4/g8' }
+    ]
+  });
+  const res = await FN().main({ action: 'stats' }, CTX('EDITOR'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.totalActive, 3, 'branches total');
+  assert.equal(res.data.totalPopulation, 4, 'members count');
+  assert.equal(res.data.byLevel['1'].total, 1, 'level 1 total');
+  assert.equal(res.data.byLevel['2'].total, 2, 'level 2 total');
+  assert.equal(res.data.byLevel['1'].population, 0, 'level 1 population');
+  assert.equal(res.data.byLevel['2'].population, 4, 'level 2 population');
+  // perBranch：仅有人口的分支
+  assert.ok(res.data.perBranch.length === 2, 'perBranch size');
+  assert.equal(res.data.perBranch[0].code, 'HAO-0000-01');
+  assert.equal(res.data.perBranch[0].population, 3);
+  assert.equal(res.data.perBranch[1].code, 'HAO-0000-02');
+  assert.equal(res.data.perBranch[1].population, 1);
 });
 
 test('branch.archive：缺 code → 400', async () => {

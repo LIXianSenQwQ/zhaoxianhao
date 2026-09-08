@@ -102,6 +102,7 @@ module.exports = {
         field: () => q,
         orderBy: (k, dir) => { state.order = k; state.orderDir = dir === 'desc' ? 'desc' : 'asc'; return q; },
         skip: (n) => { state.skip = n; return q; },
+        limit: (n) => { state.limit = typeof n === 'number' && !isNaN(n) ? Math.floor(n) : Infinity; return q; },
         limit: (n) => { state.limit = n; return q; },
         doc: (id) => ({
           get: async () => {
