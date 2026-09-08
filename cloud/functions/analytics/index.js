@@ -1,12 +1,5 @@
 /**
  * cloud/functions/analytics/index.js — 统计分析模块（R32）
- *
- * 功能（框架 §4.1 统计分析 P2）：
- *   - overview: 人口总览（总数/男女比例/在世故世/分支数）
- *   - generationDist: 世代分布（每世代人数柱状图数据）
- *   - branchCompare: 分支对比（各分支人口/世代深度/男女比例）
- *
- * 权限：MEMBER+ 读（家族速览）；EDITOR+ 可看全量字段投影
  */
 const wx = require('wx-server-sdk');
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
@@ -29,7 +22,14 @@ async function fetchAllMembers(db) {
   for (;;) {
     let pageQuery = db.collection('members').skip(skip).limit(PAGE_SIZE);
     if (typeof pageQuery.field === 'function') {
-      pageQuery = pageQuery.field({ gender: true, status: true, generation: true, branchId: true, path: true, genealogyName: true });
+      pageQuery = pageQuery.field({ 
+        gender: true, 
+        status: true, 
+        generation: true, 
+        branchId: true, 
+        path: true, 
+        genealogyName: true 
+      });
     }
     const pageRes = await pageQuery.get();
     const page = (pageRes && pageRes.data) || [];
@@ -45,7 +45,7 @@ async function fetchAllMembers(db) {
  * 通用聚合器：从成员列表计算统计指标（纯函数，可单测）
  * 独立导出供测试使用
  */
-export function aggregate(members) {
+function aggregate(members) {
   const total = members.length;
   const male = members.filter(m => m.gender === 'MALE').length;
   const female = members.filter(m => m.gender === 'FEMALE').length;
@@ -68,7 +68,15 @@ export function aggregate(members) {
   for (const m of members) {
     const b = m.branchId || 'UNASSIGNED';
     if (!branchMap.has(b)) {
-      branchMap.set(b, { branchId: b, total: 0, male: 0, female: 0, alive: 0, minGen: Infinity, maxGen: 0 });
+      branchMap.set(b, { 
+        branchId: b, 
+        total: 0, 
+        male: 0, 
+        female: 0, 
+        alive: 0, 
+        minGen: Infinity, 
+        maxGen: 0 
+      });
     }
     const agg = branchMap.get(b);
     agg.total += 1;
@@ -102,7 +110,31 @@ export function aggregate(members) {
 
 module.exports.aggregate = aggregate;
 
-// ─── R32-1: 人口总览 ───
+// ─── main dispatch ───
+module.exports.main = async (event = {}, context = {}) => {
+  const openid = context.OPENID || context.openid;
+  if (!openid) return FORBIDDEN('请先登录');
+
+  const db = wx.getDatabase();
+  const ctx = await requesterCtx(db, openid);
+  const { action } = event;
+
+  try {
+    switch (action) {
+      case 'overview': return await overview(ctx);
+      case 'generationDist': return await generationDist(ctx);
+      case 'branchCompare': return await branchCompare(ctx);
+      default: return BAD_REQUEST(`未知 action: ${action}`);
+    }
+  } catch (e) {
+    console.error('[analytics.main] error:', e);
+    return BAD_REQUEST(e.message);
+  }
+};
+
+/**
+ * R32-1: 人口总览
+ */
 async function overview(ctx) {
   const db = wx.getDatabase();
   if (!hasRole(ctx.role, 'MEMBER')) return FORBIDDEN('认证族人方可查看统计分析');
@@ -110,7 +142,7 @@ async function overview(ctx) {
   const members = await fetchAllMembers(db);
   const stats = aggregate(members);
 
-  // EDITOR+ 才能看分支明细（族人只看汇总）
+  // MEMBER+ 只看汇总，EDITOR+ 可见详细字段
   const payload = {
     total: stats.total,
     male: stats.male,
@@ -132,7 +164,9 @@ async function overview(ctx) {
   return OK(payload);
 }
 
-// ─── R32-2: 世代分布 ───
+/**
+ * R32-2: 世代分布 + 字辈字联动
+ */
 async function generationDist(ctx) {
   const db = wx.getDatabase();
   if (!hasRole(ctx.role, 'MEMBER')) return FORBIDDEN('认证族人方可查看世代分布');
@@ -140,7 +174,7 @@ async function generationDist(ctx) {
   const members = await fetchAllMembers(db);
   const stats = aggregate(members);
 
-  // 对齐字辈诗：附加每世代字辈字（generations 集合 order → char）
+  // 挂接 generations 集合的字辈字
   const genRes = await db.collection('generations').limit(200).get();
   const genCharByOrder = new Map((genRes.data || []).map(g => [g.order, g.char || g.generationChar || '']));
 
@@ -149,10 +183,15 @@ async function generationDist(ctx) {
     generationChar: genCharByOrder.get(d.generation) || ''
   }));
 
-  return OK({ dist, peakGeneration: dist.length ? dist.reduce((a, b) => (b.count > a.count ? b : a)) : null });
+  return OK({ 
+    dist, 
+    peakGeneration: dist.length ? dist.reduce((a, b) => (b.count > a.count ? b : a)) : null 
+  });
 }
 
-// ─── R32-3: 分支对比 ───
+/**
+ * R32-3: 分支对比（编辑器专属）
+ */
 async function branchCompare(ctx) {
   const db = wx.getDatabase();
   if (!hasRole(ctx.role, 'EDITOR')) return FORBIDDEN('编辑及以上可查看分支对比');
@@ -160,7 +199,7 @@ async function branchCompare(ctx) {
   const members = await fetchAllMembers(db);
   const stats = aggregate(members);
 
-  // 挂接分支名称（branches 集合 code → name）
+  // 挂接分支名称
   const bRes = await db.collection('branches').where({ status: 'ACTIVE' }).limit(500).get();
   const nameByCode = new Map((bRes.data || []).map(b => [b.code, b.name]));
 
@@ -171,29 +210,3 @@ async function branchCompare(ctx) {
 
   return OK({ branches, totalBranches: branches.length });
 }
-
-// ─── 主路由 ───
-module.exports = { main: async (event = {}, context = {}) => {
-  const openid = context.OPENID || context.openid;
-  if (!openid) return FORBIDDEN('请先登录');
-
-  const db = wx.getDatabase();
-  const ctx = await requesterCtx(db, openid);
-  const { action } = event;
-
-  try {
-    switch (action) {
-      case 'overview': return await overview(ctx);
-      case 'generationDist': return await generationDist(ctx);
-      case 'branchCompare': return await branchCompare(ctx);
-      default: return BAD_REQUEST(`未知 action: ${action}`);
-    }
-  } catch (e) {
-    console.error('[analytics.main] error:', e);
-    return BAD_REQUEST(e.message);
-  }
-} };
-
-// 导出纯函数供单测
-module.exports.aggregate = aggregate;
-module.exports.fetchAllMembers = fetchAllMembers;
