@@ -182,11 +182,21 @@ async function main(event, context) {
           if (byLevel[b.level]) byLevel[b.level].total += 1;
         }
 
-        // 成员按 branchId 聚合（投影 branchId；真实 SDK 走 field，stub 无 field 自动降级全量）
-        let memQuery = db.collection('members').limit(1000);
-        if (typeof memQuery.field === 'function') memQuery = memQuery.field({ branchId: true });
-        const memRes = await memQuery.get();
-        const members = (memRes && memRes.data) || [];
+        // 成员按 branchId 聚合（R28：游标分页，PAGE_SIZE=100 为云开发单次上限；
+        // 真实 SDK 走 field 投影，stub 无 field 自动降级全量拉取）
+        const PAGE_SIZE = 100;
+        const members = [];
+        let skip = 0;
+        for (;;) {
+          let pageQuery = db.collection('members').skip(skip).limit(PAGE_SIZE);
+          if (typeof pageQuery.field === 'function') pageQuery = pageQuery.field({ branchId: true });
+          const pageRes = await pageQuery.get();
+          const page = (pageRes && pageRes.data) || [];
+          if (page.length === 0) break;
+          members.push(...page);
+          if (page.length < PAGE_SIZE) break; // 最后一页
+          skip += PAGE_SIZE;
+        }
         const popByCode = {};
         let totalPopulation = 0;
         for (const m of members) {
@@ -208,8 +218,7 @@ async function main(event, context) {
           totalActive: branches.length,
           totalPopulation,
           byLevel,
-          perBranch,
-          truncated: members.length >= 1000 // 成员超 1000 时聚合为近似值（分页聚合待 R28）
+          perBranch
         });
       }
       

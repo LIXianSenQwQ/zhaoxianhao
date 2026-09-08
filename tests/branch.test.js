@@ -288,3 +288,74 @@ test('branch.archive：缺 code → 400', async () => {
   const res = await FN().main({ action: 'archive' }, CTX('EDITOR'));
   assert.equal(res.code, 400);
 });
+
+// ─── stats 分页测试 ───
+
+test('branch.stats：members 空集合 → totalPopulation=0', async () => {
+  seed({
+    users: [USER('EDITOR')],
+    branches: [{ _id: 'b0', code: 'HAO-0000', name: '总谱', level: 1, status: 'ACTIVE', parentCode: null }]
+  });
+  const res = await FN().main({ action: 'stats' }, CTX('EDITOR'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.totalActive, 1);
+  assert.equal(res.data.totalPopulation, 0);
+  assert.ok(!res.data.perBranch || res.data.perBranch.length === 0, '无人口分支不返回');
+});
+
+test('branch.stats：members ≤ PAGE_SIZE(100) → 一次拉完', async () => {
+  const members = [];
+  for (let i = 0; i < 50; i++) {
+    members.push({ _id: `m${i}`, openid: `u-${i}`, branchId: 'HAO-0000-01', path: `/m${i}/g5` });
+  }
+  seed({
+    users: [USER('EDITOR')],
+    branches: [
+      { _id: 'b0', code: 'HAO-0000', name: '总谱', level: 1, status: 'ACTIVE', parentCode: null },
+      { _id: 'b1', code: 'HAO-0000-01', name: '宋村一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' }
+    ],
+    members
+  });
+  const res = await FN().main({ action: 'stats' }, CTX('EDITOR'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.totalPopulation, 50);
+  assert.equal(res.data.byLevel['2'].population, 50);
+  assert.equal(res.data.perBranch.length, 1);
+  assert.equal(res.data.perBranch[0].population, 50);
+});
+
+test('branch.stats：members > PAGE_SIZE → 多页聚合精确一致', async () => {
+  const members = [];
+  // 生成 150 成员：前 100 支 A，后 50 支 B
+  for (let i = 0; i < 150; i++) {
+    const bc = i < 100 ? 'HAO-0000-01' : 'HAO-0000-02';
+    members.push({ _id: `m${i}`, openid: `u-${i}`, branchId: bc, path: `/m${i}/g5` });
+  }
+  seed({
+    users: [USER('EDITOR')],
+    branches: [
+      { _id: 'b0', code: 'HAO-0000', name: '总谱', level: 1, status: 'ACTIVE', parentCode: null },
+      { _id: 'b1', code: 'HAO-0000-01', name: '宋村一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' },
+      { _id: 'b2', code: 'HAO-0000-02', name: '南庄一支', level: 2, status: 'ACTIVE', parentCode: 'HAO-0000' }
+    ],
+    members
+  });
+  const res = await FN().main({ action: 'stats' }, CTX('EDITOR'));
+  assert.equal(res.success, true);
+  assert.equal(res.data.totalPopulation, 150);
+  assert.equal(res.data.byLevel['2'].population, 150);
+  // perBranch 按人口降序：A(100), B(50)
+  assert.equal(res.data.perBranch.length, 2);
+  assert.equal(res.data.perBranch[0].code, 'HAO-0000-01');
+  assert.equal(res.data.perBranch[0].population, 100);
+  assert.equal(res.data.perBranch[1].code, 'HAO-0000-02');
+  assert.equal(res.data.perBranch[1].population, 50);
+  // 旧 truncated 字段应移除
+  assert.equal(Object.hasOwn(res.data, 'truncated'), false, 'no truncated field in R28');
+});
+
+test('branch.archive：缺 code → 400', async () => {
+  seed({ users: [USER('EDITOR')] });
+  const res = await FN().main({ action: 'archive' }, CTX('EDITOR'));
+  assert.equal(res.code, 400);
+});
