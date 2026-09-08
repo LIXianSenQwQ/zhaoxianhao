@@ -2,6 +2,7 @@
 
 > **文档用途**：《好诚事家风开发框架最终细节 V2.0》的执行追踪总表。每完成一项在「状态」列打勾并记录 commit。本表是**已交付与待交付的单一事实源**，照此推进后续冲刺。
 > 收口日期：2026-09-06 · 基线版本：V2.0（见开发框架附录 D）
+> **后续方向（V2.0 通用分支版）**：蓝图 `docs/planning/FRAMEWORK-GENERIC-BRANCH-V2.md` + 差距清单/实施排期 `docs/planning/BRANCH-FRAMEWORK-GAP-PLAN.md`（B1 分支底座 → B6 权限收口）
 
 ---
 
