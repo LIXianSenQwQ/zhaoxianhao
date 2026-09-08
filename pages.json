@@ -95,6 +95,12 @@
 					"style": {}
 				},
 				{
+					"path": "pages/entry-submit/entry-submit",
+					"style": {
+						"navigationBarTitleText": "入谱申请"
+					}
+				},
+				{
 					"path": "pages/reviewAuth/reviewAuth",
 					"style": {}
 				},

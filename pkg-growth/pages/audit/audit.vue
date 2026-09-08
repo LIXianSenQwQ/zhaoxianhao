@@ -2,6 +2,11 @@
 <template>
   <view class="audit-page">
     <scroll-view scroll-y class="scan-list" @scrolltolower="loadMore">
+      <!-- 工具条：入谱申请入口（框架 §4.5 前端补口） -->
+      <view class="toolbar">
+        <text class="toolbar-tip">共 {{ records.length }} 条工单</text>
+        <button class="mini-btn btn-new" size="mini" @click="goSubmit">＋ 提交入谱</button>
+      </view>
       <!-- 状态筛选 -->
       <view class="tabs">
         <view
@@ -96,6 +101,7 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import Skeleton from '@/components/common/Skeleton.vue';
 import ErrorPage from '@/components/common/ErrorPage.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
+import { auditEntry } from '@/services/entry';
 
 const user = useUserStore();
 const loading = ref(true);
@@ -170,9 +176,9 @@ async function doAudit(record: any, action: 'FIRST_PASS' | 'SECOND_PASS' | 'PUBL
   }
 
   try {
-    // entry.audit（R17：初审 BRANCH_HEAD+ / 复审 HISTORIAN+，auditChain 留痕）
-    const res = await read('entry', { action: 'audit', recordId: record._id, auditAction: action, comment }, null, 5000);
-    if (!res.success && res.code) throw new Error(res.message || '审核失败');
+    // entry.audit（R17：初审 BRANCH_HEAD+ / 复审 HISTORIAN+，auditChain 留痕；R34 branchScope 校验）
+    const res = await auditEntry(record._id, action, comment || undefined);
+    if (res.error) throw new Error(res.error.message || '审核失败');
 
     // 刷新列表
     loadList();
@@ -180,6 +186,11 @@ async function doAudit(record: any, action: 'FIRST_PASS' | 'SECOND_PASS' | 'PUBL
   } catch (e: any) {
     uni.showToast({ title: e.message || '操作失败', icon: 'none' });
   }
+}
+
+/** 框架 §4.5：入谱申请入口 */
+function goSubmit() {
+  uni.navigateTo({ url: '/pkg-growth/pages/entry-submit/entry-submit' });
 }
 
 function statusClass(s: string): string {
