@@ -4,12 +4,14 @@
  */
 
 // 角色层级顺序（用于判断权限级别）
+// 与 cloud/functions/common/roles.js 同口径：EDITOR(3) < HISTORIAN(4)
+// 依据 docs/API.md admin.heroTag(HISTORIAN+)：EDITOR 及以下 403 族史委专属
 export const ROLE_ORDER = {
   VISITOR: 0,    // 访客
   MEMBER: 1,     // 族人
-  BRANCH_HEAD: 2, // 支系
-  HISTORIAN: 3,   // 族史委
-  EDITOR: 4,      // 编辑
+  BRANCH_HEAD: 2, // 支系负责人
+  EDITOR: 3,      // 编辑
+  HISTORIAN: 4,   // 族史委
   CHIEF: 5        // 族长（最高权限）
 };
 
