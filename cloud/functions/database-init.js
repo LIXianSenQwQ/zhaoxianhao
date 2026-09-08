@@ -44,9 +44,14 @@ const collections = {
     indexes: [{ key: 'branchId', index: true }, { key: 'order', index: true }]
   },
   
-  // 5. branches - 房支层级库（L2）
+  // 5. branches - 分支三级谱系树（R26：总谱/分谱/支谱，索引与 branches.schema.json 对齐）
   branches: {
-    indexes: [{ key: 'parentId', index: true }, { key: 'level', index: true }]
+    indexes: [
+      { key: 'code', index: true, unique: true },
+      { key: 'parentCode', index: true },
+      { key: 'level', index: true },
+      { key: 'status', index: true }
+    ]
   },
   
   // 6. entry_records - 入谱审核工单（L4）

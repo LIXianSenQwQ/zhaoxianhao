@@ -151,7 +151,7 @@ function fanLayout(nodes, focusPath) {
         _id: m._id, path: m.path, name: m.genealogyName || m.name || '',
         gender: m.gender, ring: fam.delta, r, theta: t, x, y,
         generation: m.generation || generationOf(m.path),
-        fiveFu: m.fiveFu || m.fiveFabric,
+        fiveFu: m.fiveFu,
         spouseId: m.spouseId
       });
       offset += 1;
@@ -200,17 +200,17 @@ function ringLabel(delta) {
 }
 
 // ─── 五服环着色（P1 二期）：|世代差| → 五服标签（本人最内朱砂，越外越疏） ───
-// 同心环 = 世代亲疏：|Δ|0 本人 · 1 近(斩衰) · 2 齐衰 · 3 大功 · 4 小功 · 5 缌麻 · ≥6 同宗
-const RING_FU_ORDER = ['本人', '斩衰', '齐衰', '大功', '小功', '缌麻', '同宗'];
+// 同心环 = 世代亲疏：|Δ|0 本人 · 1 近(斩衰) · 2 齐衰 · 3 大功 · 4 小功 · 5 缌麻 · ≥6 出五服
+const RING_FU_ORDER = ['本人', '斩衰', '齐衰', '大功', '小功', '缌麻', '出五服'];
 
 /**
  * fanRingWuFu — 按环深度（世代差绝对值）映射五服标签（供 wufuColor 取色）
  * @param {number} delta 世代差（fanLayout 节点 ring）
- * @returns {string} 本人/斩衰/齐衰/大功/小功/缌麻/同宗
+ * @returns {string} 本人/斩衰/齐衰/大功/小功/缌麻/出五服
  */
 function fanRingWuFu(delta) {
   const n = Number(delta);
-  if (!Number.isFinite(n)) return '同宗'; // 未知/异常 → 最疏
+  if (!Number.isFinite(n)) return '出五服'; // 未知/异常 → 最疏
   const d = Math.abs(n);
   return RING_FU_ORDER[Math.min(d, RING_FU_ORDER.length - 1)];
 }

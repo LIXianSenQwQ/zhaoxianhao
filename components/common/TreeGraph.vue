@@ -34,10 +34,9 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, nextTick, onBeforeUnmount } from 'vue';
 import * as perf from '@/utils/tree-perf.js';
-import { WU_FU_COLORS } from '@/utils/family-tree-layout.js';
 
 const props = defineProps<{
-  nodes: Array<{ id: string; name: string; generation: number; isMale: boolean; x: number; y: number; fiveFabric?: string }>;
+  nodes: Array<{ id: string; name: string; generation: number; isMale: boolean; x: number; y: number; fiveFu?: string }>;
   edges: Array<{ from: { x: number; y: number }; to: { x: number; y: number } }>;
   focusId?: string | null;
   viewMode?: 'ALL' | 'ANCESTORS' | 'DESCENDANTS' | 'LINEAGE';
@@ -140,8 +139,14 @@ const COLORS = {
   bg: '#FAF8F2',
   male: '#E3E9EC', female: '#F7F4EC', focus: '#B03A2E', line: '#C0BBAD', text: '#26221E', textSub: '#8A867F'
 };
-const FIVE_FABRIC_COLORS = {
-  QIN: '#C98A7C', ZHOU: '#E3C6B5', DA: '#F5E6DA', XIAO: '#D4A5A5', MA: '#B8908C'
+const WU_FU_COLORS = {
+  '斩衰': '#2C2A29',
+  '齐衰': '#6B5B3E',
+  '大功': '#8C6A4F',
+  '小功': '#A8926E',
+  '缌麻': '#C4B391',
+  '出五服': '#E3DCCB',
+  '本人': '#B03A2E'
 };
 
 // ─── RoundRect polyfill & helper ───
@@ -263,7 +268,7 @@ function drawTreeFrame(cv: any) {
     const nx = node.x!, ny = node.y!, isFocus = node.id === props.focusId;
 
     let bgColor = COLORS.male;
-    if (node.fiveFabric && FIVE_FABRIC_COLORS[node.fiveFabric]) bgColor = FIVE_FABRIC_COLORS[node.fiveFabric];
+    if (node.fiveFu && WU_FU_COLORS[node.fiveFu]) bgColor = WU_FU_COLORS[node.fiveFu];
     else if (isFocus) bgColor = COLORS.focus;
     else if (!node.isMale) bgColor = COLORS.female;
 

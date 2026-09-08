@@ -174,7 +174,7 @@ const layoutNodes = computed(() => layoutResult.value.nodes.map((n: any) => ({
   isMale: n.gender === 'MALE',
   x: n.x,
   y: n.y,
-  fiveFabric: n.fiveFu
+  fiveFu: n.fiveFu
 })));
 const layoutEdges = computed(() => layoutResult.value.edges);
 

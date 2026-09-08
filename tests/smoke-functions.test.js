@@ -489,10 +489,10 @@ test('R11 relation.calc：VISITOR 403 / MEMBER 正向（物化路径共同祖先
   assert.equal(sib.data.downSteps, 1);
   assert.equal(sib.data.formalTitle, '哥哥', '矩阵 1-1 male elder（A 视角：对方为兄）');
 
-  // 无共同祖先 → fail-closed 同宗（与 R2 单测口径一致）
+  // 无共同祖先 → fail-closed related:false, formalTitle='同宗', fiveFu=null（与 R26 五服修正一致）
   const oth = await FN('relation').main({ action: 'calc', aId: 'g1', bId: 'other' }, ctx);
   assert.equal(oth.data.related, false);
-  assert.equal(oth.data.fiveFu, '同宗');
+  assert.equal(oth.data.fiveFu, null); // R26 修正：不同宗 fiveFu=null
 });
 
 // ─── Sprint R12: points 大修（蓝图 7.5）───

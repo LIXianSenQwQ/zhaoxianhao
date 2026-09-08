@@ -7,17 +7,44 @@
  * 矩阵键 (n,m) 采用文档语义「先上 n 步到最近共同祖先，再下 m 步到对方」：
  *   兄弟=(1,1) 经父 | 父母=(1,0) | 子女=(0,1) | 侄=(1,2) | 叔伯=(2,1) | 堂兄弟=(2,2)
  * 对方世代 = myGen - n + m；(n,m) 与 tree.relationSteps 直接连通。
+ *
+ * Sprint B0 定稿（2026-09，五服口径统一）：
+ * - fiveFu(n)：档位曲线仅接受 1..5（1 斩衰 · 2 齐衰 · 3 大功 · 4 小功 · 5 缌麻）；
+ *   越界/非法（n<1、非整数）→ '出五服'（第六档，语义见蓝图 §4.7；旧 '同宗' 弃用——
+ *   '同宗' 仅保留给「无血亲共同祖先」的 fail-closed 语义，见 relation calc）。
+ * - fiveFuOf(up, down)：关系级口径（供 member.tree / relation.calc 共用）。
+ *   直系（up 为 0 或 down 为 0）→ 档位 = 双方代数间隔 max(up,down)；
+ *   旁系（up>0 且 down>0）→ 档位 = max(up,down) + 1（对齐礼制旁系亲疏：
+ *     兄弟(1,1)=齐衰、堂兄弟(2,2)=大功、再从(3,3)=小功、族兄弟(4,4)=缌麻、五世亲尽）。
+ *   本人 (0,0) → '本人'（不归入任何服）。
  */
 
-/** 五服判定：n = 共同祖先与本人的世代距离 */
+/** 五服档位曲线：n = 亲疏档 1..5；0 视为本人层归入最近服（fail-closed）；越界/非法 → 出五服 */
 function fiveFu(n) {
-  if (!Number.isInteger(n) || n < 0) return '同宗';
+  if (!Number.isInteger(n) || n < 0) return '出五服';
   if (n <= 1) return '斩衰';
   if (n <= 2) return '齐衰';
   if (n <= 3) return '大功';
   if (n <= 4) return '小功';
   if (n <= 5) return '缌麻';
-  return '同宗'; // 出五服
+  return '出五服';
+}
+
+/**
+ * 关系级五服判定（(up, down) 与 tree.relationSteps / 称谓矩阵 (n,m) 同几何口径）
+ * @param {number} up   本人 → 最近共同祖先 上溯步数
+ * @param {number} down 最近共同祖先 → 对方 下溯步数
+ * @returns {string} 本人/斩衰/齐衰/大功/小功/缌麻/出五服
+ */
+function fiveFuOf(up, down) {
+  if (up === null || up === undefined || down === null || down === undefined) return '出五服';
+  if (up === 0 && down === 0) return '本人';
+  const u = Number(up);
+  const d = Number(down);
+  if (!Number.isInteger(u) || !Number.isInteger(d) || u < 0 || d < 0) return '出五服';
+  const span = Math.max(u, d);
+  const tier = (u === 0 || d === 0) ? span : span + 1;
+  return fiveFu(tier);
 }
 
 /**
@@ -102,4 +129,4 @@ function kinshipTitle(n, m, gender, seniority, dialect) {
   return { formal: fmt, dialect: dia };
 }
 
-module.exports = { fiveFu, kinshipTitle, MATRIX };
+module.exports = { fiveFu, fiveFuOf, kinshipTitle, MATRIX };

@@ -29,7 +29,7 @@ const WU_FU_COLORS = Object.freeze({
   '大功': '#8C6A4F',
   '小功': '#A8926E',
   '缌麻': '#C4B391',
-  '同宗': '#E3DCCB',
+  '出五服': '#E3DCCB',
   '本人': '#B03A2E'
 });
 
@@ -241,10 +241,10 @@ function timelineFilter(nodes, yearY, birthKey = 'birthDate', deathKey = 'deathD
 
 /**
  * 五服 → 色板映射（蓝图 7.3 族谱树五服模式着色，五色见蓝本卷）
- * fiveFu 取值：斩衰/齐衰/大功/小功/缌麻/同宗
+ * fiveFu 取值：斩衰/齐衰/大功/小功/缌麻/出五服/本人
  */
 function wufuColor(fiveFuLabel) {
-  return WU_FU_COLORS[fiveFuLabel] || WU_FU_COLORS['同宗'];
+  return WU_FU_COLORS[fiveFuLabel] || WU_FU_COLORS['出五服'];
 }
 
 export {

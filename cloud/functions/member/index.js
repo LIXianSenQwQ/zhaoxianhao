@@ -15,6 +15,7 @@ const { rowsToCsv, buildExportPath } = require('./common/csv');
 const {
   generationOf, relationSteps, paginateTree, subtreeRegex, TREE_PAGE_BUDGET
 } = require('./common/tree');
+const { fiveFuOf } = require('./common/kindship');
 
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
 
@@ -437,9 +438,16 @@ async function buildTree(db, openid, focusId, page, cursor = '') {
     return up <= 2 && down <= 2;
   });
 
-  // 4. 公开层字段 + 分页
+  // 4. 公开层字段 + 分页 + 回填五服（fiveFuOf(up,down) 与 relation.calc 同口径；本人 → '本人'）
   const sorted = viewNodes
-    .map(m => ({ ...m, gen: generationOf(m.path) }))
+    .map(m => {
+      const { up, down } = relationSteps(focus.path, m.path);
+      return {
+        ...m,
+        gen: generationOf(m.path),
+        fiveFu: fiveFuOf(up, down)
+      };
+    })
     .sort((a, b) => (a.path < b.path ? -1 : 1));
 
   const paged = paginateTree(sorted, cursor || '', TREE_PAGE_BUDGET);

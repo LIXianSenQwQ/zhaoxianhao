@@ -3,7 +3,7 @@
  */
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { fiveFu, kinshipTitle } = require('../cloud/functions/common/kindship');
+const { fiveFu, fiveFuOf, kinshipTitle } = require('../cloud/functions/common/kindship');
 
 // ─── 五服 ───
 
@@ -13,15 +13,42 @@ test('五服边界（文档 7.3 口径）', () => {
   assert.equal(fiveFu(3), '大功');   // 堂兄弟
   assert.equal(fiveFu(4), '小功');   // 从祖兄弟
   assert.equal(fiveFu(5), '缌麻');   // 族兄弟
-  assert.equal(fiveFu(6), '同宗');   // 出五服
-  assert.equal(fiveFu(100), '同宗');
+  assert.equal(fiveFu(6), '出五服'); // R26 修正：出五服 ≠ 无共同祖先（框架 7.3 口径）
+  assert.equal(fiveFu(100), '出五服');
 });
 
-test('五服非法输入 fail-closed 为同宗', () => {
+test('五服非法输入 fail-closed 为出五服', () => {
   assert.equal(fiveFu(0), '斩衰');   // 0 视为本人层，归入最近服
-  assert.equal(fiveFu(-1), '同宗');
-  assert.equal(fiveFu(1.5), '同宗');
-  assert.equal(fiveFu(NaN), '同宗');
+  assert.equal(fiveFu(-1), '出五服');
+  assert.equal(fiveFu(1.5), '出五服');
+  assert.equal(fiveFu(NaN), '出五服');
+});
+
+// ─── fiveFuOf（关系级口径，B0 新增：member.tree 回填 / relation.calc 共用）───
+
+test('fiveFuOf：本人与直系（代数间隔 = 档位）', () => {
+  assert.equal(fiveFuOf(0, 0), '本人');      // 本人不归服
+  assert.equal(fiveFuOf(1, 0), '斩衰');      // 父
+  assert.equal(fiveFuOf(0, 1), '斩衰');      // 子（对称）
+  assert.equal(fiveFuOf(2, 0), '齐衰');      // 祖
+  assert.equal(fiveFuOf(0, 3), '大功');      // 曾孙
+  assert.equal(fiveFuOf(6, 0), '出五服');    // 直系六代亲尽
+});
+
+test('fiveFuOf：旁系（代数间隔 + 1，对齐测试锚点）', () => {
+  assert.equal(fiveFuOf(1, 1), '齐衰');      // 兄弟（R2 锚点 2=齐衰）
+  assert.equal(fiveFuOf(2, 2), '大功');      // 堂兄弟（锚点 3）
+  assert.equal(fiveFuOf(3, 3), '小功');      // 从祖兄弟（锚点 4）
+  assert.equal(fiveFuOf(4, 4), '缌麻');      // 族兄弟（锚点 5）
+  assert.equal(fiveFuOf(5, 5), '出五服');    // 五世亲尽
+});
+
+test('fiveFuOf：非法输入 fail-closed 为出五服', () => {
+  assert.equal(fiveFuOf(-1, 1), '出五服');
+  assert.equal(fiveFuOf(1, -1), '出五服');
+  assert.equal(fiveFuOf(NaN, 1), '出五服');
+  assert.equal(fiveFuOf('a', 1), '出五服');
+  assert.equal(fiveFuOf(null, null), '出五服');
 });
 
 // ─── 称谓矩阵（(n,m) = 先上 n 步到 LCA 再下 m 步） ───

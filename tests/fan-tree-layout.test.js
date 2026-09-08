@@ -134,9 +134,9 @@ describe('扇形布局 · 五服环着色 fanRingWuFu', () => {
     assert.strictEqual(fanRingWuFu(-3), '大功');
     assert.strictEqual(fanRingWuFu(4), '小功');
     assert.strictEqual(fanRingWuFu(-5), '缌麻');
-    assert.strictEqual(fanRingWuFu(6), '同宗');
-    assert.strictEqual(fanRingWuFu(-9), '同宗');
-    assert.strictEqual(fanRingWuFu(NaN), '同宗');
+    assert.strictEqual(fanRingWuFu(6), '出五服'); // R26 修正：≥6 → 出五服（框架 7.3）
+    assert.strictEqual(fanRingWuFu(-9), '出五服');
+    assert.strictEqual(fanRingWuFu(NaN), '出五服');
   });
 });
 

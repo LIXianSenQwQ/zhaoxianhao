@@ -38,15 +38,19 @@
           <text class="res-value" :class="result.fiveFu === '同宗' ? 'muted' : 'accent'">{{ result.formalTitle }}</text>
         </view>
         <view class="res-item">
+          <text class="res-label">辈分差</text>
+          <text class="res-value small">{{ result.seniorityDiff || (result.upSteps == null ? '—' : `${result.upSteps > result.downSteps ? '高出'+(result.upSteps-result.downSteps)+'代' : result.upSteps < result.downSteps ? '低出'+(result.downSteps-result.upSteps)+'代' : '同代'`) }}</text>
+        </view>
+        <view class="res-item">
           <text class="res-label">五服等第</text>
-          <text class="res-value" :class="result.fiveFu === '同宗' ? 'muted' : 'accent'">{{ result.fiveFu }}</text>
+          <text class="res-value" :class="result.fiveFu === '同宗' ? 'muted' : 'accent'">{{ result.fiveFu || '不同宗' }}</text>
         </view>
         <view class="res-item" v-if="result.related">
           <text class="res-label">世系距离</text>
           <text class="res-value small">A 上溯 {{ result.upSteps }} 代 · 祖先下溯 B {{ result.downSteps }} 代</text>
         </view>
       </view>
-      <view class="fu-bar" v-if="result.related">
+      <view class="fu-bar" v-if="result.related && result.fiveFu">
         <view
           v-for="seg in FU_SEGMENTS"
           :key="seg.name"
@@ -82,14 +86,14 @@ const result = ref<any>(null);
 const loading = ref(false);
 const searchFailed = ref(false);
 
-/** 五服着色（蓝图 7.3 五色 + 同宗灰） */
+/** 五服着色（蓝图 7.3 五色 + 出五服灰） */
 const FU_SEGMENTS = [
   { name: '斩衰', color: '#B03A2E' },
   { name: '齐衰', color: '#C9A063' },
   { name: '大功', color: '#D9A441' },
   { name: '小功', color: '#7FA8A0' },
   { name: '缌麻', color: '#3A4A56' },
-  { name: '同宗', color: '#999999' }
+  { name: '出五服', color: '#999999' }
 ];
 
 /** 成员搜索（蓝图 member.search L2；防抖 300ms） */

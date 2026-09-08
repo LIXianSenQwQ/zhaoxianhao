@@ -9,7 +9,7 @@
 const wx = require('wx-server-sdk');
 const { OK, BAD_REQUEST, FORBIDDEN, NOT_FOUND } = require('./common/response');
 const { hasRole } = require('./common/roles');
-const { fiveFu, kinshipTitle } = require('./common/kindship');
+const { fiveFuOf, kinshipTitle } = require('./common/kindship');
 const { writeAudit } = require('./common/audit');
 
 wx.init({ env: wx.DYNAMIC_CURRENT_ENV });
@@ -193,7 +193,7 @@ async function calcRelation(db, openid, aId, bId) {
   if (!hasRole(role, 'MEMBER')) return FORBIDDEN('认证族人方可使用称谓计算');
 
   if (aId === bId) {
-    return OK({ related: true, formalTitle: '本人', fiveFu: fiveFu(0), upSteps: 0, downSteps: 0, path: '' });
+    return OK({ related: true, formalTitle: '本人', fiveFu: '本人', upSteps: 0, downSteps: 0, path: '' });
   }
 
   const [aRes, bRes] = await Promise.all([
@@ -217,7 +217,7 @@ async function calcRelation(db, openid, aId, bId) {
       await writeAudit(db, { userId: openid, action: 'relation.calc', target: `${aId}->${bId}`, detail: `姻亲: ${spouseTitle}` }).catch(() => {});
       return OK({ related: true, formalTitle: spouseTitle, fiveFu: '姻亲', upSteps: 0, downSteps: 0, path: '', through: 'SPOUSE' });
     }
-    return OK({ related: false, formalTitle: '同宗', fiveFu: '同宗', upSteps: null, downSteps: null, path: '' });
+    return OK({ related: false, formalTitle: '同宗', fiveFu: null, upSteps: null, downSteps: null, path: '' }); // 不同宗：无共同祖先/姻亲桥
   }
 
   const upSteps = as.length - common;    // A 上溯至共同祖先 n
@@ -251,9 +251,10 @@ async function calcRelation(db, openid, aId, bId) {
     related: true,
     formalTitle: result.formal,
     dialectTitle: result.dialect || null, // additive field, optional
-    fiveFu: fiveFu(upSteps),
+    fiveFu: fiveFuOf(upSteps, downSteps),
     upSteps,
     downSteps,
+    seniorityDiff: upSteps === downSteps ? '同代' : (upSteps > downSteps ? `高出${upSteps-downSteps}代` : `低出${downSteps-upSteps}代`),
     path: '/' + as.slice(0, common).join('/') + '/'
   });
 }

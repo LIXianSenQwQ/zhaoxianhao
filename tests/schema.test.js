@@ -82,8 +82,8 @@ test('T3 enum 类型字段必须声明 enum 数组', () => {
     for (const [field, def] of Object.entries(s.json.properties || {})) {
       if (def && def.type === 'string' && /type|status|role|level|pool|visibility|scope|scene|gender|era/i.test(field)) {
         // 排除开放的类型字段（mimeType/bizType/typeLabel 等开放字符串；前缀匹配覆盖复合名）
-        const openFields = /^(mime|biz|action|label|typeLabel|desc|detail|comment|note|body|targetRoute|ocrText)/i;
-        const openExact = ['roleTitle', 'roleDesc'];
+        const openFields = /^(mime|biz|action|label|typeLabel|desc|detail|comment|note|body|targetRoute|ocrText|generation)/i;
+        const openExact = ['roleTitle', 'roleDesc', 'generationPoem'];
         if (openFields.test(field) || openExact.includes(field)) continue;
         assert.ok(
           Array.isArray(def.enum),

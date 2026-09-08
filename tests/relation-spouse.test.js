@@ -98,7 +98,7 @@ test('§7.2 SPOUSE Rule 1: 哥哥的妻子 → 嫂子', async () => {
   assert.equal(res.data.formalTitle, '嫂子', '哥哥的妻子 → 嫂子');
 });
 
-test('§7.2 SPOUSE Rule 1: 无血缘关系时回退到同宗', async () => {
+test('§7.2 SPOUSE Rule 1: 无血缘关系时回退到同宗（fail-closed）', async () => {
   seed({
     users: [{ _id: 'u-m', openid: 'u-m', role: 'MEMBER' }],
     members: [
@@ -111,6 +111,7 @@ test('§7.2 SPOUSE Rule 1: 无血缘关系时回退到同宗', async () => {
   assert.equal(res.success, true);
   assert.equal(res.data.related, false);
   assert.equal(res.data.formalTitle, '同宗');
+  assert.equal(res.data.fiveFu, null); // R26 修正：不同宗 fiveFu=null，与"出五服的血亲"区分
 });
 
 test('§7.2 SPOUSE Rule 2: 妻子之父 → 岳父', async () => {

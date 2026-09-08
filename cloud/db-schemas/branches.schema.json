@@ -1,43 +1,74 @@
 /**
  * cloud/db-schemas/branches.schema.json
- * 房支集合
+ * 分支集合 —— 总谱/分谱/支谱三级谱系树（V2.0 通用分支版 · R26 重写）
+ *
+ * 层级语义（框架 §3.1）：
+ *   level=1 总谱（全族唯一一棵，code=HAO-0000）
+ *   level=2 分谱（支系，挂在总谱下）
+ *   level=3 支谱（房支，挂在分谱下）
+ *
+ * 编码规则（框架 §3.2，评审决策点⑤：可读中文别名待族史委裁决）：
+ *   code 采用「层级序列码」：总谱 HAO-0000；二级 HAO-0000-01；三级 HAO-0000-01-03。
+ *   天然唯一、层级自解释、无中文/拼音依赖；region 字段承载省市县中文地名。
  *
  * 字段：
- *   _id: ObjectId (房支 ID)
- *   name: string (房支名称)
- *   ancestorId: string (始祖 member_id)
- *   branchNo: string (房支序数，可选)
+ *   _id: ObjectId
+ *   code: string (层级序列码，唯一，HAO- 前缀)
+ *   name: string (分支名称，同父下唯一)
+ *   level: integer 1|2|3
+ *   parentCode: string|null (总谱为 null)
+ *   ancestorId: string|null (始祖 member_id)
+ *   founderGeneration: integer|null (始祖世代数)
+ *   region: string (地域，如「河北省石家庄市赵县」)
+ *   population: integer (登记人口，默认 0)
+ *   generationVerses: string (本支字辈诗，≤500)
+ *   headUserId: string|null (本支负责人 userId)
  *   description: string (描述)
- *   status: enum [ACTIVE, INACTIVE]
- *   createdAt: Date
- *   createdBy: string
+ *   sourceTags: array<string> (来源标注)
+ *   confidence: integer 1-5 (置信度，默认 3)
+ *   status: enum [ACTIVE, MERGED, ARCHIVED]
+ *   mergedInto: string|null (合并去向 branch code)
+ *   createdAt/createdBy/updatedAt/updatedBy
  *
- * 权限：仅云函数读写（族议会配置）。
- * 索引：name(唯一), ancestorId, status.
+ * 权限：仅云函数读写（branch 云函数门禁：创建=房长 BRANCH_HEAD+，总谱=族长 CHIEF）。
+ * 索引：code(唯一), name, parentCode, level, status.
  */
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "branches",
-  "description": "房支集合",
+  "description": "总谱/分谱/支谱三级谱系树",
   "type": "object",
   "properties": {
     "_id": { "type": "string" },
-    "name": { "type": "string", "maxLength": 32 },
-    "ancestorId": { "type": "string" },
-    "branchNo": { "type": ["string", "null"] },
+    "code": { "type": "string", "pattern": "^HAO-[0-9]{4}(-[0-9]{2})*$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "level": { "type": "integer", "minimum": 1, "maximum": 3 },
+    "parentCode": { "type": ["string", "null"], "pattern": "^HAO-[0-9]{4}(-[0-9]{2})*$" },
+    "ancestorId": { "type": ["string", "null"] },
+    "founderGeneration": { "type": ["integer", "null"], "minimum": 1 },
+    "region": { "type": "string", "maxLength": 64 },
+    "population": { "type": "integer", "minimum": 0, "default": 0 },
+    "generationVerses": { "type": "string", "maxLength": 500 },
+    "headUserId": { "type": ["string", "null"] },
     "description": { "type": "string", "maxLength": 512 },
+    "sourceTags": { "type": "array", "items": { "type": "string" } },
+    "confidence": { "type": "integer", "minimum": 1, "maximum": 5, "default": 3 },
     "status": {
       "type": "string",
-      "enum": ["ACTIVE", "INACTIVE"],
+      "enum": ["ACTIVE", "MERGED", "ARCHIVED"],
       "default": "ACTIVE"
     },
+    "mergedInto": { "type": ["string", "null"] },
     "createdAt": { "type": "string", "format": "date-time" },
-    "createdBy": { "type": "string" }
+    "createdBy": { "type": "string" },
+    "updatedAt": { "type": ["string", "null"], "format": "date-time" },
+    "updatedBy": { "type": ["string", "null"] }
   },
-  "required": ["_id", "name", "ancestorId", "status", "createdAt", "createdBy"],
+  "required": ["_id", "code", "name", "level", "status", "createdAt", "createdBy"],
   "indexes": [
-    { "keys": { "name": 1 }, "options": { "unique": true, "name": "name_unique" } },
-    { "keys": { "ancestorId": 1 }, "name": "ancestor_idx" },
+    { "keys": { "code": 1 }, "options": { "unique": true, "name": "code_unique" } },
+    { "keys": { "parentCode": 1 }, "name": "parentCode_idx" },
+    { "keys": { "level": 1 }, "name": "level_idx" },
     { "keys": { "status": 1 }, "name": "status_idx" }
   ]
 }

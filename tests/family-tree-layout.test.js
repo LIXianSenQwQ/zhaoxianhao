@@ -163,13 +163,13 @@ describe('timelineFilter（时间轴）', () => {
 });
 
 describe('五服色板（wufuColor）', () => {
-  it('五级 + 同宗 + 兜底', () => {
+  it('五级 + 出五服 + 兜底', () => {
     assert.strictEqual(wufuColor('斩衰'), '#2C2A29');
     assert.strictEqual(wufuColor('齐衰'), '#6B5B3E');
     assert.strictEqual(wufuColor('大功'), '#8C6A4F');
     assert.strictEqual(wufuColor('小功'), '#A8926E');
     assert.strictEqual(wufuColor('缌麻'), '#C4B391');
-    assert.strictEqual(wufuColor('同宗'), '#E3DCCB');
-    assert.strictEqual(wufuColor('未知值'), '#E3DCCB'); // 兜底同宗
+    assert.strictEqual(wufuColor('出五服'), '#E3DCCB'); // R26 修正：≥6 → 出五服（框架 7.3）
+    assert.strictEqual(wufuColor('未知值'), '#E3DCCB'); // 兜底出五服
   });
 });

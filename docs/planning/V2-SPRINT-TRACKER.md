@@ -78,7 +78,7 @@
 ### F1 合规 + 架构（可立即收口）
 - [x] 合规红线确认（开发框架 9.0 已逐项落文：棋牌不联机、新闻外链、零内购）
 - [x] 五模块功能开关（settings featureFlag，既有 v20Content/v20News/... 命名）
-- [x] 集合/接口骨架完整性复查（news_items 等 12 个 V2.0 集合：schema 齐备 JSON 合法 K1 ✅；云函数引用 ⊆ schema K2✅；接线状态判定 + game_records 预留声明 K3✅；stub 动态 seed K4✅ → 审计底稿 `tests/collections-audit.test.js` (4 用例)；结果：search_index/content, news_sources/items/favorites/users/news, family_moments/moment_interactions/clan_notices/plaza, home_worlds/home_avatars/home, game_records(本地零联机不启用), content_categories/content — 437 tests 全绿）
+- [x] 集合/接口骨架完整性复查（news_items 等 12 个 V2.0 集合：schema 齐备 JSON 合法 K1 ✅；云函数引用 ⊆ schema K2✅；接线状态判定 + game_records 预留声明 K3✅；stub 动态 seed K4✅ → 审计底稿 `tests/collections-audit.test.js` (4 用例)；结果：search_index/content, news_sources/items/favorites/users/news, family_moments/moment_interactions/clan_notices/plaza, home_worlds/home_avatars/home, game_records(本地零联机不启用), content_categories/content — 543 tests 全绿，**R26 交付：branches 三级谱系 schema+branch 云函数 / relation.calc seniorityDiff 辈分差输出 / fiveFu 语义修正与着色统一**)
 
 ### F2 模块一（本地内容核心）
 - [x] 上传（content.save，含 HEIC/类型扩展位）
